@@ -726,18 +726,14 @@ raw_ostream &llvm::outs() {
   // when the program exits, forcing error detection.  This means that if you
   // ever call outs(), you can't open another raw_fd_ostream on stdout, as we'll
   // close stdout twice and print an error the second time.
-  std::error_code EC;
-  static raw_fd_ostream S("-", EC, sys::fs::F_None);
-  assert(!EC);
-  return S;
+  return nulls();
 }
 
 /// errs() - This returns a reference to a raw_ostream for standard error.
 /// Use it like: errs() << "foo" << "bar";
 raw_ostream &llvm::errs() {
   // Set standard error to be unbuffered by default.
-  static raw_fd_ostream S(STDERR_FILENO, false, true);
-  return S;
+  return nulls();
 }
 
 /// nulls() - This returns a reference to a raw_ostream which discards output.

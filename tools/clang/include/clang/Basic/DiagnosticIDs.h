@@ -19,6 +19,7 @@
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/StringRef.h"
 #include <vector>
+#include "llvm/Config/opencor.h"
 
 namespace clang {
   class DiagnosticsEngine;
@@ -144,7 +145,7 @@ public:
 /// \brief Used for handling and querying diagnostic IDs.
 ///
 /// Can be used and shared by multiple Diagnostics for multiple translation units.
-class DiagnosticIDs : public RefCountedBase<DiagnosticIDs> {
+class LLVMCLANG_EXPORT DiagnosticIDs : public RefCountedBase<DiagnosticIDs> {
 public:
   /// \brief The level of the diagnostic, after it has been through mapping.
   enum Level {

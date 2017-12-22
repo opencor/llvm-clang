@@ -60,7 +60,7 @@ class StructType;
 /// constant references to global variables in the module.  When a global
 /// variable is destroyed, it should have no entries in the GlobalValueRefMap.
 /// @brief The main container class for the LLVM Intermediate Representation.
-class Module {
+class LLVMCLANG_EXPORT Module {
 /// @name Types And Enumerations
 /// @{
 public:

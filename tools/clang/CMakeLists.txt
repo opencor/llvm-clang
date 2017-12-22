@@ -414,7 +414,9 @@ get_property(CLANG_TABLEGEN_TARGETS GLOBAL PROPERTY CLANG_TABLEGEN_TARGETS)
 list(APPEND LLVM_COMMON_DEPENDS ${CLANG_TABLEGEN_TARGETS})
 
 add_subdirectory(lib)
-add_subdirectory(tools)
+if(CLANG_BUILD_TOOLS)
+  add_subdirectory(tools)
+endif()
 add_subdirectory(runtime)
 
 option(CLANG_BUILD_EXAMPLES "Build CLANG example programs by default." OFF)

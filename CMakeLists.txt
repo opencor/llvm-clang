@@ -19,6 +19,10 @@ if(POLICY CMP0057)
   cmake_policy(SET CMP0057 NEW)
 endif()
 
+if(POLICY CMP0068)
+  cmake_policy(SET CMP0068 NEW)
+endif()
+
 if(NOT DEFINED LLVM_VERSION_MAJOR)
   set(LLVM_VERSION_MAJOR 5)
 endif()
@@ -527,6 +531,15 @@ option (LLVM_BUILD_EXTERNAL_COMPILER_RT
 option (LLVM_VERSION_PRINTER_SHOW_HOST_TARGET_INFO
   "Show target and host info when tools are invoked with --version." ON)
 
+# Option to build LLVM and Clang as a single shared library for use in OpenCOR
+option(LLVMCLANG_BUILD_SHARED_LIB "Build LLVM and Clang as a single shared library for use in OpenCOR" OFF)
+set_property(GLOBAL PROPERTY LLVMCLANG_INCLUDE_DIRS "")
+set_property(GLOBAL PROPERTY LLVMCLANG_SOURCES "")
+
+if(LLVMCLANG_BUILD_SHARED_LIB)
+  add_definitions(-DLLVMCLANG_BUILD_SHARED_LIB)
+endif()
+
 # You can configure which libraries from LLVM you want to include in the
 # shared library by setting LLVM_DYLIB_COMPONENTS to a semi-colon delimited
 # list of LLVM components. All component names handled by llvm-config are valid.
@@ -1014,4 +1027,47 @@ endif()
 # This allows us to deploy the Universal CRT DLLs by passing -DCMAKE_INSTALL_UCRT_LIBRARIES=ON to CMake
 if (MSVC)
   include(InstallRequiredSystemLibraries)
+endif()
+
+# Build LLVM and Clang as a single shared library for use in OpenCOR, if needed
+if(LLVMCLANG_BUILD_SHARED_LIB)
+  add_subdirectory(tools/clang)
+  get_property(LLVMCLANG_LIBS GLOBAL PROPERTY LLVMCLANG_LIBS)
+  get_property(LLVMCLANG_INCLUDE_DIRS GLOBAL PROPERTY LLVMCLANG_INCLUDE_DIRS)
+  get_property(LLVMCLANG_SOURCES GLOBAL PROPERTY LLVMCLANG_SOURCES)
+  get_property(LLVMCLANG_COMPILE_DEFINITIONS GLOBAL PROPERTY LLVMCLANG_COMPILE_DEFINITIONS)
+  include_directories(${CMAKE_SOURCE_DIR}/include
+                      ${CMAKE_SOURCE_DIR}/tools/clang/include
+                      ${CMAKE_SOURCE_DIR}/utils/unittest/googlemock/include
+                      ${CMAKE_SOURCE_DIR}/utils/unittest/googletest/include
+                      ${LLVMCLANG_INCLUDE_DIRS})
+  add_library(LLVMClang SHARED ${LLVMCLANG_SOURCES})
+  set_property(TARGET LLVMClang APPEND PROPERTY COMPILE_DEFINITIONS ${LLVMCLANG_COMPILE_DEFINITIONS})
+  if(WIN32)
+    set_target_properties(LLVMClang PROPERTIES OUTPUT_NAME llvmclang.${LLVM_VERSION_MAJOR})
+  else()
+    set_target_properties(LLVMClang PROPERTIES OUTPUT_NAME llvmclang)
+  endif()
+  set_target_properties(LLVMClang PROPERTIES VERSION ${LLVM_VERSION_MAJOR})
+  add_dependencies(LLVMClang ${LLVMCLANG_LIBS})
+  if(WIN32)
+    target_link_libraries(LLVMClang version)
+  elseif(NOT APPLE)
+    target_link_libraries(LLVMClang dl)
+  endif()
+  if(HAVE_LIBEDIT)
+    target_link_libraries(LLVMClang edit)
+  endif()
+  if(HAVE_LIBPTHREAD)
+    target_link_libraries(LLVMClang pthread)
+  endif()
+  if(HAVE_LIBZ)
+    target_link_libraries(LLVMClang z)
+  endif()
+  if(HAVE_TERMINFO)
+    target_link_libraries(LLVMClang ${TERMINFO_LIBS})
+  endif()
+  install(TARGETS LLVMClang RUNTIME DESTINATION lib
+                            LIBRARY DESTINATION lib
+                            ARCHIVE DESTINATION lib)
 endif()

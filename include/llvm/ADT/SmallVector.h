@@ -15,6 +15,7 @@
 #define LLVM_ADT_SMALLVECTOR_H
 
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/Config/opencor.h"
 #include "llvm/Support/AlignOf.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/MathExtras.h"
@@ -34,7 +35,7 @@
 namespace llvm {
 
 /// This is all the non-templated stuff common to all SmallVectors.
-class SmallVectorBase {
+class LLVMCLANG_EXPORT SmallVectorBase {
 protected:
   void *BeginX, *EndX, *CapacityX;
 

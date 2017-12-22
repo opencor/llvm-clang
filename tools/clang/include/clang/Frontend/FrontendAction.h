@@ -33,7 +33,7 @@ class ASTMergeAction;
 class CompilerInstance;
 
 /// Abstract base class for actions which can be performed by the frontend.
-class FrontendAction {
+class LLVMCLANG_EXPORT FrontendAction {
   FrontendInputFile CurrentInput;
   std::unique_ptr<ASTUnit> CurrentASTUnit;
   CompilerInstance *Instance;

@@ -12,6 +12,7 @@
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/LLVM.h"
+#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Phases.h"
 #include "clang/Driver/ToolChain.h"
@@ -62,7 +63,7 @@ enum LTOKind {
 
 /// Driver - Encapsulate logic for constructing compilation processes
 /// from a set of gcc-driver-like command line arguments.
-class Driver {
+class LLVMCLANG_EXPORT Driver {
   std::unique_ptr<llvm::opt::OptTable> Opts;
 
   DiagnosticsEngine &Diags;

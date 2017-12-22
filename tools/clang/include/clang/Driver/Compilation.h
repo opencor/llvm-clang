@@ -31,7 +31,7 @@ namespace driver {
 
 /// Compilation - A set of tasks to perform for a single driver
 /// invocation.
-class Compilation {
+class LLVMCLANG_EXPORT Compilation : private NonCopyable {
   /// The driver we were created by.
   const Driver &TheDriver;
 

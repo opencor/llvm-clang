@@ -144,7 +144,7 @@ public:
 /// as errors" and passes them off to the DiagnosticConsumer for reporting to
 /// the user. DiagnosticsEngine is tied to one translation unit and one
 /// SourceManager.
-class DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
+class LLVMCLANG_EXPORT DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
 public:
   /// \brief The level of the diagnostic, after it has been through mapping.
   enum Level {
