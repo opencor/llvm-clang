@@ -12,7 +12,6 @@
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/LLVM.h"
-#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Phases.h"
 #include "clang/Driver/ToolChain.h"
