@@ -21,6 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/StringSaver.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 #include <list>
 #include <map>
