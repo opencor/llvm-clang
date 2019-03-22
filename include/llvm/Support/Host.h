@@ -60,7 +60,7 @@ constexpr bool IsBigEndianHost = false;
 
   /// getProcessTriple() - Return an appropriate target triple for generating
   /// code to be loaded into the current process, e.g. when using the JIT.
-  std::string getProcessTriple();
+  std::string LLVMCLANG_EXPORT getProcessTriple();
 
   /// getHostCPUName - Get the LLVM name for the host CPU. The particular format
   /// of the name is target dependent, and suitable for passing as -mcpu to the
