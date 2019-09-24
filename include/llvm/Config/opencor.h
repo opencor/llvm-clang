@@ -1,5 +1,4 @@
-#ifndef OPENCOR_H
-#define OPENCOR_H
+#pragma once
 
 #ifdef _WIN32
     #ifdef LLVMCLANG_BUILD_SHARED_LIB
@@ -20,5 +19,3 @@ class NonCopyable
 
         const NonCopyable & operator=(const NonCopyable &) = delete;
 };
-
-#endif
