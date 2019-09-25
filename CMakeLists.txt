@@ -1117,8 +1117,6 @@ if(LLVMCLANG_BUILD_SHARED_LIB)
   get_property(LLVMCLANG_COMPILE_DEFINITIONS GLOBAL PROPERTY LLVMCLANG_COMPILE_DEFINITIONS)
   include_directories(${CMAKE_SOURCE_DIR}/include
                       ${CMAKE_SOURCE_DIR}/tools/clang/include
-                      ${CMAKE_SOURCE_DIR}/utils/unittest/googlemock/include
-                      ${CMAKE_SOURCE_DIR}/utils/unittest/googletest/include
                       ${LLVMCLANG_INCLUDE_DIRS})
   add_library(LLVMClang SHARED ${LLVMCLANG_SOURCES})
   set_property(TARGET LLVMClang APPEND PROPERTY COMPILE_DEFINITIONS ${LLVMCLANG_COMPILE_DEFINITIONS})
@@ -1134,17 +1132,11 @@ if(LLVMCLANG_BUILD_SHARED_LIB)
   elseif(NOT APPLE)
     target_link_libraries(LLVMClang dl)
   endif()
-  if(HAVE_LIBEDIT)
-    target_link_libraries(LLVMClang edit)
-  endif()
   if(HAVE_LIBPTHREAD)
     target_link_libraries(LLVMClang pthread)
   endif()
   if(HAVE_LIBZ)
     target_link_libraries(LLVMClang z)
-  endif()
-  if(HAVE_TERMINFO)
-    target_link_libraries(LLVMClang ${TERMINFO_LIBS})
   endif()
   install(TARGETS LLVMClang RUNTIME DESTINATION lib
                             LIBRARY DESTINATION lib
