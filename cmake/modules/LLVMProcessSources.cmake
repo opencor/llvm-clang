@@ -86,7 +86,7 @@ function(llvm_process_sources OUT_VAR)
         if(NOT ${has_build_include_dir} EQUAL -1)
           set(build_include_dir)
         endif()
-        string(REPLACE "${CMAKE_SOURCE_DIR}" ${CMAKE_SOURCE_DIR}/build
+        string(REPLACE "/ext/LLVMClang/" "/build/ext/Build/LLVMClangBuild/"
                        build_lib_dir "${CMAKE_CURRENT_SOURCE_DIR}")
         string(FIND "${LLVMCLANG_INCLUDE_DIRS}" "${build_lib_dir}" has_build_lib_dir)
         if(NOT ${has_build_lib_dir} EQUAL -1)
