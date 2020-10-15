@@ -590,6 +590,19 @@ public:
   ~raw_null_ostream() override;
 };
 
+class raw_fd_null_ostream : public raw_fd_ostream {
+  void write_impl(const char *Ptr, size_t size) override;
+  void pwrite_impl(const char *Ptr, size_t Size, uint64_t Offset) override;
+
+  uint64_t current_pos() const override;
+
+public:
+  raw_fd_null_ostream(StringRef Filename, std::error_code &EC,
+                      sys::fs::OpenFlags Flags);
+  raw_fd_null_ostream(int fd, bool shouldClose, bool unbuffered=false);
+  ~raw_fd_null_ostream() override;
+};
+
 class buffer_ostream : public raw_svector_ostream {
   raw_ostream &OS;
   SmallVector<char, 0> Buffer;

@@ -13,6 +13,7 @@
 #ifndef LLVM_SUPPORT_HOST_H
 #define LLVM_SUPPORT_HOST_H
 
+#include "llvm/Config/opencor.h"
 #include <string>
 
 namespace llvm {

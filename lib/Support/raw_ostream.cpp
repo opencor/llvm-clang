@@ -869,12 +869,16 @@ void raw_fd_ostream::anchor() {}
 
 raw_fd_ostream &llvm::outs() {
   // Discard stdout behavior.
-  return nulls();
+  std::error_code EC;
+  static raw_fd_null_ostream S("-", EC, sys::fs::OF_None);
+  assert(!EC);
+  return S;
 }
 
 raw_fd_ostream &llvm::errs() {
   // Discard stderr behavior.
-  return nulls();
+  static raw_fd_null_ostream S(STDERR_FILENO, false, true);
+  return S;
 }
 
 /// nulls() - This returns a reference to a raw_ostream which discards output.
@@ -932,6 +936,29 @@ uint64_t raw_null_ostream::current_pos() const {
 
 void raw_null_ostream::pwrite_impl(const char *Ptr, size_t Size,
                                    uint64_t Offset) {}
+
+raw_fd_null_ostream::raw_fd_null_ostream(StringRef Filename, std::error_code &EC,
+                                         sys::fs::OpenFlags Flags)
+    : raw_fd_ostream(Filename, EC, Flags) {}
+
+raw_fd_null_ostream::raw_fd_null_ostream(int fd, bool shouldClose, bool unbuffered)
+    : raw_fd_ostream(fd, shouldClose, unbuffered) {}
+
+raw_fd_null_ostream::~raw_fd_null_ostream() {
+#ifndef NDEBUG
+  flush();
+#endif
+}
+
+void raw_fd_null_ostream::write_impl(const char *Ptr, size_t Size) {
+}
+
+uint64_t raw_fd_null_ostream::current_pos() const {
+  return 0;
+}
+
+void raw_fd_null_ostream::pwrite_impl(const char *Ptr, size_t Size,
+                                      uint64_t Offset) {}
 
 void raw_pwrite_stream::anchor() {}
 
