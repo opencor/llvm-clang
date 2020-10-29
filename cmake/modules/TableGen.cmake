@@ -112,6 +112,13 @@ function(tablegen project ofn)
     ${LLVM_TARGET_DEFINITIONS_ABSOLUTE}
     COMMENT "Building ${ofn}..."
     )
+  if(LLVMCLANG_BUILD_SHARED_LIB)
+    set(FULL_OFN ${CMAKE_CURRENT_BINARY_DIR}/${ofn})
+    get_filename_component(FULL_OFN_EXT ${FULL_OFN} EXT)
+    if("${FULL_OFN_EXT}" STREQUAL ".cpp")
+      set_property(GLOBAL APPEND PROPERTY LLVMCLANG_SOURCES ${FULL_OFN})
+    endif()
+  endif()
 
   # `make clean' must remove all those generated files:
   set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${ofn})
