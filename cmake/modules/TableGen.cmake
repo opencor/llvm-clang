@@ -116,6 +116,13 @@ function(tablegen project ofn)
     set(FULL_OFN ${CMAKE_CURRENT_BINARY_DIR}/${ofn})
     get_filename_component(FULL_OFN_EXT ${FULL_OFN} EXT)
     if("${FULL_OFN_EXT}" STREQUAL ".cpp")
+      # CMake needs the .cpp file to be physically present for our call to
+      # add_library() in the main CMakeLists.txt file to be successful, hence we
+      # create an empty file to foul CMake. Ideally, we would have a dependency,
+      # but this cannot be done here (apparently, a target can have a dependency
+      # on a file only if everything is done in the same CMakeLists.txt file,
+      # which is not the case here).
+      file(WRITE ${FULL_OFN})
       set_property(GLOBAL APPEND PROPERTY LLVMCLANG_SOURCES ${FULL_OFN})
     endif()
   endif()
