@@ -570,7 +570,7 @@ option (LLVM_BUILD_EXTERNAL_COMPILER_RT
 option (LLVM_VERSION_PRINTER_SHOW_HOST_TARGET_INFO
   "Show target and host info when tools are invoked with --version." ON)
 
-# Option to build LLVM and Clang as a single shared library for use in OpenCOR
+# Option to build LLVM and Clang as a single shared library for use in OpenCOR.
 option(LLVMCLANG_BUILD_SHARED_LIB "Build LLVM and Clang as a single shared library for use in OpenCOR" OFF)
 
 if(LLVMCLANG_BUILD_SHARED_LIB)
@@ -1218,7 +1218,7 @@ if (LLVM_INCLUDE_UTILS AND LLVM_INCLUDE_TOOLS)
   add_subdirectory(utils/llvm-locstats)
 endif()
 
-# Build LLVM and Clang as a single shared library for use in OpenCOR, if needed
+# Build LLVM and Clang as a single shared library for use in OpenCOR, if needed.
 if(LLVMCLANG_BUILD_SHARED_LIB)
   add_subdirectory(tools/clang)
   get_property(LLVMCLANG_LIBS GLOBAL PROPERTY LLVMCLANG_LIBS)
