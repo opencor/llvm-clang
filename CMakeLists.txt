@@ -572,8 +572,6 @@ option (LLVM_VERSION_PRINTER_SHOW_HOST_TARGET_INFO
 
 # Option to build LLVM and Clang as a single shared library for use in OpenCOR
 option(LLVMCLANG_BUILD_SHARED_LIB "Build LLVM and Clang as a single shared library for use in OpenCOR" OFF)
-set_property(GLOBAL PROPERTY LLVMCLANG_INCLUDE_DIRS "")
-set_property(GLOBAL PROPERTY LLVMCLANG_SOURCES "")
 
 if(LLVMCLANG_BUILD_SHARED_LIB)
   add_definitions(-DLLVMCLANG_BUILD_SHARED_LIB)
