@@ -11,7 +11,6 @@
 #include "SnippetRepetitor.h"
 #include "Target.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -129,11 +128,7 @@ void BasicBlockFiller::addReturn(const DebugLoc &DL) {
   } else {
     MachineIRBuilder MIB(MF);
     MIB.setMBB(*MBB);
-
-    FunctionLoweringInfo FuncInfo;
-    FuncInfo.CanLowerReturn = true;
-    MF.getSubtarget().getCallLowering()->lowerReturn(MIB, nullptr, {},
-                                                     FuncInfo);
+    MF.getSubtarget().getCallLowering()->lowerReturn(MIB, nullptr, {});
   }
 }
 

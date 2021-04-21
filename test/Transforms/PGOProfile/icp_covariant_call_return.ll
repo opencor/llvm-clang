@@ -10,9 +10,7 @@ target triple = "x86_64-unknown-linux-gnu"
 
 declare noalias i8* @_Znwm(i64)
 declare void @_ZN1DC2Ev(%struct.D*);
-define %struct.Derived* @_ZN1D4funcEv(%struct.D*) {
-  ret %struct.Derived* null
-}
+declare %struct.Derived* @_ZN1D4funcEv(%struct.D*);
 
 define %struct.Base* @bar() {
 entry:

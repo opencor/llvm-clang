@@ -19,6 +19,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/ObjCARCInstKind.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/ObjCARCAnalysisUtils.h"
 #include "llvm/IR/Intrinsics.h"
 

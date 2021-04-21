@@ -1,6 +1,7 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK,CHECK-EL,CHECK-ALU64 %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK,CHECK-EL,CHECK-ALU32 %s
+; RUN: llc -march=bpfel -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-EL,CHECK-ALU64 %s
+; RUN: llc -march=bpfeb -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-EB,CHECK-ALU64 %s
+; RUN: llc -march=bpfel -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-EL,CHECK-ALU32 %s
+; RUN: llc -march=bpfeb -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-EB,CHECK-ALU32 %s
 ; Source code:
 ;   struct s {
 ;     char f1;
@@ -19,9 +20,7 @@
 ; bf1, bf1, bf3 and bf4 and the ABI alignment is 1 byte. So for bf4 access,
 ; the starting offset has to be at the beginning of field bf3.
 ; Compilation flag:
-;   clang -target bpfel -O2 -g -S -emit-llvm -Xclang -disable-llvm-passes test.c
-
-target triple = "bpfel"
+;   clang -target bpf -O2 -g -S -emit-llvm test.c
 
 %struct.s = type <{ i8, i16 }>
 
@@ -43,6 +42,7 @@ entry:
 ; CHECK-ALU64:       r0 += r1
 ; CHECK-ALU32:       w0 += w1
 ; CHECK-EL:          r1 = 56
+; CHECK-EB:          r1 = 61
 ; CHECK-ALU64:       r0 += r1
 ; CHECK-ALU32:       w0 += w1
 ; CHECK:             exit

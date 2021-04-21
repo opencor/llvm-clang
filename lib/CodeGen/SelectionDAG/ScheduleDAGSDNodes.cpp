@@ -125,7 +125,8 @@ static void CheckForPhysRegDependency(SDNode *Def, SDNode *User, unsigned Op,
     PhysReg = Reg;
   } else if (Def->isMachineOpcode()) {
     const MCInstrDesc &II = TII->get(Def->getMachineOpcode());
-    if (ResNo >= II.getNumDefs() && II.hasImplicitDefOfPhysReg(Reg))
+    if (ResNo >= II.getNumDefs() &&
+        II.ImplicitDefs[ResNo - II.getNumDefs()] == Reg)
       PhysReg = Reg;
   }
 
@@ -172,7 +173,7 @@ static bool AddGlue(SDNode *N, SDValue Glue, bool AddGlue, SelectionDAG *DAG) {
   // Don't add glue to something that already has a glue value.
   if (N->getValueType(N->getNumValues() - 1) == MVT::Glue) return false;
 
-  SmallVector<EVT, 4> VTs(N->values());
+  SmallVector<EVT, 4> VTs(N->value_begin(), N->value_end());
   if (AddGlue)
     VTs.push_back(MVT::Glue);
 
@@ -829,7 +830,7 @@ EmitPhysRegCopy(SUnit *SU, DenseMap<SUnit*, Register> &VRBaseMap,
 /// not necessarily refer to returned BB. The emitter may split blocks.
 MachineBasicBlock *ScheduleDAGSDNodes::
 EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
-  InstrEmitter Emitter(DAG->getTarget(), BB, InsertPos);
+  InstrEmitter Emitter(BB, InsertPos);
   DenseMap<SDValue, Register> VRBaseMap;
   DenseMap<SUnit*, Register> CopyVRBaseMap;
   SmallVector<std::pair<unsigned, MachineInstr*>, 32> Orders;
@@ -1033,29 +1034,7 @@ EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
   }
 
   InsertPos = Emitter.getInsertPos();
-  // In some cases, DBG_VALUEs might be inserted after the first terminator,
-  // which results in an invalid MBB. If that happens, move the DBG_VALUEs
-  // before the first terminator.
-  MachineBasicBlock *InsertBB = Emitter.getBlock();
-  auto FirstTerm = InsertBB->getFirstTerminator();
-  if (FirstTerm != InsertBB->end()) {
-    assert(!FirstTerm->isDebugValue() &&
-           "first terminator cannot be a debug value");
-    for (MachineInstr &MI : make_early_inc_range(
-             make_range(std::next(FirstTerm), InsertBB->end()))) {
-      if (!MI.isDebugValue())
-        continue;
-
-      if (&MI == InsertPos)
-        InsertPos = std::prev(InsertPos->getIterator());
-
-      // The DBG_VALUE was referencing a value produced by a terminator. By
-      // moving the DBG_VALUE, the referenced value also needs invalidating.
-      MI.getOperand(0).ChangeToRegister(0, false);
-      MI.moveBefore(&*FirstTerm);
-    }
-  }
-  return InsertBB;
+  return Emitter.getBlock();
 }
 
 /// Return the basic block label.

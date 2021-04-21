@@ -165,24 +165,19 @@ public:
   }
 
   /// Returns a pointer to the first instruction in this block that is not a
-  /// PHINode or a debug intrinsic, or any pseudo operation if \c SkipPseudoOp
-  /// is true.
-  const Instruction *getFirstNonPHIOrDbg(bool SkipPseudoOp = false) const;
-  Instruction *getFirstNonPHIOrDbg(bool SkipPseudoOp = false) {
+  /// PHINode or a debug intrinsic.
+  const Instruction* getFirstNonPHIOrDbg() const;
+  Instruction* getFirstNonPHIOrDbg() {
     return const_cast<Instruction *>(
-        static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbg(
-            SkipPseudoOp));
+                  static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbg());
   }
 
   /// Returns a pointer to the first instruction in this block that is not a
-  /// PHINode, a debug intrinsic, or a lifetime intrinsic, or any pseudo
-  /// operation if \c SkipPseudoOp is true.
-  const Instruction *
-  getFirstNonPHIOrDbgOrLifetime(bool SkipPseudoOp = false) const;
-  Instruction *getFirstNonPHIOrDbgOrLifetime(bool SkipPseudoOp = false) {
+  /// PHINode, a debug intrinsic, or a lifetime intrinsic.
+  const Instruction* getFirstNonPHIOrDbgOrLifetime() const;
+  Instruction* getFirstNonPHIOrDbgOrLifetime() {
     return const_cast<Instruction *>(
-        static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbgOrLifetime(
-            SkipPseudoOp));
+        static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbgOrLifetime());
   }
 
   /// Returns an iterator to the first instruction in this block that is
@@ -196,18 +191,16 @@ public:
   }
 
   /// Return a const iterator range over the instructions in the block, skipping
-  /// any debug instructions. Skip any pseudo operations as well if \c
-  /// SkipPseudoOp is true.
+  /// any debug instructions.
   iterator_range<filter_iterator<BasicBlock::const_iterator,
                                  std::function<bool(const Instruction &)>>>
-  instructionsWithoutDebug(bool SkipPseudoOp = false) const;
+  instructionsWithoutDebug() const;
 
   /// Return an iterator range over the instructions in the block, skipping any
-  /// debug instructions. Skip and any pseudo operations as well if \c
-  /// SkipPseudoOp is true.
-  iterator_range<
-      filter_iterator<BasicBlock::iterator, std::function<bool(Instruction &)>>>
-  instructionsWithoutDebug(bool SkipPseudoOp = false);
+  /// debug instructions.
+  iterator_range<filter_iterator<BasicBlock::iterator,
+                                 std::function<bool(Instruction &)>>>
+  instructionsWithoutDebug();
 
   /// Return the size of the basic block ignoring debug instructions
   filter_iterator<BasicBlock::const_iterator,
@@ -327,9 +320,7 @@ public:
     phi_iterator_impl() = default;
 
     // Allow conversion between instantiations where valid.
-    template <typename PHINodeU, typename BBIteratorU,
-              typename = std::enable_if_t<
-                  std::is_convertible<PHINodeU *, PHINodeT *>::value>>
+    template <typename PHINodeU, typename BBIteratorU>
     phi_iterator_impl(const phi_iterator_impl<PHINodeU, BBIteratorU> &Arg)
         : PN(Arg.PN) {}
 
@@ -398,49 +389,22 @@ public:
 
   /// Split the basic block into two basic blocks at the specified instruction.
   ///
-  /// If \p Before is true, splitBasicBlockBefore handles the
-  /// block splitting. Otherwise, execution proceeds as described below.
-  ///
-  /// Note that all instructions BEFORE the specified iterator
-  /// stay as part of the original basic block, an unconditional branch is added
-  /// to the original BB, and the rest of the instructions in the BB are moved
-  /// to the new BB, including the old terminator.  The newly formed basic block
-  /// is returned. This function invalidates the specified iterator.
+  /// Note that all instructions BEFORE the specified iterator stay as part of
+  /// the original basic block, an unconditional branch is added to the original
+  /// BB, and the rest of the instructions in the BB are moved to the new BB,
+  /// including the old terminator.  The newly formed BasicBlock is returned.
+  /// This function invalidates the specified iterator.
   ///
   /// Note that this only works on well formed basic blocks (must have a
-  /// terminator), and \p 'I' must not be the end of instruction list (which
-  /// would cause a degenerate basic block to be formed, having a terminator
-  /// inside of the basic block).
+  /// terminator), and 'I' must not be the end of instruction list (which would
+  /// cause a degenerate basic block to be formed, having a terminator inside of
+  /// the basic block).
   ///
   /// Also note that this doesn't preserve any passes. To split blocks while
   /// keeping loop information consistent, use the SplitBlock utility function.
-  BasicBlock *splitBasicBlock(iterator I, const Twine &BBName = "",
-                              bool Before = false);
-  BasicBlock *splitBasicBlock(Instruction *I, const Twine &BBName = "",
-                              bool Before = false) {
-    return splitBasicBlock(I->getIterator(), BBName, Before);
-  }
-
-  /// Split the basic block into two basic blocks at the specified instruction
-  /// and insert the new basic blocks as the predecessor of the current block.
-  ///
-  /// This function ensures all instructions AFTER and including the specified
-  /// iterator \p I are part of the original basic block. All Instructions
-  /// BEFORE the iterator \p I are moved to the new BB and an unconditional
-  /// branch is added to the new BB. The new basic block is returned.
-  ///
-  /// Note that this only works on well formed basic blocks (must have a
-  /// terminator), and \p 'I' must not be the end of instruction list (which
-  /// would cause a degenerate basic block to be formed, having a terminator
-  /// inside of the basic block).  \p 'I' cannot be a iterator for a PHINode
-  /// with multiple incoming blocks.
-  ///
-  /// Also note that this doesn't preserve any passes. To split blocks while
-  /// keeping loop information consistent, use the SplitBlockBefore utility
-  /// function.
-  BasicBlock *splitBasicBlockBefore(iterator I, const Twine &BBName = "");
-  BasicBlock *splitBasicBlockBefore(Instruction *I, const Twine &BBName = "") {
-    return splitBasicBlockBefore(I->getIterator(), BBName);
+  BasicBlock *splitBasicBlock(iterator I, const Twine &BBName = "");
+  BasicBlock *splitBasicBlock(Instruction *I, const Twine &BBName = "") {
+    return splitBasicBlock(I->getIterator(), BBName);
   }
 
   /// Returns true if there are any uses of this basic block other than

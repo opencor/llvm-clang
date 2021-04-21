@@ -78,7 +78,6 @@ public:
     printDispatchStalls(OS);
     printDispatchHistogram(OS);
   }
-  StringRef getNameAsString() const override { return "DispatchStatistics"; }
 };
 } // namespace mca
 } // namespace llvm

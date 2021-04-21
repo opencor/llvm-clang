@@ -14,6 +14,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/DebugInfo/CodeView/CVRecord.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/GUID.h"
@@ -31,10 +32,15 @@ using support::little32_t;
 using support::ulittle16_t;
 using support::ulittle32_t;
 
+using CVType = CVRecord<TypeLeafKind>;
+using RemappedType = RemappedRecord<TypeLeafKind>;
+
 struct CVMemberRecord {
   TypeLeafKind Kind;
   ArrayRef<uint8_t> Data;
 };
+using CVTypeArray = VarStreamArray<CVType>;
+using CVTypeRange = iterator_range<CVTypeArray::Iterator>;
 
 /// Equvalent to CV_fldattr_t in cvinfo.h.
 struct MemberAttributes {
@@ -697,7 +703,7 @@ public:
       : TypeRecord(TypeRecordKind::VFTable), CompleteClass(CompleteClass),
         OverriddenVFTable(OverriddenVFTable), VFPtrOffset(VFPtrOffset) {
     MethodNames.push_back(Name);
-    llvm::append_range(MethodNames, Methods);
+    MethodNames.insert(MethodNames.end(), Methods.begin(), Methods.end());
   }
 
   TypeIndex getCompleteClass() const { return CompleteClass; }

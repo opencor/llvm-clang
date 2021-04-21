@@ -14,7 +14,6 @@
 #define LLVM_SUPPORT_PROGRAM_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
@@ -37,7 +36,7 @@ namespace sys {
   typedef unsigned long procid_t; // Must match the type of DWORD on Windows.
   typedef void *process_t;        // Must match the type of HANDLE on Windows.
 #else
-  typedef ::pid_t procid_t;
+  typedef pid_t procid_t;
   typedef procid_t process_t;
 #endif
 
@@ -126,11 +125,9 @@ namespace sys {
       ///< string is non-empty upon return an error occurred while invoking the
       ///< program.
       bool *ExecutionFailed = nullptr,
-      Optional<ProcessStatistics> *ProcStat = nullptr, ///< If non-zero,
-      /// provides a pointer to a structure in which process execution
-      /// statistics will be stored.
-      BitVector *AffinityMask = nullptr ///< CPUs or processors the new
-                                        /// program shall run on.
+      Optional<ProcessStatistics> *ProcStat = nullptr ///< If non-zero, provides
+      /// a pointer to a structure in which process execution statistics will be
+      /// stored.
   );
 
   /// Similar to ExecuteAndWait, but returns immediately.
@@ -143,8 +140,7 @@ namespace sys {
                             ArrayRef<Optional<StringRef>> Redirects = {},
                             unsigned MemoryLimit = 0,
                             std::string *ErrMsg = nullptr,
-                            bool *ExecutionFailed = nullptr,
-                            BitVector *AffinityMask = nullptr);
+                            bool *ExecutionFailed = nullptr);
 
   /// Return true if the given arguments fit within system-specific
   /// argument length limits.
@@ -222,7 +218,7 @@ namespace sys {
   /// to build a single flat command line appropriate for calling CreateProcess
   /// on
   /// Windows.
-  ErrorOr<std::wstring> flattenWindowsCommandLine(ArrayRef<StringRef> Args);
+  std::string flattenWindowsCommandLine(ArrayRef<StringRef> Args);
 #endif
   }
 }

@@ -1,5 +1,5 @@
 set(LLVM_LINK_COMPONENTS
-  OrcShared
+  OrcError
   OrcJIT
   RuntimeDyld
   Support

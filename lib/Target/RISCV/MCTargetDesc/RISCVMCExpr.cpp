@@ -13,6 +13,7 @@
 
 #include "RISCVMCExpr.h"
 #include "MCTargetDesc/RISCVAsmBackend.h"
+#include "RISCV.h"
 #include "RISCVFixupKinds.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmLayout.h"

@@ -4,7 +4,6 @@ unittest("ObjectTests") {
   deps = [
     "//llvm/lib/BinaryFormat",
     "//llvm/lib/Object",
-    "//llvm/lib/ObjectYAML",
     "//llvm/lib/Testing/Support",
   ]
   sources = [
@@ -16,6 +15,5 @@ unittest("ObjectTests") {
     "ObjectFileTest.cpp",
     "SymbolSizeTest.cpp",
     "SymbolicFileTest.cpp",
-    "XCOFFObjectFileTest.cpp",
   ]
 }

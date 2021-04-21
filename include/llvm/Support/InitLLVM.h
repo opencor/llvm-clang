@@ -9,7 +9,6 @@
 #ifndef LLVM_SUPPORT_LLVM_H
 #define LLVM_SUPPORT_LLVM_H
 
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -45,7 +44,7 @@ public:
 private:
   BumpPtrAllocator Alloc;
   SmallVector<const char *, 0> Args;
-  Optional<PrettyStackTraceProgram> StackPrinter;
+  PrettyStackTraceProgram StackPrinter;
 };
 } // namespace llvm
 

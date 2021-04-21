@@ -154,7 +154,7 @@ static bool getUnderlyingObjectsForInstr(const MachineInstr *MI,
         Objects.push_back(UnderlyingObjectsVector::value_type(PSV, MayAlias));
       } else if (const Value *V = MMO->getValue()) {
         SmallVector<Value *, 4> Objs;
-        if (!getUnderlyingObjectsForCodeGen(V, Objs))
+        if (!getUnderlyingObjectsForCodeGen(V, Objs, DL))
           return false;
 
         for (Value *V : Objs) {
@@ -199,10 +199,7 @@ void ScheduleDAGInstrs::exitRegion() {
 }
 
 void ScheduleDAGInstrs::addSchedBarrierDeps() {
-  MachineInstr *ExitMI =
-      RegionEnd != BB->end()
-          ? &*skipDebugInstructionsBackward(RegionEnd, RegionBegin)
-          : nullptr;
+  MachineInstr *ExitMI = RegionEnd != BB->end() ? &*RegionEnd : nullptr;
   ExitSU.setInstr(ExitMI);
   // Add dependencies on the defs and uses of the instruction.
   if (ExitMI) {
@@ -244,6 +241,8 @@ void ScheduleDAGInstrs::addPhysRegDataDeps(SUnit *SU, unsigned OperIdx) {
                             !DefMIDesc->hasImplicitDefOfPhysReg(MO.getReg()));
   for (MCRegAliasIterator Alias(MO.getReg(), TRI, true);
        Alias.isValid(); ++Alias) {
+    if (!Uses.contains(*Alias))
+      continue;
     for (Reg2SUnitsMap::iterator I = Uses.find(*Alias); I != Uses.end(); ++I) {
       SUnit *UseSU = I->SU;
       if (UseSU == SU)
@@ -514,8 +513,6 @@ void ScheduleDAGInstrs::addVRegDefDeps(SUnit *SU, unsigned OperIdx) {
 /// TODO: Handle ExitSU "uses" properly.
 void ScheduleDAGInstrs::addVRegUseDeps(SUnit *SU, unsigned OperIdx) {
   const MachineInstr *MI = SU->getInstr();
-  assert(!MI->isDebugInstr());
-
   const MachineOperand &MO = MI->getOperand(OperIdx);
   Register Reg = MO.getReg();
 
@@ -807,7 +804,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AAResults *AA,
       DbgMI = nullptr;
     }
 
-    if (MI.isDebugValue() || MI.isDebugRef()) {
+    if (MI.isDebugValue()) {
       DbgMI = &MI;
       continue;
     }
@@ -1187,7 +1184,7 @@ std::string ScheduleDAGInstrs::getGraphNodeLabel(const SUnit *SU) const {
   else if (SU == &ExitSU)
     oss << "<exit>";
   else
-    SU->getInstr()->print(oss, /*IsStandalone=*/true);
+    SU->getInstr()->print(oss, /*SkipOpers=*/true);
   return oss.str();
 }
 

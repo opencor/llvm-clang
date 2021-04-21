@@ -17,7 +17,6 @@
 #include "llvm/Object/Wasm.h"
 #include "llvm/Object/XCOFFObjectFile.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/MemoryBufferRef.h"
 #include <system_error>
 
 std::error_code coff2yaml(llvm::raw_ostream &Out,
@@ -32,7 +31,6 @@ std::error_code xcoff2yaml(llvm::raw_ostream &Out,
                            const llvm::object::XCOFFObjectFile &Obj);
 std::error_code wasm2yaml(llvm::raw_ostream &Out,
                           const llvm::object::WasmObjectFile &Obj);
-llvm::Error archive2yaml(llvm::raw_ostream &Out, llvm::MemoryBufferRef Source);
 
 // Forward decls for dwarf2yaml
 namespace llvm {
@@ -42,15 +40,6 @@ struct Data;
 }
 }
 
-void dumpDebugAbbrev(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-llvm::Error dumpDebugAddr(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-llvm::Error dumpDebugARanges(llvm::DWARFContext &DCtx,
-                             llvm::DWARFYAML::Data &Y);
-void dumpDebugPubSections(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-void dumpDebugInfo(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-void dumpDebugLines(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-llvm::Error dumpDebugRanges(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
-llvm::Error dumpDebugStrings(llvm::DWARFContext &DCtx,
-                             llvm::DWARFYAML::Data &Y);
+llvm::Error dwarf2yaml(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
 
 #endif

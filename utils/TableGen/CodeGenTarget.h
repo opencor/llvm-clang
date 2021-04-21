@@ -60,7 +60,6 @@ class CodeGenTarget {
 
   mutable std::unique_ptr<CodeGenSchedModels> SchedModels;
 
-  mutable StringRef InstNamespace;
   mutable std::vector<const CodeGenInstruction*> InstrsByEnum;
   mutable unsigned NumPseudoInstructions = 0;
 public:
@@ -68,14 +67,11 @@ public:
   ~CodeGenTarget();
 
   Record *getTargetRecord() const { return TargetRec; }
-  StringRef getName() const;
+  const StringRef getName() const;
 
   /// getInstNamespace - Return the target-specific instruction namespace.
   ///
   StringRef getInstNamespace() const;
-
-  /// getRegNamespace - Return the target-specific register namespace.
-  StringRef getRegNamespace() const;
 
   /// getInstructionSet - Return the InstructionSet object.
   ///
@@ -111,8 +107,7 @@ public:
   /// covers \p SubIdx if it exists.
   Optional<CodeGenRegisterClass *>
   getSuperRegForSubReg(const ValueTypeByHwMode &Ty, CodeGenRegBank &RegBank,
-                       const CodeGenSubRegIndex *SubIdx,
-                       bool MustBeAllocatable = false) const;
+                       const CodeGenSubRegIndex *SubIdx) const;
 
   /// getRegisterByName - If there is a register with the specific AsmName,
   /// return it.

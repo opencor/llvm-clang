@@ -96,12 +96,11 @@ void CallGraphUpdater::reanalyzeFunction(Function &Fn) {
   }
 }
 
-void CallGraphUpdater::registerOutlinedFunction(Function &OriginalFn,
-                                                Function &NewFn) {
+void CallGraphUpdater::registerOutlinedFunction(Function &NewFn) {
   if (CG)
     CG->addToCallGraph(&NewFn);
   else if (LCG)
-    LCG->addSplitFunction(OriginalFn, NewFn);
+    LCG->addNewFunctionIntoSCC(NewFn, *SCC);
 }
 
 void CallGraphUpdater::removeFunction(Function &DeadFn) {

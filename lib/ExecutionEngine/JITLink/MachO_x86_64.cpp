@@ -26,7 +26,7 @@ namespace {
 class MachOLinkGraphBuilder_x86_64 : public MachOLinkGraphBuilder {
 public:
   MachOLinkGraphBuilder_x86_64(const object::MachOObjectFile &Obj)
-      : MachOLinkGraphBuilder(Obj, Triple("x86_64-apple-darwin")) {}
+      : MachOLinkGraphBuilder(Obj) {}
 
 private:
   static Expected<MachOX86RelocationKind>
@@ -150,11 +150,10 @@ private:
       else
         return ToSymbolOrErr.takeError();
     } else {
-      auto ToSymbolSec = findSectionByIndex(UnsignedRI.r_symbolnum - 1);
-      if (!ToSymbolSec)
-        return ToSymbolSec.takeError();
-      ToSymbol = getSymbolByAddress(ToSymbolSec->Address);
-      assert(ToSymbol && "No symbol for section");
+      if (auto ToSymbolOrErr = findSymbolByAddress(FixupValue))
+        ToSymbol = &*ToSymbolOrErr;
+      else
+        return ToSymbolOrErr.takeError();
       FixupValue -= ToSymbol->getAddress();
     }
 
@@ -184,8 +183,6 @@ private:
     using namespace support;
     auto &Obj = getObject();
 
-    LLVM_DEBUG(dbgs() << "Processing relocations:\n");
-
     for (auto &S : Obj.sections()) {
 
       JITTargetAddress SectionAddress = S.getAddress();
@@ -204,8 +201,8 @@ private:
             getSectionByIndex(Obj.getSectionIndex(S.getRawDataRefImpl()));
         if (!NSec.GraphSection) {
           LLVM_DEBUG({
-            dbgs() << "  Skipping relocations for MachO section "
-                   << NSec.SegName << "/" << NSec.SectName
+            dbgs() << "Skipping relocations for MachO section " << NSec.SegName
+                   << "/" << NSec.SectName
                    << " which has no associated graph section\n";
           });
           continue;
@@ -227,10 +224,8 @@ private:
         JITTargetAddress FixupAddress = SectionAddress + (uint32_t)RI.r_address;
 
         LLVM_DEBUG({
-          auto &NSec =
-              getSectionByIndex(Obj.getSectionIndex(S.getRawDataRefImpl()));
-          dbgs() << "  " << NSec.SectName << " + "
-                 << formatv("{0:x8}", RI.r_address) << ":\n";
+          dbgs() << "Processing relocation at "
+                 << format("0x%016" PRIx64, FixupAddress) << "\n";
         });
 
         // Find the block that the fixup points to.
@@ -339,16 +334,12 @@ private:
           assert(TargetSymbol && "No target symbol from parsePairRelocation?");
           break;
         }
-        case PCRel32TLV:
-          return make_error<JITLinkError>(
-              "MachO TLV relocations not yet supported");
         default:
           llvm_unreachable("Special relocation kind should not appear in "
                            "mach-o file");
         }
 
         LLVM_DEBUG({
-          dbgs() << "    ";
           Edge GE(*Kind, FixupAddress - BlockToFix->getAddress(), *TargetSymbol,
                   Addend);
           printEdge(dbgs(), *BlockToFix, GE,
@@ -548,13 +539,20 @@ class MachOJITLinker_x86_64 : public JITLinker<MachOJITLinker_x86_64> {
 
 public:
   MachOJITLinker_x86_64(std::unique_ptr<JITLinkContext> Ctx,
-                        std::unique_ptr<LinkGraph> G,
                         PassConfiguration PassConfig)
-      : JITLinker(std::move(Ctx), std::move(G), std::move(PassConfig)) {}
+      : JITLinker(std::move(Ctx), std::move(PassConfig)) {}
 
 private:
   StringRef getEdgeKindName(Edge::Kind R) const override {
     return getMachOX86RelocationKindName(R);
+  }
+
+  Expected<std::unique_ptr<LinkGraph>>
+  buildGraph(MemoryBufferRef ObjBuffer) override {
+    auto MachOObj = object::ObjectFile::createMachOObjectFile(ObjBuffer);
+    if (!MachOObj)
+      return MachOObj.takeError();
+    return MachOLinkGraphBuilder_x86_64(**MachOObj).buildGraph();
   }
 
   static Error targetOutOfRangeError(const Block &B, const Edge &E) {
@@ -653,27 +651,18 @@ private:
   uint64_t NullValue = 0;
 };
 
-Expected<std::unique_ptr<LinkGraph>>
-createLinkGraphFromMachOObject_x86_64(MemoryBufferRef ObjectBuffer) {
-  auto MachOObj = object::ObjectFile::createMachOObjectFile(ObjectBuffer);
-  if (!MachOObj)
-    return MachOObj.takeError();
-  return MachOLinkGraphBuilder_x86_64(**MachOObj).buildGraph();
-}
-
-void link_MachO_x86_64(std::unique_ptr<LinkGraph> G,
-                       std::unique_ptr<JITLinkContext> Ctx) {
-
+void jitLink_MachO_x86_64(std::unique_ptr<JITLinkContext> Ctx) {
   PassConfiguration Config;
+  Triple TT("x86_64-apple-macosx");
 
-  if (Ctx->shouldAddDefaultTargetPasses(G->getTargetTriple())) {
+  if (Ctx->shouldAddDefaultTargetPasses(TT)) {
     // Add eh-frame passses.
     Config.PrePrunePasses.push_back(EHFrameSplitter("__eh_frame"));
-    Config.PrePrunePasses.push_back(EHFrameEdgeFixer(
-        "__eh_frame", G->getPointerSize(), Delta64, Delta32, NegDelta32));
+    Config.PrePrunePasses.push_back(
+        EHFrameEdgeFixer("__eh_frame", NegDelta32, Delta64, Delta64));
 
     // Add a mark-live pass.
-    if (auto MarkLive = Ctx->getMarkLivePass(G->getTargetTriple()))
+    if (auto MarkLive = Ctx->getMarkLivePass(TT))
       Config.PrePrunePasses.push_back(std::move(MarkLive));
     else
       Config.PrePrunePasses.push_back(markAllSymbolsLive);
@@ -685,14 +674,14 @@ void link_MachO_x86_64(std::unique_ptr<LinkGraph> G,
     });
 
     // Add GOT/Stubs optimizer pass.
-    Config.PreFixupPasses.push_back(optimizeMachO_x86_64_GOTAndStubs);
+    Config.PostAllocationPasses.push_back(optimizeMachO_x86_64_GOTAndStubs);
   }
 
-  if (auto Err = Ctx->modifyPassConfig(G->getTargetTriple(), Config))
+  if (auto Err = Ctx->modifyPassConfig(TT, Config))
     return Ctx->notifyFailed(std::move(Err));
 
   // Construct a JITLinker and run the link function.
-  MachOJITLinker_x86_64::link(std::move(Ctx), std::move(G), std::move(Config));
+  MachOJITLinker_x86_64::link(std::move(Ctx), std::move(Config));
 }
 
 StringRef getMachOX86RelocationKindName(Edge::Kind R) {

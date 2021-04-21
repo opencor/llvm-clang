@@ -15,9 +15,4 @@ add_llvm_component_library(LLVMFrontendOpenMP
   intrinsics_gen
   omp_gen
   omp_cpp
-
-  LINK_COMPONENTS
-  Core
-  Support
-  TransformUtils
   )

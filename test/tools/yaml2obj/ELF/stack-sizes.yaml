@@ -44,9 +44,10 @@
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
 ## Valid.
   - Name:    '.stack_sizes (1)'
@@ -92,9 +93,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS[[BITS]]
-  Data:  ELFDATA2[[ENCODE]]
-  Type:  ET_EXEC
+  Class:   ELFCLASS[[BITS]]
+  Data:    ELFDATA2[[ENCODE]]
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:    .stack_sizes
     Type:    SHT_PROGBITS
@@ -116,9 +118,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:    .stack_sizes
     Type:    SHT_PROGBITS
@@ -134,9 +137,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:    .stack_sizes
     Type:    SHT_PROGBITS
@@ -147,13 +151,14 @@ Sections:
 
 # RUN: not yaml2obj --docnum=5 %s 2>&1 | FileCheck %s --check-prefix=ENTRIES-AND-CONTENT
 
-# ENTRIES-AND-CONTENT: error: "Entries" cannot be used with "Content" or "Size"
+# ENTRIES-AND-CONTENT: error: .stack_sizes: Content and Entries cannot be used together
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:    .stack_sizes
     Type:    SHT_PROGBITS
@@ -162,19 +167,18 @@ Sections:
       - Address: 0x10
         Size:    0x20
 
-## Check we emit an empty section if neither "Content", "Size" nor "Entries" were set.
+## Check we must specify either "Content", "Entries" or "Size" tag when describing .stack_sizes.
 
-# RUN: yaml2obj --docnum=6 %s -o %t6
-# RUN: llvm-readelf --sections %t6 | FileCheck %s --check-prefix=NO-TAGS
+# RUN: not yaml2obj --docnum=6 %s 2>&1 | FileCheck %s --check-prefix=NO-TAGS
 
-# NO-TAGS: [Nr] Name         Type     Address          Off    Size
-# NO-TAGS: [ 1] .stack_sizes PROGBITS 0000000000000000 000040 000000
+# NO-TAGS: .stack_sizes: one of Content, Entries and Size must be specified
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .stack_sizes
     Type: SHT_PROGBITS
@@ -183,13 +187,14 @@ Sections:
 
 # RUN: not yaml2obj --docnum=7 %s 2>&1 | FileCheck %s --check-prefix=ENTRIES-AND-SIZE
 
-# ENTRIES-AND-SIZE: error: "Entries" cannot be used with "Content" or "Size"
+# ENTRIES-AND-SIZE: .stack_sizes: Size and Entries cannot be used together
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .stack_sizes
     Type: SHT_PROGBITS
@@ -213,9 +218,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .stack_sizes
     Type: SHT_PROGBITS
@@ -235,9 +241,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .stack_sizes
     Type: SHT_PROGBITS
@@ -246,13 +253,14 @@ Sections:
 
 # RUN: not yaml2obj --docnum=10 %s 2>&1 | FileCheck %s --check-prefix=SIZE-CONTENT-ERR
 
-# SIZE-CONTENT-ERR: error: Section size must be greater than or equal to the content size
+# SIZE-CONTENT-ERR: error: .stack_sizes: Size must be greater than or equal to the content size
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .stack_sizes
     Type: SHT_PROGBITS
@@ -274,9 +282,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:    '.stack_sizes (1)'
     Type:    SHT_PROGBITS

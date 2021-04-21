@@ -11,8 +11,7 @@
 ; CHECK:   [[COUNT:%[^ ]+]] = add i32 [[MAX]], -1
 ; CHECK:   br i1 %t1, label %do.body.preheader
 ; CHECK: do.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32 [[COUNT]])
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32 [[COUNT]])
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32 [[COUNT]])
 ; CHECK:   br label %do.body
 define void @test1(i1 zeroext %t1, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
@@ -37,7 +36,6 @@ if.end:                                           ; preds = %do.body, %entry
 ; CHECK-LABEL: test2
 ; CHECK-NOT: call i1 @llvm.test.set.loop.iterations
 ; CHECK-NOT: call void @llvm.set.loop.iterations
-; CHECK-NOT: call i32 @llvm.start.loop.iterations
 define void @test2(i1 zeroext %t1, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
   br i1 %t1, label %do.body, label %if.end
@@ -64,8 +62,7 @@ if.end:                                           ; preds = %do.body, %entry
 ; CHECK:   [[COUNT:%[^ ]+]] = select i1 [[CMP]], i32 %N, i32 1
 ; CHECK:   br i1 %brmerge.demorgan, label %do.body.preheader
 ; CHECK: do.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32 [[COUNT]])
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32 [[COUNT]])
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32 [[COUNT]])
 ; CHECK:   br label %do.body
 define void @test3(i1 zeroext %t1, i1 zeroext %t2, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
@@ -91,7 +88,7 @@ if.end:                                           ; preds = %do.body, %entry
 ; CHECK-LABEL: test4
 ; CHECK: entry:
 ; CHECK-LATCH:  br i1 %brmerge.demorgan, label %while.cond
-; CHECK-LATCH-NOT: @llvm{{.*}}loop.iterations 
+; CHECK-LATCH-NOT: call void @llvm{{.*}}loop.iterations 
 ; CHECK-EXIT:   br i1 %brmerge.demorgan, label %while.cond.preheader
 ; CHECK-EXIT: while.cond.preheader:
 ; CHECK-EXIT:   [[COUNT:%[^ ]+]] = add i32 %N, 1
@@ -125,8 +122,7 @@ if.end:                                           ; preds = %while.cond, %entry
 ; CHECK: entry:
 ; CHECK:   br i1 %or.cond, label %while.body.preheader
 ; CHECK: while.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32 %N)
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32 %N)
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32 %N)
 ; CHECK:   br label %while.body
 define void @test5(i1 zeroext %t1, i1 zeroext %t2, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
@@ -225,8 +221,7 @@ if.end:                                           ; preds = %while.body, %while.
 ; CHECK: while.preheader:
 ; CHECK:   br i1 %brmerge.demorgan, label %while.body.preheader
 ; CHECK: while.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32 %N)
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32 %N)
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32 %N)
 ; CHECK:   br label %while.body
 define void @test8(i1 zeroext %t1, i1 zeroext %t2, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
@@ -257,8 +252,7 @@ if.end:                                           ; preds = %while.body, %while.
 ; CHECK: entry:
 ; CHECK:   br i1 %brmerge.demorgan, label %do.body.preheader
 ; CHECK: do.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32 %N)
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32 %N)
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32 %N)
 ; CHECK:   br label %do.body
 define void @test9(i1 zeroext %t1, i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:
@@ -286,8 +280,7 @@ if.end:                                           ; preds = %do.body, %entry
 ; CHECK: entry:
 ; CHECK:   br i1 %cmp.1, label %do.body.preheader
 ; CHECK: do.body.preheader:
-; CHECK-EXIT:   call void @llvm.set.loop.iterations.i32(i32
-; CHECK-LATCH:   call i32 @llvm.start.loop.iterations.i32(i32
+; CHECK:   call void @llvm.set.loop.iterations.i32(i32
 ; CHECK:   br label %do.body
 define void @test10(i32* nocapture %a, i32* nocapture readonly %b, i32 %N) {
 entry:

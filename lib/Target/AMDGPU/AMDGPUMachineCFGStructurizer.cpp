@@ -11,17 +11,36 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
-#include "GCNSubtarget.h"
+#include "AMDGPUSubtarget.h"
+#include "SIInstrInfo.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegionInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Config/llvm-config.h"
+#include "llvm/IR/DebugLoc.h"
 #include "llvm/InitializePasses.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <tuple>
+#include <utility>
 
 using namespace llvm;
 
@@ -323,11 +342,11 @@ protected:
   LinearizedRegion *Parent;
   RegionMRT *RMRT;
 
-  void storeLiveOutReg(MachineBasicBlock *MBB, Register Reg,
+  void storeLiveOutReg(MachineBasicBlock *MBB, unsigned Reg,
                        MachineInstr *DefInstr, const MachineRegisterInfo *MRI,
                        const TargetRegisterInfo *TRI, PHILinearize &PHIInfo);
 
-  void storeLiveOutRegRegion(RegionMRT *Region, Register Reg,
+  void storeLiveOutRegRegion(RegionMRT *Region, unsigned Reg,
                              MachineInstr *DefInstr,
                              const MachineRegisterInfo *MRI,
                              const TargetRegisterInfo *TRI,
@@ -378,7 +397,7 @@ public:
 
   void replaceLiveOut(unsigned OldReg, unsigned NewReg);
 
-  void replaceRegister(unsigned Register, class Register NewRegister,
+  void replaceRegister(unsigned Register, unsigned NewRegister,
                        MachineRegisterInfo *MRI, bool ReplaceInside,
                        bool ReplaceOutside, bool IncludeLoopPHIs);
 
@@ -671,12 +690,12 @@ RegionMRT *MRT::buildMRT(MachineFunction &MF,
   return Result;
 }
 
-void LinearizedRegion::storeLiveOutReg(MachineBasicBlock *MBB, Register Reg,
+void LinearizedRegion::storeLiveOutReg(MachineBasicBlock *MBB, unsigned Reg,
                                        MachineInstr *DefInstr,
                                        const MachineRegisterInfo *MRI,
                                        const TargetRegisterInfo *TRI,
                                        PHILinearize &PHIInfo) {
-  if (Reg.isVirtual()) {
+  if (Register::isVirtualRegister(Reg)) {
     LLVM_DEBUG(dbgs() << "Considering Register: " << printReg(Reg, TRI)
                       << "\n");
     // If this is a source register to a PHI we are chaining, it
@@ -711,12 +730,12 @@ void LinearizedRegion::storeLiveOutReg(MachineBasicBlock *MBB, Register Reg,
   }
 }
 
-void LinearizedRegion::storeLiveOutRegRegion(RegionMRT *Region, Register Reg,
+void LinearizedRegion::storeLiveOutRegRegion(RegionMRT *Region, unsigned Reg,
                                              MachineInstr *DefInstr,
                                              const MachineRegisterInfo *MRI,
                                              const TargetRegisterInfo *TRI,
                                              PHILinearize &PHIInfo) {
-  if (Reg.isVirtual()) {
+  if (Register::isVirtualRegister(Reg)) {
     LLVM_DEBUG(dbgs() << "Considering Register: " << printReg(Reg, TRI)
                       << "\n");
     for (auto &UI : MRI->use_operands(Reg)) {
@@ -888,8 +907,7 @@ void LinearizedRegion::replaceLiveOut(unsigned OldReg, unsigned NewReg) {
   }
 }
 
-void LinearizedRegion::replaceRegister(unsigned Register,
-                                       class Register NewRegister,
+void LinearizedRegion::replaceRegister(unsigned Register, unsigned NewRegister,
                                        MachineRegisterInfo *MRI,
                                        bool ReplaceInside, bool ReplaceOutside,
                                        bool IncludeLoopPHI) {
@@ -932,7 +950,7 @@ void LinearizedRegion::replaceRegister(unsigned Register,
                          (IncludeLoopPHI && IsLoopPHI);
     if (ShouldReplace) {
 
-      if (NewRegister.isPhysical()) {
+      if (Register::isPhysicalRegister(NewRegister)) {
         LLVM_DEBUG(dbgs() << "Trying to substitute physical register: "
                           << printReg(NewRegister, MRI->getTargetRegisterInfo())
                           << "\n");
@@ -984,11 +1002,11 @@ void LinearizedRegion::addMBBs(LinearizedRegion *InnerRegion) {
 }
 
 bool LinearizedRegion::contains(MachineBasicBlock *MBB) {
-  return MBBs.contains(MBB);
+  return MBBs.count(MBB) == 1;
 }
 
 bool LinearizedRegion::isLiveOut(unsigned Reg) {
-  return LiveOuts.contains(Reg);
+  return LiveOuts.count(Reg) == 1;
 }
 
 bool LinearizedRegion::hasNoDef(unsigned Reg, MachineRegisterInfo *MRI) {
@@ -1007,7 +1025,7 @@ void LinearizedRegion::removeFalseRegisterKills(MachineRegisterInfo *MRI) {
       for (auto &RI : II.uses()) {
         if (RI.isReg()) {
           Register Reg = RI.getReg();
-          if (Reg.isVirtual()) {
+          if (Register::isVirtualRegister(Reg)) {
             if (hasNoDef(Reg, MRI))
               continue;
             if (!MRI->hasOneDef(Reg)) {
@@ -1150,7 +1168,7 @@ private:
   void createEntryPHIs(LinearizedRegion *CurrentRegion);
   void resolvePHIInfos(MachineBasicBlock *FunctionEntry);
 
-  void replaceRegisterWith(unsigned Register, class Register NewRegister);
+  void replaceRegisterWith(unsigned Register, unsigned NewRegister);
 
   MachineBasicBlock *createIfRegion(MachineBasicBlock *MergeBB,
                                     MachineBasicBlock *CodeBB,
@@ -1854,7 +1872,7 @@ MachineBasicBlock *AMDGPUMachineCFGStructurizer::createIfBlock(
                     ? SinglePred->findDebugLoc(SinglePred->getFirstTerminator())
                     : DebugLoc();
 
-  Register Reg =
+  unsigned Reg =
       TII->insertEQ(IfBB, IfBB->begin(), DL, IfReg,
                     SelectBB->getNumber() /* CodeBBStart->getNumber() */);
   if (&(*(IfBB->getParent()->begin())) == IfBB) {
@@ -2206,8 +2224,8 @@ void AMDGPUMachineCFGStructurizer::createEntryPHIs(LinearizedRegion *CurrentRegi
   PHIInfo.clear();
 }
 
-void AMDGPUMachineCFGStructurizer::replaceRegisterWith(
-    unsigned Register, class Register NewRegister) {
+void AMDGPUMachineCFGStructurizer::replaceRegisterWith(unsigned Register,
+                                                 unsigned NewRegister) {
   assert(Register != NewRegister && "Cannot replace a reg with itself");
 
   for (MachineRegisterInfo::reg_iterator I = MRI->reg_begin(Register),
@@ -2215,7 +2233,7 @@ void AMDGPUMachineCFGStructurizer::replaceRegisterWith(
        I != E;) {
     MachineOperand &O = *I;
     ++I;
-    if (NewRegister.isPhysical()) {
+    if (Register::isPhysicalRegister(NewRegister)) {
       LLVM_DEBUG(dbgs() << "Trying to substitute physical register: "
                         << printReg(NewRegister, MRI->getTargetRegisterInfo())
                         << "\n");
@@ -2316,7 +2334,7 @@ MachineBasicBlock *AMDGPUMachineCFGStructurizer::createIfRegion(
         TII->removeBranch(*RegionExit);
 
         // We need to create a backedge if there is a loop
-        Register Reg = TII->insertNE(
+        unsigned Reg = TII->insertNE(
             RegionExit, RegionExit->instr_end(), DL,
             CurrentRegion->getRegionMRT()->getInnerOutputRegister(),
             CurrentRegion->getRegionMRT()->getEntry()->getNumber());
@@ -2375,7 +2393,7 @@ MachineBasicBlock *AMDGPUMachineCFGStructurizer::createIfRegion(
       TII->removeBranch(*RegionExit);
 
       // We need to create a backedge if there is a loop
-      Register Reg =
+      unsigned Reg =
           TII->insertNE(RegionExit, RegionExit->instr_end(), DL,
                         CurrentRegion->getRegionMRT()->getInnerOutputRegister(),
                         CurrentRegion->getRegionMRT()->getEntry()->getNumber());
@@ -2574,7 +2592,7 @@ static void removeOldExitPreds(RegionMRT *Region) {
 static bool mbbHasBackEdge(MachineBasicBlock *MBB,
                            SmallPtrSet<MachineBasicBlock *, 8> &MBBs) {
   for (auto SI = MBB->succ_begin(), SE = MBB->succ_end(); SI != SE; ++SI) {
-    if (MBBs.contains(*SI)) {
+    if (MBBs.count(*SI) != 0) {
       return true;
     }
   }

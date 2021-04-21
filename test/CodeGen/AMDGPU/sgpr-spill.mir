@@ -1,28 +1,21 @@
-# RUN: llc -mtriple=amdgcn -mcpu=gfx900 -verify-machineinstrs -run-pass=prologepilog %s -o - | FileCheck -check-prefixes=CHECK,GCN64,MUBUF %s
-# RUN: llc -mtriple=amdgcn -mcpu=gfx1010 -mattr=+wavefrontsize32,-wavefrontsize64 -verify-machineinstrs -run-pass=prologepilog %s -o - | FileCheck -check-prefixes=CHECK,GCN32,MUBUF %s
-# RUN: llc -mtriple=amdgcn -mcpu=gfx900 -verify-machineinstrs -amdgpu-enable-flat-scratch -run-pass=prologepilog %s -o - | FileCheck -check-prefixes=CHECK,GCN64,FLATSCR %s
+# RUN: llc -mtriple=amdgcn -mcpu=gfx900 -verify-machineinstrs -run-pass=prologepilog %s -o - | FileCheck -check-prefix=CHECK -check-prefix=GCN64 %s
+# RUN: llc -mtriple=amdgcn -mcpu=gfx1010 -mattr=+wavefrontsize32,-wavefrontsize64 -verify-machineinstrs -run-pass=prologepilog %s -o - | FileCheck -check-prefix=CHECK -check-prefix=GCN32 %s
 
 
 # CHECK-LABEL: name: check_spill
-
-# FLATSCR: $sgpr33 = S_MOV_B32 0
-# FLATSCR: $flat_scr_lo = S_ADD_U32 $sgpr0, $sgpr11, implicit-def $scc
-# FLATSCR: $flat_scr_hi = S_ADDC_U32 $sgpr1, 0, implicit-def $scc, implicit $scc
 
 # S32 with kill
 # CHECK: V_WRITELANE
 # CHECK: $sgpr12 = S_MOV_B32 $exec_lo
 # CHECK: $exec_lo = S_MOV_B32 1
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR killed $vgpr{{[0-9]+}}, $sgpr33, 4
+# CHECK: BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
 # CHECK: $exec_lo = S_MOV_B32 killed $sgpr12
 
 # S32 without kill
 # CHECK: V_WRITELANE
 # CHECK: $sgpr12 = S_MOV_B32 $exec_lo
 # CHECK: $exec_lo = S_MOV_B32 1
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR $vgpr{{[0-9]+}}, $sgpr33, 4
+# CHECK: BUFFER_STORE_DWORD_OFFSET $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
 # CHECK: $sgpr12 = V_READLANE
 
 # S64 with kill
@@ -32,8 +25,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 3
 # GCN64: $exec = S_MOV_B64 3
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR killed $vgpr{{[0-9]+}}, $sgpr33, 8
+# CHECK: BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -44,8 +36,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 3
 # GCN64: $exec = S_MOV_B64 3
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR $vgpr{{[0-9]+}}, $sgpr33, 8
+# CHECK: BUFFER_STORE_DWORD_OFFSET $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
 # GCN32: $exec_lo = S_MOV_B32 $sgpr12
 # GCN64: $exec = S_MOV_B64 $sgpr12_sgpr13
 # GCN64: $sgpr13 = V_READLANE
@@ -59,8 +50,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 7
 # GCN64: $exec = S_MOV_B64 7
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 16
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR killed $vgpr{{[0-9]+}}, $sgpr33, 16
+# CHECK: BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 16
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -73,8 +63,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 15
 # GCN64: $exec = S_MOV_B64 15
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 28
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR killed $vgpr{{[0-9]+}}, $sgpr33, 28
+# CHECK: BUFFER_STORE_DWORD_OFFSET killed $vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 28
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -88,8 +77,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 31
 # GCN64: $exec = S_MOV_B64 31
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 44
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR {{(killed )?}}$vgpr{{[0-9]+}}, $sgpr33, 44
+# CHECK: BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 44
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -106,8 +94,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 255
 # GCN64: $exec = S_MOV_B64 255
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 64
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR {{(killed )?}}$vgpr{{[0-9]+}}, $sgpr33, 64
+# CHECK: BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 64
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -132,8 +119,7 @@
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 65535
 # GCN64: $exec = S_MOV_B64 65535
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 96
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR {{(killed )?}}$vgpr{{[0-9]+}}, $sgpr33, 96
+# CHECK: BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 96
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 
@@ -174,8 +160,7 @@
 # GCN64: $sgpr64_sgpr65 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 4294967295
 # GCN64: $exec = S_MOV_B64 4294967295
-# MUBUF:   BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 160
-# FLATSCR: SCRATCH_STORE_DWORD_SADDR {{(killed )?}}$vgpr{{[0-9]+}}, $sgpr33, 160
+# CHECK: BUFFER_STORE_DWORD_OFFSET {{(killed )?}}$vgpr{{[0-9]+}}, ${{(sgpr[0-9_]+)*}}, $sgpr33, 160
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr64
 # GCN64: $exec = S_MOV_B64 killed $sgpr64_sgpr65
 
@@ -218,12 +203,11 @@ machineFunctionInfo:
   stackPtrOffsetReg: '$sgpr32'
   frameOffsetReg: '$sgpr33'
   argumentInfo:
-    flatScratchInit: { reg: '$sgpr0_sgpr1' }
-    dispatchPtr:     { reg: '$sgpr2_sgpr3' }
-    privateSegmentBuffer: { reg: '$sgpr4_sgpr5_sgpr6_sgpr7' }
-    kernargSegmentPtr: { reg: '$sgpr8_sgpr9' }
-    workGroupIDX:    { reg: '$sgpr10' }
-    privateSegmentWaveByteOffset: { reg: '$sgpr11' }
+    privateSegmentBuffer: { reg: '$sgpr0_sgpr1_sgpr2_sgpr3' }
+    dispatchPtr:     { reg: '$sgpr4_sgpr5' }
+    kernargSegmentPtr: { reg: '$sgpr6_sgpr7' }
+    workGroupIDX:    { reg: '$sgpr8' }
+    privateSegmentWaveByteOffset: { reg: '$sgpr9' }
 body:             |
   bb.0:
     liveins: $sgpr8, $sgpr4_sgpr5, $sgpr6_sgpr7
@@ -261,15 +245,10 @@ body:             |
 
 # CHECK-LABEL: name: check_reload
 
-# FLATSCR: $sgpr33 = S_MOV_B32 0
-# FLATSCR: $flat_scr_lo = S_ADD_U32 $sgpr0, $sgpr11, implicit-def $scc
-# FLATSCR: $flat_scr_hi = S_ADDC_U32 $sgpr1, 0, implicit-def $scc, implicit $scc
-
 # S32
 # CHECK: $sgpr12 = S_MOV_B32 $exec_lo
 # CHECK: $exec_lo = S_MOV_B32 1
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 4
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 4
 # CHECK: $exec_lo = S_MOV_B32 killed $sgpr12
 # CHECK: $sgpr12 = V_READLANE
 
@@ -278,8 +257,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 3
 # GCN64: $exec = S_MOV_B64 3
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 8
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 8
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -290,8 +268,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 7
 # GCN64: $exec = S_MOV_B64 7
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 16
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 16
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 16
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -303,8 +280,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 15
 # GCN64: $exec = S_MOV_B64 15
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 28
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 28
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 28
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -317,8 +293,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 31
 # GCN64: $exec = S_MOV_B64 31
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 44
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 44
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 44
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -332,8 +307,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 255
 # GCN64: $exec = S_MOV_B64 255
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 64
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 64
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 64
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -350,8 +324,7 @@ body:             |
 # GCN64: $sgpr12_sgpr13 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 65535
 # GCN64: $exec = S_MOV_B64 65535
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 96
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 96
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 96
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr12
 # GCN64: $exec = S_MOV_B64 killed $sgpr12_sgpr13
 # CHECK: $sgpr12 = V_READLANE
@@ -376,8 +349,7 @@ body:             |
 # GCN64: $sgpr64_sgpr65 = S_MOV_B64 $exec
 # GCN32: $exec_lo = S_MOV_B32 4294967295
 # GCN64: $exec = S_MOV_B64 4294967295
-# MUBUF:   BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 160
-# FLATSCR: SCRATCH_LOAD_DWORD_SADDR $sgpr33, 160
+# CHECK: BUFFER_LOAD_DWORD_OFFSET ${{(sgpr[0-9_]+)*}}, $sgpr33, 160
 # GCN32: $exec_lo = S_MOV_B32 killed $sgpr64
 # GCN64: $exec = S_MOV_B64 killed $sgpr64_sgpr65
 # CHECK: $sgpr64 = V_READLANE
@@ -440,12 +412,11 @@ machineFunctionInfo:
   stackPtrOffsetReg: '$sgpr32'
   frameOffsetReg: '$sgpr33'
   argumentInfo:
-    flatScratchInit: { reg: '$sgpr0_sgpr1' }
-    dispatchPtr:     { reg: '$sgpr2_sgpr3' }
-    privateSegmentBuffer: { reg: '$sgpr4_sgpr5_sgpr6_sgpr7' }
-    kernargSegmentPtr: { reg: '$sgpr8_sgpr9' }
-    workGroupIDX:    { reg: '$sgpr10' }
-    privateSegmentWaveByteOffset: { reg: '$sgpr11' }
+    privateSegmentBuffer: { reg: '$sgpr0_sgpr1_sgpr2_sgpr3' }
+    dispatchPtr:     { reg: '$sgpr4_sgpr5' }
+    kernargSegmentPtr: { reg: '$sgpr6_sgpr7' }
+    workGroupIDX:    { reg: '$sgpr8' }
+    privateSegmentWaveByteOffset: { reg: '$sgpr9' }
 body:             |
   bb.0:
     liveins: $sgpr8, $sgpr4_sgpr5, $sgpr6_sgpr7

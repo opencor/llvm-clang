@@ -552,7 +552,7 @@ MipsConstantIslands::doInitialPlacement(std::vector<MachineInstr*> &CPEMIs) {
 
   const DataLayout &TD = MF->getDataLayout();
   for (unsigned i = 0, e = CPs.size(); i != e; ++i) {
-    unsigned Size = CPs[i].getSizeInBytes(TD);
+    unsigned Size = TD.getTypeAllocSize(CPs[i].getType());
     assert(Size >= 4 && "Too small constant pool entry");
     Align Alignment = CPs[i].getAlign();
     // Verify that all constant pool entries are a multiple of their alignment.
@@ -593,7 +593,12 @@ static bool BBHasFallthrough(MachineBasicBlock *MBB) {
     return false;
 
   MachineBasicBlock *NextBB = &*std::next(MBBI);
-  return llvm::is_contained(MBB->successors(), NextBB);
+  for (MachineBasicBlock::succ_iterator I = MBB->succ_begin(),
+       E = MBB->succ_end(); I != E; ++I)
+    if (*I == NextBB)
+      return true;
+
+  return false;
 }
 
 /// findConstPoolEntry - Given the constpool index and CONSTPOOL_ENTRY MI,

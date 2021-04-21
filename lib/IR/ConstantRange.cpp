@@ -26,7 +26,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
-#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/Support/Compiler.h"
@@ -411,21 +410,6 @@ bool ConstantRange::contains(const ConstantRange &Other) const {
            Lower.ule(Other.getLower());
 
   return Other.getUpper().ule(Upper) && Lower.ule(Other.getLower());
-}
-
-unsigned ConstantRange::getActiveBits() const {
-  if (isEmptySet())
-    return 0;
-
-  return getUnsignedMax().getActiveBits();
-}
-
-unsigned ConstantRange::getMinSignedBits() const {
-  if (isEmptySet())
-    return 0;
-
-  return std::max(getSignedMin().getMinSignedBits(),
-                  getSignedMax().getMinSignedBits());
 }
 
 ConstantRange ConstantRange::subtract(const APInt &Val) const {
@@ -851,54 +835,6 @@ ConstantRange ConstantRange::overflowingBinaryOp(Instruction::BinaryOps BinOp,
   }
 }
 
-bool ConstantRange::isIntrinsicSupported(Intrinsic::ID IntrinsicID) {
-  switch (IntrinsicID) {
-  case Intrinsic::uadd_sat:
-  case Intrinsic::usub_sat:
-  case Intrinsic::sadd_sat:
-  case Intrinsic::ssub_sat:
-  case Intrinsic::umin:
-  case Intrinsic::umax:
-  case Intrinsic::smin:
-  case Intrinsic::smax:
-  case Intrinsic::abs:
-    return true;
-  default:
-    return false;
-  }
-}
-
-ConstantRange ConstantRange::intrinsic(Intrinsic::ID IntrinsicID,
-                                       ArrayRef<ConstantRange> Ops) {
-  switch (IntrinsicID) {
-  case Intrinsic::uadd_sat:
-    return Ops[0].uadd_sat(Ops[1]);
-  case Intrinsic::usub_sat:
-    return Ops[0].usub_sat(Ops[1]);
-  case Intrinsic::sadd_sat:
-    return Ops[0].sadd_sat(Ops[1]);
-  case Intrinsic::ssub_sat:
-    return Ops[0].ssub_sat(Ops[1]);
-  case Intrinsic::umin:
-    return Ops[0].umin(Ops[1]);
-  case Intrinsic::umax:
-    return Ops[0].umax(Ops[1]);
-  case Intrinsic::smin:
-    return Ops[0].smin(Ops[1]);
-  case Intrinsic::smax:
-    return Ops[0].smax(Ops[1]);
-  case Intrinsic::abs: {
-    const APInt *IntMinIsPoison = Ops[1].getSingleElement();
-    assert(IntMinIsPoison && "Must be known (immarg)");
-    assert(IntMinIsPoison->getBitWidth() == 1 && "Must be boolean");
-    return Ops[0].abs(IntMinIsPoison->getBoolValue());
-  }
-  default:
-    assert(!isIntrinsicSupported(IntrinsicID) && "Shouldn't be supported");
-    llvm_unreachable("Unsupported intrinsic");
-  }
-}
-
 ConstantRange
 ConstantRange::add(const ConstantRange &Other) const {
   if (isEmptySet() || Other.isEmptySet())
@@ -1255,16 +1191,6 @@ ConstantRange ConstantRange::srem(const ConstantRange &RHS) const {
   return ConstantRange(std::move(Lower), std::move(Upper));
 }
 
-ConstantRange ConstantRange::binaryNot() const {
-  if (isEmptySet())
-    return getEmpty();
-
-  if (isWrappedSet())
-    return getFull();
-
-  return ConstantRange(APInt::getAllOnesValue(getBitWidth())).sub(*this);
-}
-
 ConstantRange
 ConstantRange::binaryAnd(const ConstantRange &Other) const {
   if (isEmptySet() || Other.isEmptySet())
@@ -1302,12 +1228,6 @@ ConstantRange ConstantRange::binaryXor(const ConstantRange &Other) const {
   // Use APInt's implementation of XOR for single element ranges.
   if (isSingleElement() && Other.isSingleElement())
     return {*getSingleElement() ^ *Other.getSingleElement()};
-
-  // Special-case binary complement, since we can give a precise answer.
-  if (Other.isSingleElement() && Other.getSingleElement()->isAllOnesValue())
-    return binaryNot();
-  if (isSingleElement() && getSingleElement()->isAllOnesValue())
-    return Other.binaryNot();
 
   // TODO: replace this with something less conservative
   return getFull();
@@ -1498,7 +1418,7 @@ ConstantRange ConstantRange::inverse() const {
   return ConstantRange(Upper, Lower);
 }
 
-ConstantRange ConstantRange::abs(bool IntMinIsPoison) const {
+ConstantRange ConstantRange::abs() const {
   if (isEmptySet())
     return getEmpty();
 
@@ -1510,22 +1430,11 @@ ConstantRange ConstantRange::abs(bool IntMinIsPoison) const {
     else
       Lo = APIntOps::umin(Lower, -Upper + 1);
 
-    // If SignedMin is not poison, then it is included in the result range.
-    if (IntMinIsPoison)
-      return ConstantRange(Lo, APInt::getSignedMinValue(getBitWidth()));
-    else
-      return ConstantRange(Lo, APInt::getSignedMinValue(getBitWidth()) + 1);
+    // SignedMin is included in the result range.
+    return ConstantRange(Lo, APInt::getSignedMinValue(getBitWidth()) + 1);
   }
 
   APInt SMin = getSignedMin(), SMax = getSignedMax();
-
-  // Skip SignedMin if it is poison.
-  if (IntMinIsPoison && SMin.isMinSignedValue()) {
-    // The range may become empty if it *only* contains SignedMin.
-    if (SMax.isMinSignedValue())
-      return getEmpty();
-    ++SMin;
-  }
 
   // All non-negative.
   if (SMin.isNonNegative())

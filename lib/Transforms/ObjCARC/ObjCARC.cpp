@@ -29,8 +29,8 @@ void llvm::initializeObjCARCOpts(PassRegistry &Registry) {
   initializeObjCARCAAWrapperPassPass(Registry);
   initializeObjCARCAPElimPass(Registry);
   initializeObjCARCExpandPass(Registry);
-  initializeObjCARCContractLegacyPassPass(Registry);
-  initializeObjCARCOptLegacyPassPass(Registry);
+  initializeObjCARCContractPass(Registry);
+  initializeObjCARCOptPass(Registry);
   initializePAEvalPass(Registry);
 }
 

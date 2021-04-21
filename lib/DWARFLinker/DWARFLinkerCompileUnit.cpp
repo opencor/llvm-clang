@@ -36,7 +36,7 @@ StringRef CompileUnit::getSysRoot() {
   }
   return SysRoot;
 }
-
+ 
 void CompileUnit::markEverythingAsKept() {
   unsigned Idx = 0;
 
@@ -69,10 +69,10 @@ void CompileUnit::markEverythingAsKept() {
   }
 }
 
-uint64_t CompileUnit::computeNextUnitOffset(uint16_t DwarfVersion) {
+uint64_t CompileUnit::computeNextUnitOffset() {
   NextUnitOffset = StartOffset;
   if (NewUnit) {
-    NextUnitOffset += (DwarfVersion >= 5) ? 12 : 11; // Header size
+    NextUnitOffset += 11 /* Header size */;
     NextUnitOffset += NewUnit->getUnitDie().getSize();
   }
   return NextUnitOffset;

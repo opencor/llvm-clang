@@ -56,11 +56,10 @@ public:
                  bool isExternallyInitialized = false);
   /// GlobalVariable ctor - This creates a global and inserts it before the
   /// specified other global.
-  GlobalVariable(Module &M, Type *Ty, bool isConstant, LinkageTypes Linkage,
-                 Constant *Initializer, const Twine &Name = "",
-                 GlobalVariable *InsertBefore = nullptr,
-                 ThreadLocalMode = NotThreadLocal,
-                 Optional<unsigned> AddressSpace = None,
+  GlobalVariable(Module &M, Type *Ty, bool isConstant,
+                 LinkageTypes Linkage, Constant *Initializer,
+                 const Twine &Name = "", GlobalVariable *InsertBefore = nullptr,
+                 ThreadLocalMode = NotThreadLocal, unsigned AddressSpace = 0,
                  bool isExternallyInitialized = false);
   GlobalVariable(const GlobalVariable &) = delete;
   GlobalVariable &operator=(const GlobalVariable &) = delete;

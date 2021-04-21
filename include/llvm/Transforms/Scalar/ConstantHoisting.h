@@ -198,6 +198,7 @@ private:
   // constant GEP base.
   bool emitBaseConstants(GlobalVariable *BaseGV);
   void deleteDeadCastInst() const;
+  bool optimizeConstants(Function &Fn);
 };
 
 } // end namespace llvm

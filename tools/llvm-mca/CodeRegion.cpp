@@ -63,6 +63,7 @@ void CodeRegions::beginRegion(StringRef Description, SMLoc Loc) {
 
   ActiveRegions[Description] = Regions.size();
   Regions.emplace_back(std::make_unique<CodeRegion>(Description, Loc));
+  return;
 }
 
 void CodeRegions::endRegion(StringRef Description, SMLoc Loc) {

@@ -196,9 +196,15 @@ void RegisterFile::addRegisterWrite(WriteRef Write,
   // Update zero registers.
   MCPhysReg ZeroRegisterID =
       WS.clearsSuperRegisters() ? RegID : WS.getRegisterID();
-  ZeroRegisters.setBitVal(ZeroRegisterID, IsWriteZero);
-  for (MCSubRegIterator I(ZeroRegisterID, &MRI); I.isValid(); ++I)
-    ZeroRegisters.setBitVal(*I, IsWriteZero);
+  if (IsWriteZero) {
+    ZeroRegisters.setBit(ZeroRegisterID);
+    for (MCSubRegIterator I(ZeroRegisterID, &MRI); I.isValid(); ++I)
+      ZeroRegisters.setBit(*I);
+  } else {
+    ZeroRegisters.clearBit(ZeroRegisterID);
+    for (MCSubRegIterator I(ZeroRegisterID, &MRI); I.isValid(); ++I)
+      ZeroRegisters.clearBit(*I);
+  }
 
   // If this is move has been eliminated, then the call to tryEliminateMove
   // should have already updated all the register mappings.
@@ -227,7 +233,10 @@ void RegisterFile::addRegisterWrite(WriteRef Write,
       RegisterMappings[*I].second.AliasRegID = 0U;
     }
 
-    ZeroRegisters.setBitVal(*I, IsWriteZero);
+    if (IsWriteZero)
+      ZeroRegisters.setBit(*I);
+    else
+      ZeroRegisters.clearBit(*I);
   }
 }
 

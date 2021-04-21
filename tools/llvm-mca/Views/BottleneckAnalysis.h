@@ -80,13 +80,12 @@
 #ifndef LLVM_TOOLS_LLVM_MCA_BOTTLENECK_ANALYSIS_H
 #define LLVM_TOOLS_LLVM_MCA_BOTTLENECK_ANALYSIS_H
 
-#include "Views/InstructionView.h"
+#include "Views/View.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCSchedule.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
@@ -283,10 +282,13 @@ public:
 };
 
 /// A view that collects and prints a few performance numbers.
-class BottleneckAnalysis : public InstructionView {
+class BottleneckAnalysis : public View {
+  const MCSubtargetInfo &STI;
+  MCInstPrinter &MCIP;
   PressureTracker Tracker;
   DependencyGraph DG;
 
+  ArrayRef<MCInst> Source;
   unsigned Iterations;
   unsigned TotalCycles;
 
@@ -315,9 +317,6 @@ class BottleneckAnalysis : public InstructionView {
   void addMemoryDep(unsigned From, unsigned To, unsigned Cy);
   void addResourceDep(unsigned From, unsigned To, uint64_t Mask, unsigned Cy);
 
-  void printInstruction(formatted_raw_ostream &FOS, const MCInst &MCI,
-                        bool UseDifferentColor = false) const;
-
   // Prints a bottleneck message to OS.
   void printBottleneckHints(raw_ostream &OS) const;
   void printCriticalSequence(raw_ostream &OS) const;
@@ -332,8 +331,6 @@ public:
   void onEvent(const HWInstructionEvent &Event) override;
 
   void printView(raw_ostream &OS) const override;
-  StringRef getNameAsString() const override { return "BottleneckAnalysis"; }
-  json::Value toJSON() const override { return "not implemented"; }
 
 #ifndef NDEBUG
   void dump(raw_ostream &OS, MCInstPrinter &MCIP) const { DG.dump(OS, MCIP); }

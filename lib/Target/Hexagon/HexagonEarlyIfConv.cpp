@@ -386,7 +386,7 @@ bool HexagonEarlyIfConversion::isValidCandidate(const MachineBasicBlock *B)
       if (!MO.isReg() || !MO.isDef())
         continue;
       Register R = MO.getReg();
-      if (!R.isVirtual())
+      if (!Register::isVirtualRegister(R))
         continue;
       if (!isPredicate(R))
         continue;
@@ -403,7 +403,7 @@ bool HexagonEarlyIfConversion::usesUndefVReg(const MachineInstr *MI) const {
     if (!MO.isReg() || !MO.isUse())
       continue;
     Register R = MO.getReg();
-    if (!R.isVirtual())
+    if (!Register::isVirtualRegister(R))
       continue;
     const MachineInstr *DefI = MRI->getVRegDef(R);
     // "Undefined" virtual registers are actually defined via IMPLICIT_DEF.
@@ -493,7 +493,7 @@ unsigned HexagonEarlyIfConversion::countPredicateDefs(
       if (!MO.isReg() || !MO.isDef())
         continue;
       Register R = MO.getReg();
-      if (!R.isVirtual())
+      if (!Register::isVirtualRegister(R))
         continue;
       if (isPredicate(R))
         PredDefs++;

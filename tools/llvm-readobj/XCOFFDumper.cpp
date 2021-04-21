@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Error.h"
 #include "ObjDumper.h"
 #include "llvm-readobj.h"
 #include "llvm/Object/XCOFFObjectFile.h"
@@ -24,7 +25,7 @@ class XCOFFDumper : public ObjDumper {
 
 public:
   XCOFFDumper(const XCOFFObjectFile &Obj, ScopedPrinter &Writer)
-      : ObjDumper(Writer, Obj.getFileName()), Obj(Obj) {}
+      : ObjDumper(Writer), Obj(Obj) {}
 
   void printFileHeaders() override;
   void printSectionHeaders() override;
@@ -514,8 +515,14 @@ void XCOFFDumper::printSectionHeaders(ArrayRef<T> Sections) {
 }
 
 namespace llvm {
-std::unique_ptr<ObjDumper>
-createXCOFFDumper(const object::XCOFFObjectFile &XObj, ScopedPrinter &Writer) {
-  return std::make_unique<XCOFFDumper>(XObj, Writer);
+std::error_code createXCOFFDumper(const object::ObjectFile *Obj,
+                                  ScopedPrinter &Writer,
+                                  std::unique_ptr<ObjDumper> &Result) {
+  const XCOFFObjectFile *XObj = dyn_cast<XCOFFObjectFile>(Obj);
+  if (!XObj)
+    return readobj_error::unsupported_obj_file_format;
+
+  Result.reset(new XCOFFDumper(*XObj, Writer));
+  return readobj_error::success;
 }
 } // namespace llvm

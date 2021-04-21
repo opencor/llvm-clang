@@ -90,20 +90,6 @@ private:
   IdKind Kind;
 };
 
-// Generic type information for an assembly object.
-// All sizes measured in bytes.
-struct AsmTypeInfo {
-  StringRef Name;
-  unsigned Size = 0;
-  unsigned ElementSize = 0;
-  unsigned Length = 0;
-};
-
-struct AsmFieldInfo {
-  AsmTypeInfo Type;
-  unsigned Offset = 0;
-};
-
 /// Generic Sema callback for assembly parser.
 class MCAsmParserSemaCallback {
 public:
@@ -184,17 +170,12 @@ public:
 
   virtual bool isParsingMasm() const { return false; }
 
-  virtual bool defineMacro(StringRef Name, StringRef Value) { return true; }
-
-  virtual bool lookUpField(StringRef Name, AsmFieldInfo &Info) const {
+  virtual bool lookUpField(StringRef Name, StringRef &Type,
+                           unsigned &Offset) const {
     return true;
   }
-  virtual bool lookUpField(StringRef Base, StringRef Member,
-                           AsmFieldInfo &Info) const {
-    return true;
-  }
-
-  virtual bool lookUpType(StringRef Name, AsmTypeInfo &Info) const {
+  virtual bool lookUpField(StringRef Base, StringRef Member, StringRef &Type,
+                           unsigned &Offset) const {
     return true;
   }
 
@@ -300,8 +281,7 @@ public:
   /// \param Res - The value of the expression. The result is undefined
   /// on error.
   /// \return - False on success.
-  virtual bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc,
-                                AsmTypeInfo *TypeInfo) = 0;
+  virtual bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) = 0;
 
   /// Parse an arbitrary expression, assuming that an initial '(' has
   /// already been consumed.

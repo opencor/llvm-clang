@@ -32,7 +32,8 @@ class TargetRegisterInfo;
 
   class LLVM_LIBRARY_VISIBILITY BranchFolder {
   public:
-    explicit BranchFolder(bool DefaultEnableTailMerge, bool CommonHoist,
+    explicit BranchFolder(bool defaultEnableTailMerge,
+                          bool CommonHoist,
                           MBFIWrapper &FreqInfo,
                           const MachineBranchProbabilityInfo &ProbInfo,
                           ProfileSummaryInfo *PSI,

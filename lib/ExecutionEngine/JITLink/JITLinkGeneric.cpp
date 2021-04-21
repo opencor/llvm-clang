@@ -24,6 +24,15 @@ JITLinkerBase::~JITLinkerBase() {}
 
 void JITLinkerBase::linkPhase1(std::unique_ptr<JITLinkerBase> Self) {
 
+  LLVM_DEBUG({ dbgs() << "Building jitlink graph for new input...\n"; });
+
+  // Build the link graph.
+  if (auto GraphOrErr = buildGraph(Ctx->getObjectBuffer()))
+    G = std::move(*GraphOrErr);
+  else
+    return Ctx->notifyFailed(GraphOrErr.takeError());
+  assert(G && "Graph should have been created by buildGraph above");
+
   LLVM_DEBUG({
     dbgs() << "Starting link phase 1 for graph " << G->getName() << "\n";
   });
@@ -55,22 +64,10 @@ void JITLinkerBase::linkPhase1(std::unique_ptr<JITLinkerBase> Self) {
   if (auto Err = allocateSegments(Layout))
     return Ctx->notifyFailed(std::move(Err));
 
-  LLVM_DEBUG({
-    dbgs() << "Link graph \"" << G->getName()
-           << "\" before post-allocation passes:\n";
-    dumpGraph(dbgs());
-  });
-
-  // Run post-allocation passes.
-  if (auto Err = runPasses(Passes.PostAllocationPasses))
-    return Ctx->notifyFailed(std::move(Err));
-
   // Notify client that the defined symbols have been assigned addresses.
   LLVM_DEBUG(
       { dbgs() << "Resolving symbols defined in " << G->getName() << "\n"; });
-
-  if (auto Err = Ctx->notifyResolved(*G))
-    return Ctx->notifyFailed(std::move(Err));
+  Ctx->notifyResolved(*G);
 
   auto ExternalSymbols = getExternalSymbolNames();
 
@@ -120,11 +117,11 @@ void JITLinkerBase::linkPhase2(std::unique_ptr<JITLinkerBase> Self,
 
   LLVM_DEBUG({
     dbgs() << "Link graph \"" << G->getName()
-           << "\" before pre-fixup passes:\n";
+           << "\" before post-allocation passes:\n";
     dumpGraph(dbgs());
   });
 
-  if (auto Err = runPasses(Passes.PreFixupPasses))
+  if (auto Err = runPasses(Passes.PostAllocationPasses))
     return deallocateAndBailOut(std::move(Err));
 
   LLVM_DEBUG({
@@ -264,8 +261,7 @@ Error JITLinkerBase::allocateSegments(const SegmentLayoutMap &Layout) {
   }
   LLVM_DEBUG(dbgs() << " }\n");
 
-  if (auto AllocOrErr =
-          Ctx->getMemoryManager().allocate(Ctx->getJITLinkDylib(), Segments))
+  if (auto AllocOrErr = Ctx->getMemoryManager().allocate(Segments))
     Alloc = std::move(*AllocOrErr);
   else
     return AllocOrErr.takeError();
@@ -336,6 +332,12 @@ void JITLinkerBase::applyLookupResult(AsyncLookupResult Result) {
       dbgs() << "  " << Sym->getName() << ": "
              << formatv("{0:x16}", Sym->getAddress()) << "\n";
   });
+  assert(llvm::all_of(G->external_symbols(),
+                      [](Symbol *Sym) {
+                        return Sym->getAddress() != 0 ||
+                               Sym->getLinkage() == Linkage::Weak;
+                      }) &&
+         "All strong external symbols should have been resolved by now");
 }
 
 void JITLinkerBase::copyBlockContentToWorkingMemory(
@@ -443,19 +445,16 @@ void prune(LinkGraph &G) {
     VisitedBlocks.insert(&B);
 
     for (auto &E : Sym->getBlock().edges()) {
-      // If the edge target is a defined symbol that is being newly marked live
-      // then add it to the worklist.
-      if (E.getTarget().isDefined() && !E.getTarget().isLive())
+      if (E.getTarget().isDefined() && !E.getTarget().isLive()) {
+        E.getTarget().setLive(true);
         Worklist.push_back(&E.getTarget());
-
-      // Mark the target live.
-      E.getTarget().setLive(true);
+      }
     }
   }
 
-  // Collect all defined symbols to remove, then remove them.
+  // Collect all the symbols to remove, then remove them.
   {
-    LLVM_DEBUG(dbgs() << "Dead-stripping defined symbols:\n");
+    LLVM_DEBUG(dbgs() << "Dead-stripping symbols:\n");
     std::vector<Symbol *> SymbolsToRemove;
     for (auto *Sym : G.defined_symbols())
       if (!Sym->isLive())
@@ -476,19 +475,6 @@ void prune(LinkGraph &G) {
     for (auto *B : BlocksToRemove) {
       LLVM_DEBUG(dbgs() << "  " << *B << "...\n");
       G.removeBlock(*B);
-    }
-  }
-
-  // Collect all external symbols to remove, then remove them.
-  {
-    LLVM_DEBUG(dbgs() << "Removing unused external symbols:\n");
-    std::vector<Symbol *> SymbolsToRemove;
-    for (auto *Sym : G.external_symbols())
-      if (!Sym->isLive())
-        SymbolsToRemove.push_back(Sym);
-    for (auto *Sym : SymbolsToRemove) {
-      LLVM_DEBUG(dbgs() << "  " << *Sym << "...\n");
-      G.removeExternalSymbol(*Sym);
     }
   }
 }

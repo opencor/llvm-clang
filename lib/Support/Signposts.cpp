@@ -13,7 +13,6 @@
 #include "llvm/Config/config.h"
 #if LLVM_SUPPORT_XCODE_SIGNPOSTS
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/Support/Mutex.h"
 #include <os/signpost.h>
 #endif // if LLVM_SUPPORT_XCODE_SIGNPOSTS
 
@@ -34,22 +33,21 @@ void LogDeleter(os_log_t *X) {
 
 namespace llvm {
 class SignpostEmitterImpl {
-  using LogPtrTy = std::unique_ptr<os_log_t, std::function<void(os_log_t *)>>;
+  using LogPtrTy =
+      std::unique_ptr<os_log_t, std::function<void(os_log_t *)>>;
   using LogTy = LogPtrTy::element_type;
 
   LogPtrTy SignpostLog;
-  DenseMap<const void *, os_signpost_id_t> Signposts;
-  sys::SmartMutex<true> Mutex;
+  DenseMap<const Timer *, os_signpost_id_t> Signposts;
 
   LogTy &getLogger() const { return *SignpostLog; }
-  os_signpost_id_t getSignpostForObject(const void *O) {
-    sys::SmartScopedLock<true> Lock(Mutex);
-    const auto &I = Signposts.find(O);
+  os_signpost_id_t getSignpostForTimer(const Timer *T) {
+    const auto &I = Signposts.find(T);
     if (I != Signposts.end())
       return I->second;
 
     const auto &Inserted = Signposts.insert(
-        std::make_pair(O, os_signpost_id_make_with_pointer(getLogger(), O)));
+        std::make_pair(T, os_signpost_id_make_with_pointer(getLogger(), T)));
     return Inserted.first->second;
   }
 
@@ -58,19 +56,20 @@ public:
 
   bool isEnabled() const { return os_signpost_enabled(*SignpostLog); }
 
-  void startInterval(const void *O, llvm::StringRef Name) {
+  void startTimerInterval(Timer *T) {
     if (isEnabled()) {
-      // Both strings used here are required to be constant literal strings.
-      os_signpost_interval_begin(getLogger(), getSignpostForObject(O),
-                                 "LLVM Timers", "Begin %s", Name.data());
+      // Both strings used here are required to be constant literal strings
+      os_signpost_interval_begin(getLogger(), getSignpostForTimer(T),
+                                 "Pass Timers", "Begin %s",
+                                 T->getName().c_str());
     }
   }
 
-  void endInterval(const void *O, llvm::StringRef Name) {
+  void endTimerInterval(Timer *T) {
     if (isEnabled()) {
-      // Both strings used here are required to be constant literal strings.
-      os_signpost_interval_end(getLogger(), getSignpostForObject(O),
-                               "LLVM Timers", "End %s", Name.data());
+      // Both strings used here are required to be constant literal strings
+      os_signpost_interval_end(getLogger(), getSignpostForTimer(T),
+                               "Pass Timers", "End %s", T->getName().c_str());
     }
   }
 };
@@ -86,7 +85,7 @@ public:
 SignpostEmitter::SignpostEmitter() {
 #if HAVE_ANY_SIGNPOST_IMPL
   Impl = new SignpostEmitterImpl();
-#else  // if HAVE_ANY_SIGNPOST_IMPL
+#else // if HAVE_ANY_SIGNPOST_IMPL
   Impl = nullptr;
 #endif // if !HAVE_ANY_SIGNPOST_IMPL
 }
@@ -105,18 +104,18 @@ bool SignpostEmitter::isEnabled() const {
 #endif // if !HAVE_ANY_SIGNPOST_IMPL
 }
 
-void SignpostEmitter::startInterval(const void *O, StringRef Name) {
+void SignpostEmitter::startTimerInterval(Timer *T) {
 #if HAVE_ANY_SIGNPOST_IMPL
   if (Impl == nullptr)
     return;
-  return Impl->startInterval(O, Name);
+  return Impl->startTimerInterval(T);
 #endif // if !HAVE_ANY_SIGNPOST_IMPL
 }
 
-void SignpostEmitter::endInterval(const void *O, StringRef Name) {
+void SignpostEmitter::endTimerInterval(Timer *T) {
 #if HAVE_ANY_SIGNPOST_IMPL
   if (Impl == nullptr)
     return;
-  Impl->endInterval(O, Name);
+  Impl->endTimerInterval(T);
 #endif // if !HAVE_ANY_SIGNPOST_IMPL
 }

@@ -29,9 +29,10 @@
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name:    .dynamic
     Type:    SHT_DYNAMIC
@@ -40,6 +41,6 @@ Sections:
         Value: 0
 Symbols: []
 ProgramHeaders:
-  - Type:     PT_DYNAMIC
-    FirstSec: .dynamic
-    LastSec:  .dynamic
+  - Type: PT_DYNAMIC
+    Sections:
+      - Section: .dynamic

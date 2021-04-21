@@ -38,8 +38,8 @@ using namespace llvm;
 using namespace object;
 using namespace llvm::support::endian;
 
-const char Magic[] = "!<arch>\n";
-const char ThinMagic[] = "!<thin>\n";
+static const char *const Magic = "!<arch>\n";
+static const char *const ThinMagic = "!<thin>\n";
 
 void Archive::anchor() {}
 

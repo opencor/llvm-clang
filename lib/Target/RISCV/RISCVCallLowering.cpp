@@ -22,8 +22,8 @@ RISCVCallLowering::RISCVCallLowering(const RISCVTargetLowering &TLI)
     : CallLowering(&TLI) {}
 
 bool RISCVCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
-                                    const Value *Val, ArrayRef<Register> VRegs,
-                                    FunctionLoweringInfo &FLI) const {
+                                    const Value *Val,
+                                    ArrayRef<Register> VRegs) const {
 
   MachineInstrBuilder Ret = MIRBuilder.buildInstrNoInsert(RISCV::PseudoRET);
 
@@ -34,10 +34,9 @@ bool RISCVCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
   return true;
 }
 
-bool RISCVCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
-                                             const Function &F,
-                                             ArrayRef<ArrayRef<Register>> VRegs,
-                                             FunctionLoweringInfo &FLI) const {
+bool RISCVCallLowering::lowerFormalArguments(
+    MachineIRBuilder &MIRBuilder, const Function &F,
+    ArrayRef<ArrayRef<Register>> VRegs) const {
 
   if (F.arg_empty())
     return true;

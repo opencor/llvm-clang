@@ -87,10 +87,9 @@ bool MipsCallLowering::MipsHandler::handle(
 }
 
 namespace {
-class MipsIncomingValueHandler : public MipsCallLowering::MipsHandler {
+class IncomingValueHandler : public MipsCallLowering::MipsHandler {
 public:
-  MipsIncomingValueHandler(MachineIRBuilder &MIRBuilder,
-                           MachineRegisterInfo &MRI)
+  IncomingValueHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI)
       : MipsHandler(MIRBuilder, MRI) {}
 
 private:
@@ -118,11 +117,11 @@ private:
   }
 };
 
-class CallReturnHandler : public MipsIncomingValueHandler {
+class CallReturnHandler : public IncomingValueHandler {
 public:
   CallReturnHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
                     MachineInstrBuilder &MIB)
-      : MipsIncomingValueHandler(MIRBuilder, MRI), MIB(MIB) {}
+      : IncomingValueHandler(MIRBuilder, MRI), MIB(MIB) {}
 
 private:
   void markPhysRegUsed(unsigned PhysReg) override {
@@ -134,9 +133,9 @@ private:
 
 } // end anonymous namespace
 
-void MipsIncomingValueHandler::assignValueToReg(Register ValVReg,
-                                                const CCValAssign &VA,
-                                                const EVT &VT) {
+void IncomingValueHandler::assignValueToReg(Register ValVReg,
+                                            const CCValAssign &VA,
+                                            const EVT &VT) {
   Register PhysReg = VA.getLocReg();
   if (VT == MVT::f64 && PhysReg >= Mips::A0 && PhysReg <= Mips::A3) {
     const MipsSubtarget &STI =
@@ -168,8 +167,8 @@ void MipsIncomingValueHandler::assignValueToReg(Register ValVReg,
   }
 }
 
-Register MipsIncomingValueHandler::getStackAddress(const CCValAssign &VA,
-                                                   MachineMemOperand *&MMO) {
+Register IncomingValueHandler::getStackAddress(const CCValAssign &VA,
+                                               MachineMemOperand *&MMO) {
   MachineFunction &MF = MIRBuilder.getMF();
   unsigned Size = alignTo(VA.getValVT().getSizeInBits(), 8) / 8;
   unsigned Offset = VA.getLocMemOffset();
@@ -187,8 +186,8 @@ Register MipsIncomingValueHandler::getStackAddress(const CCValAssign &VA,
   return MIRBuilder.buildFrameIndex(LLT::pointer(0, 32), FI).getReg(0);
 }
 
-void MipsIncomingValueHandler::assignValueToAddress(Register ValVReg,
-                                                    const CCValAssign &VA) {
+void IncomingValueHandler::assignValueToAddress(Register ValVReg,
+                                                const CCValAssign &VA) {
   if (VA.getLocInfo() == CCValAssign::SExt ||
       VA.getLocInfo() == CCValAssign::ZExt ||
       VA.getLocInfo() == CCValAssign::AExt) {
@@ -198,10 +197,10 @@ void MipsIncomingValueHandler::assignValueToAddress(Register ValVReg,
     buildLoad(ValVReg, VA);
 }
 
-bool MipsIncomingValueHandler::handleSplit(SmallVectorImpl<Register> &VRegs,
-                                           ArrayRef<CCValAssign> ArgLocs,
-                                           unsigned ArgLocsStartIndex,
-                                           Register ArgsReg, const EVT &VT) {
+bool IncomingValueHandler::handleSplit(SmallVectorImpl<Register> &VRegs,
+                                       ArrayRef<CCValAssign> ArgLocs,
+                                       unsigned ArgLocsStartIndex,
+                                       Register ArgsReg, const EVT &VT) {
   if (!assignVRegs(VRegs, ArgLocs, ArgLocsStartIndex, VT))
     return false;
   setLeastSignificantFirst(VRegs);
@@ -210,10 +209,10 @@ bool MipsIncomingValueHandler::handleSplit(SmallVectorImpl<Register> &VRegs,
 }
 
 namespace {
-class MipsOutgoingValueHandler : public MipsCallLowering::MipsHandler {
+class OutgoingValueHandler : public MipsCallLowering::MipsHandler {
 public:
-  MipsOutgoingValueHandler(MachineIRBuilder &MIRBuilder,
-                           MachineRegisterInfo &MRI, MachineInstrBuilder &MIB)
+  OutgoingValueHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
+                       MachineInstrBuilder &MIB)
       : MipsHandler(MIRBuilder, MRI), MIB(MIB) {}
 
 private:
@@ -235,9 +234,9 @@ private:
 };
 } // end anonymous namespace
 
-void MipsOutgoingValueHandler::assignValueToReg(Register ValVReg,
-                                                const CCValAssign &VA,
-                                                const EVT &VT) {
+void OutgoingValueHandler::assignValueToReg(Register ValVReg,
+                                            const CCValAssign &VA,
+                                            const EVT &VT) {
   Register PhysReg = VA.getLocReg();
   if (VT == MVT::f64 && PhysReg >= Mips::A0 && PhysReg <= Mips::A3) {
     const MipsSubtarget &STI =
@@ -255,8 +254,8 @@ void MipsOutgoingValueHandler::assignValueToReg(Register ValVReg,
   }
 }
 
-Register MipsOutgoingValueHandler::getStackAddress(const CCValAssign &VA,
-                                                   MachineMemOperand *&MMO) {
+Register OutgoingValueHandler::getStackAddress(const CCValAssign &VA,
+                                               MachineMemOperand *&MMO) {
   MachineFunction &MF = MIRBuilder.getMF();
   const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
 
@@ -279,16 +278,16 @@ Register MipsOutgoingValueHandler::getStackAddress(const CCValAssign &VA,
   return AddrReg.getReg(0);
 }
 
-void MipsOutgoingValueHandler::assignValueToAddress(Register ValVReg,
-                                                    const CCValAssign &VA) {
+void OutgoingValueHandler::assignValueToAddress(Register ValVReg,
+                                                const CCValAssign &VA) {
   MachineMemOperand *MMO;
   Register Addr = getStackAddress(VA, MMO);
   Register ExtReg = extendRegister(ValVReg, VA);
   MIRBuilder.buildStore(ExtReg, Addr, *MMO);
 }
 
-Register MipsOutgoingValueHandler::extendRegister(Register ValReg,
-                                                  const CCValAssign &VA) {
+Register OutgoingValueHandler::extendRegister(Register ValReg,
+                                              const CCValAssign &VA) {
   LLT LocTy{VA.getLocVT()};
   switch (VA.getLocInfo()) {
   case CCValAssign::SExt: {
@@ -309,10 +308,10 @@ Register MipsOutgoingValueHandler::extendRegister(Register ValReg,
   llvm_unreachable("unable to extend register");
 }
 
-bool MipsOutgoingValueHandler::handleSplit(SmallVectorImpl<Register> &VRegs,
-                                           ArrayRef<CCValAssign> ArgLocs,
-                                           unsigned ArgLocsStartIndex,
-                                           Register ArgsReg, const EVT &VT) {
+bool OutgoingValueHandler::handleSplit(SmallVectorImpl<Register> &VRegs,
+                                       ArrayRef<CCValAssign> ArgLocs,
+                                       unsigned ArgLocsStartIndex,
+                                       Register ArgsReg, const EVT &VT) {
   MIRBuilder.buildUnmerge(VRegs, ArgsReg);
   setLeastSignificantFirst(VRegs);
   if (!assignVRegs(VRegs, ArgLocs, ArgLocsStartIndex, VT))
@@ -347,7 +346,7 @@ static CCValAssign::LocInfo determineLocInfo(const MVT RegisterVT, const EVT VT,
                                              const ISD::ArgFlagsTy &Flags) {
   // > does not mean loss of information as type RegisterVT can't hold type VT,
   // it means that type VT is split into multiple registers of type RegisterVT
-  if (VT.getFixedSizeInBits() >= RegisterVT.getFixedSizeInBits())
+  if (VT.getSizeInBits() >= RegisterVT.getSizeInBits())
     return CCValAssign::LocInfo::Full;
   if (Flags.isSExt())
     return CCValAssign::LocInfo::SExt;
@@ -374,8 +373,8 @@ static void setLocInfo(SmallVectorImpl<CCValAssign> &ArgLocs,
 }
 
 bool MipsCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
-                                   const Value *Val, ArrayRef<Register> VRegs,
-                                   FunctionLoweringInfo &FLI) const {
+                                   const Value *Val,
+                                   ArrayRef<Register> VRegs) const {
 
   MachineInstrBuilder Ret = MIRBuilder.buildInstrNoInsert(Mips::RetRA);
 
@@ -404,7 +403,7 @@ bool MipsCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
     CCInfo.AnalyzeReturn(Outs, TLI.CCAssignFnForReturn());
     setLocInfo(ArgLocs, Outs);
 
-    MipsOutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), Ret);
+    OutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), Ret);
     if (!RetHandler.handle(ArgLocs, RetInfos)) {
       return false;
     }
@@ -413,10 +412,9 @@ bool MipsCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
   return true;
 }
 
-bool MipsCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
-                                            const Function &F,
-                                            ArrayRef<ArrayRef<Register>> VRegs,
-                                            FunctionLoweringInfo &FLI) const {
+bool MipsCallLowering::lowerFormalArguments(
+    MachineIRBuilder &MIRBuilder, const Function &F,
+    ArrayRef<ArrayRef<Register>> VRegs) const {
 
   // Quick exit if there aren't any args.
   if (F.arg_empty())
@@ -457,7 +455,7 @@ bool MipsCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   CCInfo.AnalyzeFormalArguments(Ins, TLI.CCAssignFnForCall());
   setLocInfo(ArgLocs, Ins);
 
-  MipsIncomingValueHandler Handler(MIRBuilder, MF.getRegInfo());
+  IncomingValueHandler Handler(MIRBuilder, MF.getRegInfo());
   if (!Handler.handle(ArgLocs, ArgInfos))
     return false;
 
@@ -581,7 +579,7 @@ bool MipsCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   CCInfo.AnalyzeCallOperands(Outs, TLI.CCAssignFnForCall(), FuncOrigArgs, Call);
   setLocInfo(ArgLocs, Outs);
 
-  MipsOutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), MIB);
+  OutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), MIB);
   if (!RetHandler.handle(ArgLocs, ArgInfos)) {
     return false;
   }

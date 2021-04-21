@@ -306,7 +306,7 @@ static bool needsStackFrame(const MachineBasicBlock &MBB, const BitVector &CSR,
           Register R = MO.getReg();
           // Virtual registers will need scavenging, which then may require
           // a stack slot.
-          if (R.isVirtual())
+          if (Register::isVirtualRegister(R))
             return true;
           for (MCSubRegIterator S(R, &HRI, true); S.isValid(); ++S)
             if (CSR[*S])
@@ -1104,8 +1104,7 @@ void HexagonFrameLowering::insertCFIInstructionsAt(MachineBasicBlock &MBB,
       Offset = MFI.getObjectOffset(F->getFrameIdx());
     } else {
       Register FrameReg;
-      Offset =
-          getFrameIndexReference(MF, F->getFrameIdx(), FrameReg).getFixed();
+      Offset = getFrameIndexReference(MF, F->getFrameIdx(), FrameReg);
     }
     // Subtract 8 to make room for R30 and R31, which are added above.
     Offset -= 8;
@@ -1257,9 +1256,9 @@ static const char *getSpillFunctionFor(unsigned MaxReg, SpillKind SpillType,
   return nullptr;
 }
 
-StackOffset
-HexagonFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
-                                             Register &FrameReg) const {
+int HexagonFrameLowering::getFrameIndexReference(const MachineFunction &MF,
+                                                 int FI,
+                                                 Register &FrameReg) const {
   auto &MFI = MF.getFrameInfo();
   auto &HRI = *MF.getSubtarget<HexagonSubtarget>().getRegisterInfo();
 
@@ -1355,7 +1354,7 @@ HexagonFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   int RealOffset = Offset;
   if (!UseFP && !UseAP)
     RealOffset = FrameSize+Offset;
-  return StackOffset::getFixed(RealOffset);
+  return RealOffset;
 }
 
 bool HexagonFrameLowering::insertCSRSpillsInBlock(MachineBasicBlock &MBB,

@@ -140,13 +140,14 @@ public:
         MachineFunctionProperties::Property::NoPHIs);
   }
 
-  MachineFunctionProperties getClearedProperties() const override {
-    return MachineFunctionProperties().set(
-      MachineFunctionProperties::Property::IsSSA);
-  }
-
 private:
-  using RegSet = std::set<Register>;
+  using LI2NodeMap = std::map<const LiveInterval *, unsigned>;
+  using Node2LIMap = std::vector<const LiveInterval *>;
+  using AllowedSet = std::vector<unsigned>;
+  using AllowedSetMap = std::vector<AllowedSet>;
+  using RegPair = std::pair<unsigned, unsigned>;
+  using CoalesceMap = std::map<RegPair, PBQP::PBQPNum>;
+  using RegSet = std::set<unsigned>;
 
   char *customPassID;
 
@@ -198,7 +199,7 @@ public:
 
     for (auto NId : G.nodeIds()) {
       PBQP::PBQPNum SpillCost =
-          LIS.getInterval(G.getNodeMetadata(NId).getVReg()).weight();
+        LIS.getInterval(G.getNodeMetadata(NId).getVReg()).weight;
       if (SpillCost == 0.0)
         SpillCost = std::numeric_limits<PBQP::PBQPNum>::min();
       else
@@ -230,9 +231,9 @@ private:
       return false;
 
     if (NRegs < MRegs)
-      return D.contains(IKey(NRegs, MRegs));
+      return D.count(IKey(NRegs, MRegs)) > 0;
 
-    return D.contains(IKey(MRegs, NRegs));
+    return D.count(IKey(MRegs, NRegs)) > 0;
   }
 
   void setDisjointAllowedRegs(const PBQPRAGraph &G, PBQPRAGraph::NodeId NId,
@@ -289,7 +290,7 @@ private:
     // If two intervals end at the same point, we need a way to break the tie or
     // the set will assume they're actually equal and refuse to insert a
     // "duplicate". Just compare the vregs - fast and guaranteed unique.
-    return std::get<0>(I1)->reg() < std::get<0>(I2)->reg();
+    return std::get<0>(I1)->reg < std::get<0>(I2)->reg;
   }
 
   static bool isAtLastSegment(const IntervalInfo &I) {
@@ -330,7 +331,7 @@ public:
 
     // Start by building the inactive set.
     for (auto NId : G.nodeIds()) {
-      Register VReg = G.getNodeMetadata(NId).getVReg();
+      unsigned VReg = G.getNodeMetadata(NId).getVReg();
       LiveInterval &LI = LIS.getInterval(VReg);
       assert(!LI.empty() && "PBQP graph contains node for empty interval");
       Inactive.push(std::make_tuple(&LI, 0, NId));
@@ -412,9 +413,9 @@ private:
     PBQPRAGraph::RawMatrix M(NRegs.size() + 1, MRegs.size() + 1, 0);
     bool NodesInterfere = false;
     for (unsigned I = 0; I != NRegs.size(); ++I) {
-      MCRegister PRegN = NRegs[I];
+      unsigned PRegN = NRegs[I];
       for (unsigned J = 0; J != MRegs.size(); ++J) {
-        MCRegister PRegM = MRegs[J];
+        unsigned PRegM = MRegs[J];
         if (TRI.regsOverlap(PRegN, PRegM)) {
           M[I + 1][J + 1] = std::numeric_limits<PBQP::PBQPNum>::infinity();
           NodesInterfere = true;
@@ -447,10 +448,11 @@ public:
         if (!CP.setRegisters(&MI) || CP.getSrcReg() == CP.getDstReg())
           continue;
 
-        Register DstReg = CP.getDstReg();
-        Register SrcReg = CP.getSrcReg();
+        unsigned DstReg = CP.getDstReg();
+        unsigned SrcReg = CP.getSrcReg();
 
-        PBQP::PBQPNum CBenefit = MBFI.getBlockFreqRelativeToEntryBlock(&MBB);
+        const float Scale = 1.0f / MBFI.getEntryFreq();
+        PBQP::PBQPNum CBenefit = MBFI.getBlockFreq(&MBB).getFrequency() * Scale;
 
         if (CP.isPhys()) {
           if (!MF.getRegInfo().isAllocatable(DstReg))
@@ -462,7 +464,7 @@ public:
             G.getNodeMetadata(NId).getAllowedRegs();
 
           unsigned PRegOpt = 0;
-          while (PRegOpt < Allowed.size() && Allowed[PRegOpt].id() != DstReg)
+          while (PRegOpt < Allowed.size() && Allowed[PRegOpt] != DstReg)
             ++PRegOpt;
 
           if (PRegOpt < Allowed.size()) {
@@ -507,9 +509,9 @@ private:
     assert(CostMat.getRows() == Allowed1.size() + 1 && "Size mismatch.");
     assert(CostMat.getCols() == Allowed2.size() + 1 && "Size mismatch.");
     for (unsigned I = 0; I != Allowed1.size(); ++I) {
-      MCRegister PReg1 = Allowed1[I];
+      unsigned PReg1 = Allowed1[I];
       for (unsigned J = 0; J != Allowed2.size(); ++J) {
-        MCRegister PReg2 = Allowed2[J];
+        unsigned PReg2 = Allowed2[J];
         if (PReg1 == PReg2)
           CostMat[I + 1][J + 1] -= Benefit;
       }
@@ -517,20 +519,6 @@ private:
   }
 };
 
-/// PBQP-specific implementation of weight normalization.
-class PBQPVirtRegAuxInfo final : public VirtRegAuxInfo {
-  float normalize(float UseDefFreq, unsigned Size, unsigned NumInstr) override {
-    // All intervals have a spill weight that is mostly proportional to the
-    // number of uses, with uses in loops having a bigger weight.
-    return NumInstr * VirtRegAuxInfo::normalize(UseDefFreq, Size, 1);
-  }
-
-public:
-  PBQPVirtRegAuxInfo(MachineFunction &MF, LiveIntervals &LIS, VirtRegMap &VRM,
-                     const MachineLoopInfo &Loops,
-                     const MachineBlockFrequencyInfo &MBFI)
-      : VirtRegAuxInfo(MF, LIS, VRM, Loops, MBFI) {}
-};
 } // end anonymous namespace
 
 // Out-of-line destructor/anchor for PBQPRAConstraint.
@@ -570,19 +558,18 @@ void RegAllocPBQP::findVRegIntervalsToAlloc(const MachineFunction &MF,
 
   // Iterate over all live ranges.
   for (unsigned I = 0, E = MRI.getNumVirtRegs(); I != E; ++I) {
-    Register Reg = Register::index2VirtReg(I);
+    unsigned Reg = Register::index2VirtReg(I);
     if (MRI.reg_nodbg_empty(Reg))
       continue;
     VRegsToAlloc.insert(Reg);
   }
 }
 
-static bool isACalleeSavedRegister(MCRegister Reg,
-                                   const TargetRegisterInfo &TRI,
+static bool isACalleeSavedRegister(unsigned reg, const TargetRegisterInfo &TRI,
                                    const MachineFunction &MF) {
   const MCPhysReg *CSR = MF.getRegInfo().getCalleeSavedRegs();
   for (unsigned i = 0; CSR[i] != 0; ++i)
-    if (TRI.regsOverlap(Reg, CSR[i]))
+    if (TRI.regsOverlap(reg, CSR[i]))
       return true;
   return false;
 }
@@ -596,12 +583,12 @@ void RegAllocPBQP::initializeGraph(PBQPRAGraph &G, VirtRegMap &VRM,
   const TargetRegisterInfo &TRI =
       *G.getMetadata().MF.getSubtarget().getRegisterInfo();
 
-  std::vector<Register> Worklist(VRegsToAlloc.begin(), VRegsToAlloc.end());
+  std::vector<unsigned> Worklist(VRegsToAlloc.begin(), VRegsToAlloc.end());
 
-  std::map<Register, std::vector<MCRegister>> VRegAllowedMap;
+  std::map<unsigned, std::vector<unsigned>> VRegAllowedMap;
 
   while (!Worklist.empty()) {
-    Register VReg = Worklist.back();
+    unsigned VReg = Worklist.back();
     Worklist.pop_back();
 
     LiveInterval &VRegLI = LIS.getInterval(VReg);
@@ -609,8 +596,8 @@ void RegAllocPBQP::initializeGraph(PBQPRAGraph &G, VirtRegMap &VRM,
     // If this is an empty interval move it to the EmptyIntervalVRegs set then
     // continue.
     if (VRegLI.empty()) {
-      EmptyIntervalVRegs.insert(VRegLI.reg());
-      VRegsToAlloc.erase(VRegLI.reg());
+      EmptyIntervalVRegs.insert(VRegLI.reg);
+      VRegsToAlloc.erase(VRegLI.reg);
       continue;
     }
 
@@ -621,10 +608,10 @@ void RegAllocPBQP::initializeGraph(PBQPRAGraph &G, VirtRegMap &VRM,
     LIS.checkRegMaskInterference(VRegLI, RegMaskOverlaps);
 
     // Compute an initial allowed set for the current vreg.
-    std::vector<MCRegister> VRegAllowed;
+    std::vector<unsigned> VRegAllowed;
     ArrayRef<MCPhysReg> RawPRegOrder = TRC->getRawAllocationOrder(MF);
     for (unsigned I = 0; I != RawPRegOrder.size(); ++I) {
-      MCRegister PReg(RawPRegOrder[I]);
+      unsigned PReg = RawPRegOrder[I];
       if (MRI.isReserved(PReg))
         continue;
 
@@ -652,11 +639,10 @@ void RegAllocPBQP::initializeGraph(PBQPRAGraph &G, VirtRegMap &VRM,
     if (VRegAllowed.empty()) {
       SmallVector<Register, 8> NewVRegs;
       spillVReg(VReg, NewVRegs, MF, LIS, VRM, VRegSpiller);
-      llvm::append_range(Worklist, NewVRegs);
+      Worklist.insert(Worklist.end(), NewVRegs.begin(), NewVRegs.end());
       continue;
-    }
-
-    VRegAllowedMap[VReg.id()] = std::move(VRegAllowed);
+    } else
+      VRegAllowedMap[VReg] = std::move(VRegAllowed);
   }
 
   for (auto &KV : VRegAllowedMap) {
@@ -699,7 +685,7 @@ void RegAllocPBQP::spillVReg(Register VReg,
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
   (void)TRI;
   LLVM_DEBUG(dbgs() << "VREG " << printReg(VReg, &TRI) << " -> SPILLED (Cost: "
-                    << LRE.getParent().weight() << ", New vregs: ");
+                    << LRE.getParent().weight << ", New vregs: ");
 
   // Copy any newly inserted live intervals into the list of regs to
   // allocate.
@@ -707,8 +693,8 @@ void RegAllocPBQP::spillVReg(Register VReg,
        I != E; ++I) {
     const LiveInterval &LI = LIS.getInterval(*I);
     assert(!LI.empty() && "Empty spill range.");
-    LLVM_DEBUG(dbgs() << printReg(LI.reg(), &TRI) << " ");
-    VRegsToAlloc.insert(LI.reg());
+    LLVM_DEBUG(dbgs() << printReg(LI.reg, &TRI) << " ");
+    VRegsToAlloc.insert(LI.reg);
   }
 
   LLVM_DEBUG(dbgs() << ")\n");
@@ -732,11 +718,11 @@ bool RegAllocPBQP::mapPBQPToRegAlloc(const PBQPRAGraph &G,
   // Iterate over the nodes mapping the PBQP solution to a register
   // assignment.
   for (auto NId : G.nodeIds()) {
-    Register VReg = G.getNodeMetadata(NId).getVReg();
-    unsigned AllocOpt = Solution.getSelection(NId);
+    unsigned VReg = G.getNodeMetadata(NId).getVReg();
+    unsigned AllocOption = Solution.getSelection(NId);
 
-    if (AllocOpt != PBQP::RegAlloc::getSpillOptionIdx()) {
-      MCRegister PReg = G.getNodeMetadata(NId).getAllowedRegs()[AllocOpt - 1];
+    if (AllocOption != PBQP::RegAlloc::getSpillOptionIdx()) {
+      unsigned PReg = G.getNodeMetadata(NId).getAllowedRegs()[AllocOption - 1];
       LLVM_DEBUG(dbgs() << "VREG " << printReg(VReg, &TRI) << " -> "
                         << TRI.getName(PReg) << "\n");
       assert(PReg != 0 && "Invalid preg selected.");
@@ -764,12 +750,12 @@ void RegAllocPBQP::finalizeAlloc(MachineFunction &MF,
          I != E; ++I) {
     LiveInterval &LI = LIS.getInterval(*I);
 
-    Register PReg = MRI.getSimpleHint(LI.reg());
+    unsigned PReg = MRI.getSimpleHint(LI.reg);
 
     if (PReg == 0) {
-      const TargetRegisterClass &RC = *MRI.getRegClass(LI.reg());
+      const TargetRegisterClass &RC = *MRI.getRegClass(LI.reg);
       const ArrayRef<MCPhysReg> RawPRegOrder = RC.getRawAllocationOrder(MF);
-      for (MCRegister CandidateReg : RawPRegOrder) {
+      for (unsigned CandidateReg : RawPRegOrder) {
         if (!VRM.getRegInfo().isReserved(CandidateReg)) {
           PReg = CandidateReg;
           break;
@@ -779,7 +765,7 @@ void RegAllocPBQP::finalizeAlloc(MachineFunction &MF,
              "No un-reserved physical registers in this register class");
     }
 
-    VRM.assignVirt2Phys(LI.reg(), PReg);
+    VRM.assignVirt2Phys(LI.reg, PReg);
   }
 }
 
@@ -793,6 +779,13 @@ void RegAllocPBQP::postOptimization(Spiller &VRegSpiller, LiveIntervals &LIS) {
   DeadRemats.clear();
 }
 
+static inline float normalizePBQPSpillWeight(float UseDefFreq, unsigned Size,
+                                         unsigned NumInstr) {
+  // All intervals have a spill weight that is mostly proportional to the number
+  // of uses, with uses in loops having a bigger weight.
+  return NumInstr * normalizeSpillWeight(UseDefFreq, Size, 1);
+}
+
 bool RegAllocPBQP::runOnMachineFunction(MachineFunction &MF) {
   LiveIntervals &LIS = getAnalysis<LiveIntervals>();
   MachineBlockFrequencyInfo &MBFI =
@@ -800,8 +793,8 @@ bool RegAllocPBQP::runOnMachineFunction(MachineFunction &MF) {
 
   VirtRegMap &VRM = getAnalysis<VirtRegMap>();
 
-  PBQPVirtRegAuxInfo VRAI(MF, LIS, VRM, getAnalysis<MachineLoopInfo>(), MBFI);
-  VRAI.calculateSpillWeightsAndHints();
+  calculateSpillWeightsAndHints(LIS, MF, &VRM, getAnalysis<MachineLoopInfo>(),
+                                MBFI, normalizePBQPSpillWeight);
 
   std::unique_ptr<Spiller> VRegSpiller(createInlineSpiller(*this, MF, VRM));
 
@@ -885,7 +878,7 @@ static Printable PrintNodeInfo(PBQP::RegAlloc::PBQPRAGraph::NodeId NId,
   return Printable([NId, &G](raw_ostream &OS) {
     const MachineRegisterInfo &MRI = G.getMetadata().MF.getRegInfo();
     const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-    Register VReg = G.getNodeMetadata(NId).getVReg();
+    unsigned VReg = G.getNodeMetadata(NId).getVReg();
     const char *RegClassName = TRI->getRegClassName(MRI.getRegClass(VReg));
     OS << NId << " (" << RegClassName << ':' << printReg(VReg, TRI) << ')';
   });

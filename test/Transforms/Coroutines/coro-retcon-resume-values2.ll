@@ -1,5 +1,4 @@
 ; RUN: opt < %s -coro-split -coro-cleanup -S | FileCheck %s
-; RUN: opt < %s -passes='coro-split,coro-cleanup' -S | FileCheck %s
 
 define i8* @f(i8* %buffer, i32 %n) "coroutine.presplit"="1" {
 entry:

@@ -102,22 +102,22 @@ class MCJIT : public ExecutionEngine {
     }
 
     bool hasModuleBeenAddedButNotLoaded(Module *M) {
-      return AddedModules.contains(M);
+      return AddedModules.count(M) != 0;
     }
 
     bool hasModuleBeenLoaded(Module *M) {
       // If the module is in either the "loaded" or "finalized" sections it
       // has been loaded.
-      return LoadedModules.contains(M) || FinalizedModules.contains(M);
+      return (LoadedModules.count(M) != 0 ) || (FinalizedModules.count(M) != 0);
     }
 
     bool hasModuleBeenFinalized(Module *M) {
-      return FinalizedModules.contains(M);
+      return FinalizedModules.count(M) != 0;
     }
 
     bool ownsModule(Module* M) {
-      return AddedModules.contains(M) || LoadedModules.contains(M) ||
-             FinalizedModules.contains(M);
+      return (AddedModules.count(M) != 0) || (LoadedModules.count(M) != 0) ||
+             (FinalizedModules.count(M) != 0);
     }
 
     void markModuleAsLoaded(Module *M) {

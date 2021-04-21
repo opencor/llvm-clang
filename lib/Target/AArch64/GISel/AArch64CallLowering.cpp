@@ -52,10 +52,10 @@ AArch64CallLowering::AArch64CallLowering(const AArch64TargetLowering &TLI)
   : CallLowering(&TLI) {}
 
 namespace {
-struct IncomingArgHandler : public CallLowering::IncomingValueHandler {
+struct IncomingArgHandler : public CallLowering::ValueHandler {
   IncomingArgHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
                      CCAssignFn *AssignFn)
-      : IncomingValueHandler(MIRBuilder, MRI, AssignFn), StackUsed(0) {}
+      : ValueHandler(MIRBuilder, MRI, AssignFn), StackUsed(0) {}
 
   Register getStackAddress(uint64_t Size, int64_t Offset,
                            MachinePointerInfo &MPO) override {
@@ -101,7 +101,9 @@ struct IncomingArgHandler : public CallLowering::IncomingValueHandler {
   /// How the physical register gets marked varies between formal
   /// parameters (it's a basic-block live-in), and a call instruction
   /// (it's an implicit-def of the BL).
-  virtual void markPhysRegUsed(MCRegister PhysReg) = 0;
+  virtual void markPhysRegUsed(unsigned PhysReg) = 0;
+
+  bool isIncomingArgumentHandler() const override { return true; }
 
   uint64_t StackUsed;
 };
@@ -111,7 +113,7 @@ struct FormalArgHandler : public IncomingArgHandler {
                    CCAssignFn *AssignFn)
     : IncomingArgHandler(MIRBuilder, MRI, AssignFn) {}
 
-  void markPhysRegUsed(MCRegister PhysReg) override {
+  void markPhysRegUsed(unsigned PhysReg) override {
     MIRBuilder.getMRI()->addLiveIn(PhysReg);
     MIRBuilder.getMBB().addLiveIn(PhysReg);
   }
@@ -122,21 +124,23 @@ struct CallReturnHandler : public IncomingArgHandler {
                     MachineInstrBuilder MIB, CCAssignFn *AssignFn)
     : IncomingArgHandler(MIRBuilder, MRI, AssignFn), MIB(MIB) {}
 
-  void markPhysRegUsed(MCRegister PhysReg) override {
+  void markPhysRegUsed(unsigned PhysReg) override {
     MIB.addDef(PhysReg, RegState::Implicit);
   }
 
   MachineInstrBuilder MIB;
 };
 
-struct OutgoingArgHandler : public CallLowering::OutgoingValueHandler {
+struct OutgoingArgHandler : public CallLowering::ValueHandler {
   OutgoingArgHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
                      MachineInstrBuilder MIB, CCAssignFn *AssignFn,
                      CCAssignFn *AssignFnVarArg, bool IsTailCall = false,
                      int FPDiff = 0)
-      : OutgoingValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB),
+      : ValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB),
         AssignFnVarArg(AssignFnVarArg), IsTailCall(IsTailCall), FPDiff(FPDiff),
         StackSize(0), SPReg(0) {}
+
+  bool isIncomingArgumentHandler() const override { return false; }
 
   Register getStackAddress(uint64_t Size, int64_t Offset,
                            MachinePointerInfo &MPO) override {
@@ -186,8 +190,6 @@ struct OutgoingArgHandler : public CallLowering::OutgoingValueHandler {
     // we disable setting a max.
     if (!Arg.IsFixed)
       MaxSize = 0;
-
-    assert(Arg.Regs.size() == 1);
 
     Register ValVReg = VA.getLocInfo() != CCValAssign::LocInfo::FPExt
                            ? extendRegister(Arg.Regs[0], VA, MaxSize)
@@ -274,7 +276,6 @@ void AArch64CallLowering::splitToValueTypes(
 bool AArch64CallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
                                       const Value *Val,
                                       ArrayRef<Register> VRegs,
-                                      FunctionLoweringInfo &FLI,
                                       Register SwiftErrorVReg) const {
   auto MIB = MIRBuilder.buildInstrNoInsert(AArch64::RET_ReallyLR);
   assert(((Val && !VRegs.empty()) || (!Val && VRegs.empty())) &&
@@ -420,7 +421,7 @@ static void handleMustTailForwardedRegisters(MachineIRBuilder &MIRBuilder,
   // Conservatively forward X8, since it might be used for an aggregate
   // return.
   if (!CCInfo.isAllocated(AArch64::X8)) {
-    Register X8VReg = MF.addLiveIn(AArch64::X8, &AArch64::GPR64RegClass);
+    unsigned X8VReg = MF.addLiveIn(AArch64::X8, &AArch64::GPR64RegClass);
     Forwards.push_back(ForwardedRegister(X8VReg, AArch64::X8, MVT::i64));
   }
 
@@ -441,7 +442,7 @@ bool AArch64CallLowering::fallBackToDAGISel(const Function &F) const {
 
 bool AArch64CallLowering::lowerFormalArguments(
     MachineIRBuilder &MIRBuilder, const Function &F,
-    ArrayRef<ArrayRef<Register>> VRegs, FunctionLoweringInfo &FLI) const {
+    ArrayRef<ArrayRef<Register>> VRegs) const {
   MachineFunction &MF = MIRBuilder.getMF();
   MachineBasicBlock &MBB = MIRBuilder.getMBB();
   MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -623,25 +624,64 @@ bool AArch64CallLowering::areCalleeOutgoingArgsTailCallable(
   const uint32_t *CallerPreservedMask = TRI->getCallPreservedMask(MF, CallerCC);
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
-  if (Info.IsVarArg) {
-    // Be conservative and disallow variadic memory operands to match SDAG's
-    // behaviour.
-    // FIXME: If the caller's calling convention is C, then we can
-    // potentially use its argument area. However, for cases like fastcc,
-    // we can't do anything.
-    for (unsigned i = 0; i < OutLocs.size(); ++i) {
-      auto &ArgLoc = OutLocs[i];
-      if (ArgLoc.isRegLoc())
-        continue;
+  for (unsigned i = 0; i < OutLocs.size(); ++i) {
+    auto &ArgLoc = OutLocs[i];
+    // If it's not a register, it's fine.
+    if (!ArgLoc.isRegLoc()) {
+      if (Info.IsVarArg) {
+        // Be conservative and disallow variadic memory operands to match SDAG's
+        // behaviour.
+        // FIXME: If the caller's calling convention is C, then we can
+        // potentially use its argument area. However, for cases like fastcc,
+        // we can't do anything.
+        LLVM_DEBUG(
+            dbgs()
+            << "... Cannot tail call vararg function with stack arguments\n");
+        return false;
+      }
+      continue;
+    }
 
+    Register Reg = ArgLoc.getLocReg();
+
+    // Only look at callee-saved registers.
+    if (MachineOperand::clobbersPhysReg(CallerPreservedMask, Reg))
+      continue;
+
+    LLVM_DEBUG(
+        dbgs()
+        << "... Call has an argument passed in a callee-saved register.\n");
+
+    // Check if it was copied from.
+    ArgInfo &OutInfo = OutArgs[i];
+
+    if (OutInfo.Regs.size() > 1) {
+      LLVM_DEBUG(
+          dbgs() << "... Cannot handle arguments in multiple registers.\n");
+      return false;
+    }
+
+    // Check if we copy the register, walking through copies from virtual
+    // registers. Note that getDefIgnoringCopies does not ignore copies from
+    // physical registers.
+    MachineInstr *RegDef = getDefIgnoringCopies(OutInfo.Regs[0], MRI);
+    if (!RegDef || RegDef->getOpcode() != TargetOpcode::COPY) {
       LLVM_DEBUG(
           dbgs()
-          << "... Cannot tail call vararg function with stack arguments\n");
+          << "... Parameter was not copied into a VReg, cannot tail call.\n");
+      return false;
+    }
+
+    // Got a copy. Verify that it's the same as the register we want.
+    Register CopyRHS = RegDef->getOperand(1).getReg();
+    if (CopyRHS != Reg) {
+      LLVM_DEBUG(dbgs() << "... Callee-saved register was not copied into "
+                           "VReg, cannot tail call.\n");
       return false;
     }
   }
 
-  return parametersInCSRMatch(MRI, CallerPreservedMask, OutLocs, OutArgs);
+  return true;
 }
 
 bool AArch64CallLowering::isEligibleForTailCallOptimization(
@@ -756,7 +796,7 @@ static unsigned getCallOpcode(const MachineFunction &CallerF, bool IsIndirect,
 
   // When BTI is enabled, we need to use TCRETURNriBTI to make sure that we use
   // x16 or x17.
-  if (CallerF.getInfo<AArch64FunctionInfo>()->branchTargetEnforcement())
+  if (CallerF.getFunction().hasFnAttribute("branch-target-enforcement"))
     return AArch64::TCRETURNriBTI;
 
   return AArch64::TCRETURNri;
@@ -776,7 +816,7 @@ bool AArch64CallLowering::lowerTailCall(
 
   // TODO: Right now, regbankselect doesn't know how to handle the rtcGPR64
   // register class. Until we can do that, we should fall back here.
-  if (MF.getInfo<AArch64FunctionInfo>()->branchTargetEnforcement()) {
+  if (F.hasFnAttribute("branch-target-enforcement")) {
     LLVM_DEBUG(
         dbgs() << "Cannot lower indirect tail calls with BTI enabled yet.\n");
     return false;
@@ -894,9 +934,10 @@ bool AArch64CallLowering::lowerTailCall(
   // If Callee is a reg, since it is used by a target specific instruction,
   // it must have a register class matching the constraint of that instruction.
   if (Info.Callee.isReg())
-    constrainOperandRegClass(MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
-                             *MF.getSubtarget().getRegBankInfo(), *MIB,
-                             MIB->getDesc(), Info.Callee, 0);
+    MIB->getOperand(0).setReg(constrainOperandRegClass(
+        MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
+        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(), Info.Callee,
+        0));
 
   MF.getFrameInfo().setHasTailCall();
   Info.LoweredTailCall = true;
@@ -978,9 +1019,10 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   // instruction, it must have a register class matching the
   // constraint of that instruction.
   if (Info.Callee.isReg())
-    constrainOperandRegClass(MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
-                             *MF.getSubtarget().getRegBankInfo(), *MIB,
-                             MIB->getDesc(), Info.Callee, 0);
+    MIB->getOperand(0).setReg(constrainOperandRegClass(
+        MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
+        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(), Info.Callee,
+        0));
 
   // Finally we can copy the returned value back into its virtual-register. In
   // symmetry with the arguments, the physical register must be an

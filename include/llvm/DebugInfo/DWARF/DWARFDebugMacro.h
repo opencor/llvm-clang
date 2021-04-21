@@ -96,9 +96,6 @@ class DWARFDebugMacro {
     MacroHeader Header;
     SmallVector<Entry, 4> Macros;
     uint64_t Offset;
-
-    /// Whether or not this is a .debug_macro section.
-    bool IsDebugMacro;
   };
 
   /// A list of all the macro entries in the debug_macinfo section.
@@ -110,7 +107,7 @@ public:
   /// Print the macro list found within the debug_macinfo/debug_macro section.
   void dump(raw_ostream &OS) const;
 
-  Error parseMacro(DWARFUnitVector::compile_unit_range Units,
+  Error parseMacro(DWARFUnitVector::iterator_range Units,
                    DataExtractor StringExtractor,
                    DWARFDataExtractor MacroData) {
     return parseImpl(Units, StringExtractor, MacroData, /*IsMacro=*/true);
@@ -126,7 +123,7 @@ public:
 private:
   /// Parse the debug_macinfo/debug_macro section accessible via the 'MacroData'
   /// parameter.
-  Error parseImpl(Optional<DWARFUnitVector::compile_unit_range> Units,
+  Error parseImpl(Optional<DWARFUnitVector::iterator_range> Units,
                   Optional<DataExtractor> StringExtractor,
                   DWARFDataExtractor Data, bool IsMacro);
 };

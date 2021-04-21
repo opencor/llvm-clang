@@ -2,7 +2,6 @@ static_library("JITLink") {
   output_name = "LLVMJITLink"
   deps = [
     "//llvm/lib/BinaryFormat",
-    "//llvm/lib/ExecutionEngine/Orc/Shared",
     "//llvm/lib/Object",
     "//llvm/lib/Support",
   ]

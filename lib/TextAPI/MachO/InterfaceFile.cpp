@@ -69,6 +69,7 @@ void InterfaceFile::addParentUmbrella(const Target &Target_, StringRef Parent) {
   }
 
   ParentUmbrellas.emplace(Iter, Target_, std::string(Parent));
+  return;
 }
 
 void InterfaceFile::addUUID(const Target &Target_, StringRef UUID) {
@@ -82,6 +83,7 @@ void InterfaceFile::addUUID(const Target &Target_, StringRef UUID) {
   }
 
   UUIDs.emplace(Iter, Target_, std::string(UUID));
+  return;
 }
 
 void InterfaceFile::addUUID(const Target &Target, uint8_t UUID[16]) {

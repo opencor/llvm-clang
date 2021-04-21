@@ -257,9 +257,9 @@ bool SparcFrameLowering::hasFP(const MachineFunction &MF) const {
       MFI.isFrameAddressTaken();
 }
 
-StackOffset
-SparcFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
-                                           Register &FrameReg) const {
+int SparcFrameLowering::getFrameIndexReference(const MachineFunction &MF,
+                                               int FI,
+                                               Register &FrameReg) const {
   const SparcSubtarget &Subtarget = MF.getSubtarget<SparcSubtarget>();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const SparcRegisterInfo *RegInfo = Subtarget.getRegisterInfo();
@@ -295,10 +295,10 @@ SparcFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
   if (UseFP) {
     FrameReg = RegInfo->getFrameRegister(MF);
-    return StackOffset::getFixed(FrameOffset);
+    return FrameOffset;
   } else {
     FrameReg = SP::O6; // %sp
-    return StackOffset::getFixed(FrameOffset + MF.getFrameInfo().getStackSize());
+    return FrameOffset + MF.getFrameInfo().getStackSize();
   }
 }
 

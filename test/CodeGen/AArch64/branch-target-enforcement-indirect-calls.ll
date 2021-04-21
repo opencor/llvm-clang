@@ -20,7 +20,7 @@ entry:
   ret void
 }
 
-define void @bti_enabled(void ()* %p) "branch-target-enforcement"="true" {
+define void @bti_enabled(void ()* %p) "branch-target-enforcement" {
 entry:
   tail call void %p()
 ; CHECK: br {{x16|x17}}

@@ -7,7 +7,8 @@
 
 ; PPC-NOT: warning:
 ; PPC: FDE cie=00000000 pc=00000000...00000004
-; PPC: FDE cie=00000000 pc=00000004...00000008
+;; TODO Take relocation into consideration
+; PPC: FDE cie=00000000 pc=00000000...00000004
 
 ; RUN: llc -filetype=obj -mtriple=ppc64 %s -o %t64.o
 ; RUN: llvm-readobj -r %t64.o | FileCheck %s --check-prefix=PPC64_REL
@@ -18,7 +19,7 @@
 
 ; PPC64-NOT: warning:
 ; PPC64: FDE cie=00000000 pc=00000000...00000010
-; PPC64: FDE cie=00000000 pc=00000010...00000020
+; PPC64: FDE cie=00000000 pc=00000000...00000010
 
 ; RUN: llc -filetype=obj -mtriple=ppc64le -code-model=large %s -o %t64l.o
 ; RUN: llvm-readobj -r %t64l.o | FileCheck %s --check-prefix=PPC64L_REL

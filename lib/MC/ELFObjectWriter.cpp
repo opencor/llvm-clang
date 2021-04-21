@@ -464,7 +464,7 @@ void ELFWriter::writeHeader(const MCAssembler &Asm) {
 
 uint64_t ELFWriter::SymbolValue(const MCSymbol &Sym,
                                 const MCAsmLayout &Layout) {
-  if (Sym.isCommon())
+  if (Sym.isCommon() && (Sym.isTargetCommon() || Sym.isExternal()))
     return Sym.getCommonAlignment();
 
   uint64_t Res;
@@ -1024,13 +1024,9 @@ void ELFWriter::writeSection(const SectionIndexMapTy &SectionIndexMap,
   }
 
   if (Section.getFlags() & ELF::SHF_LINK_ORDER) {
-    // If the value in the associated metadata is not a definition, Sym will be
-    // undefined. Represent this with sh_link=0.
     const MCSymbol *Sym = Section.getLinkedToSymbol();
-    if (Sym && Sym->isInSection()) {
-      const MCSectionELF *Sec = cast<MCSectionELF>(&Sym->getSection());
-      sh_link = SectionIndexMap.lookup(Sec);
-    }
+    const MCSectionELF *Sec = cast<MCSectionELF>(&Sym->getSection());
+    sh_link = SectionIndexMap.lookup(Sec);
   }
 
   WriteSecHdrEntry(StrTabBuilder.getOffset(Section.getName()),
@@ -1258,9 +1254,9 @@ void ELFObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
                                                const MCAsmLayout &Layout) {
   // The presence of symbol versions causes undefined symbols and
   // versions declared with @@@ to be renamed.
-  for (const MCAssembler::Symver &S : Asm.Symvers) {
-    StringRef AliasName = S.Name;
-    const auto &Symbol = cast<MCSymbolELF>(*S.Sym);
+  for (const std::pair<StringRef, const MCSymbol *> &P : Asm.Symvers) {
+    StringRef AliasName = P.first;
+    const auto &Symbol = cast<MCSymbolELF>(*P.second);
     size_t Pos = AliasName.find('@');
     assert(Pos != StringRef::npos);
 
@@ -1278,23 +1274,25 @@ void ELFObjectWriter::executePostLayoutBinding(MCAssembler &Asm,
 
     // Aliases defined with .symvar copy the binding from the symbol they alias.
     // This is the first place we are able to copy this information.
+    Alias->setExternal(Symbol.isExternal());
     Alias->setBinding(Symbol.getBinding());
-    Alias->setVisibility(Symbol.getVisibility());
     Alias->setOther(Symbol.getOther());
 
     if (!Symbol.isUndefined() && !Rest.startswith("@@@"))
       continue;
 
+    // FIXME: Get source locations for these errors or diagnose them earlier.
     if (Symbol.isUndefined() && Rest.startswith("@@") &&
         !Rest.startswith("@@@")) {
-      Asm.getContext().reportError(S.Loc, "default version symbol " +
-                                              AliasName + " must be defined");
+      Asm.getContext().reportError(SMLoc(), "versioned symbol " + AliasName +
+                                                " must be defined");
       continue;
     }
 
     if (Renames.count(&Symbol) && Renames[&Symbol] != Alias) {
-      Asm.getContext().reportError(S.Loc, Twine("multiple versions for ") +
-                                              Symbol.getName());
+      Asm.getContext().reportError(
+          SMLoc(), llvm::Twine("multiple symbol versions defined for ") +
+                       Symbol.getName());
       continue;
     }
 
@@ -1392,10 +1390,9 @@ bool ELFObjectWriter::shouldRelocateWithSymbol(const MCAssembler &Asm,
       if (C != 0)
         return true;
 
-      // gold<2.34 incorrectly ignored the addend for R_386_GOTOFF (9)
-      // (http://sourceware.org/PR16794).
-      if (TargetObjectWriter->getEMachine() == ELF::EM_386 &&
-          Type == ELF::R_386_GOTOFF)
+      // It looks like gold has a bug (http://sourceware.org/PR16794) and can
+      // only handle section relocations to mergeable sections if using RELA.
+      if (!hasRelocationAddend())
         return true;
     }
 

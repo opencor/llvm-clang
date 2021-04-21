@@ -268,7 +268,6 @@ CleanupPointerRootUsers(GlobalVariable *GV,
         I = J;
       } while (true);
       I->eraseFromParent();
-      Changed = true;
     }
   }
 
@@ -286,7 +285,7 @@ static bool CleanupConstantGlobalUsers(
   // we delete a constant array, we may also be holding pointer to one of its
   // elements (or an element of one of its elements if we're dealing with an
   // array of arrays) in the worklist.
-  SmallVector<WeakTrackingVH, 8> WorkList(V->users());
+  SmallVector<WeakTrackingVH, 8> WorkList(V->user_begin(), V->user_end());
   while (!WorkList.empty()) {
     Value *UV = WorkList.pop_back_val();
     if (!UV)
@@ -1880,8 +1879,7 @@ static bool isPointerValueDeadOnEntryToFunction(
           // and the number of bits loaded in L is less than or equal to
           // the number of bits stored in S.
           return DT.dominates(S, L) &&
-                 DL.getTypeStoreSize(LTy).getFixedSize() <=
-                     DL.getTypeStoreSize(STy).getFixedSize();
+                 DL.getTypeStoreSize(LTy) <= DL.getTypeStoreSize(STy);
         }))
       return false;
   }
@@ -1933,7 +1931,8 @@ static void makeAllConstantUsesInstructions(Constant *C) {
   SmallVector<Value*,4> UUsers;
   for (auto *U : Users) {
     UUsers.clear();
-    append_range(UUsers, U->users());
+    for (auto *UU : U->users())
+      UUsers.push_back(UU);
     for (auto *UU : UUsers) {
       Instruction *UI = cast<Instruction>(UU);
       Instruction *NewU = U->getAsInstruction();
@@ -1990,13 +1989,12 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
     return true;
   }
 
-  bool Changed = false;
-
   // If the global is never loaded (but may be stored to), it is dead.
   // Delete it now.
   if (!GS.IsLoaded) {
     LLVM_DEBUG(dbgs() << "GLOBAL NEVER LOADED: " << *GV << "\n");
 
+    bool Changed;
     if (isLeakCheckerRoot(GV)) {
       // Delete any constant stores to the global.
       Changed = CleanupPointerRootUsers(GV, GetTLI);
@@ -2022,14 +2020,11 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
     // Don't actually mark a global constant if it's atomic because atomic loads
     // are implemented by a trivial cmpxchg in some edge-cases and that usually
     // requires write access to the variable even if it's not actually changed.
-    if (GS.Ordering == AtomicOrdering::NotAtomic) {
-      assert(!GV->isConstant() && "Expected a non-constant global");
+    if (GS.Ordering == AtomicOrdering::NotAtomic)
       GV->setConstant(true);
-      Changed = true;
-    }
 
     // Clean up any obviously simplifiable users now.
-    Changed |= CleanupConstantGlobalUsers(GV, GV->getInitializer(), DL, GetTLI);
+    CleanupConstantGlobalUsers(GV, GV->getInitializer(), DL, GetTLI);
 
     // If the global is dead now, just nuke it.
     if (GV->use_empty()) {
@@ -2089,7 +2084,7 @@ processInternalGlobal(GlobalVariable *GV, const GlobalStatus &GS,
     }
   }
 
-  return Changed;
+  return false;
 }
 
 /// Analyze the specified global variable and optimize it if possible.  If we
@@ -2224,7 +2219,8 @@ isValidCandidateForColdCC(Function &F,
     BlockFrequencyInfo &CallerBFI = GetBFI(*CallerFunc);
     if (!isColdCallSite(CB, CallerBFI))
       return false;
-    if (!llvm::is_contained(AllCallsCold, CallerFunc))
+    auto It = std::find(AllCallsCold.begin(), AllCallsCold.end(), CallerFunc);
+    if (It == AllCallsCold.end())
       return false;
   }
   return true;

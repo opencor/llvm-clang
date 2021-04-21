@@ -180,7 +180,7 @@ std::pair<unsigned, unsigned>
 SourceMgr::getLineAndColumn(SMLoc Loc, unsigned BufferID) const {
   if (!BufferID)
     BufferID = FindBufferContainingLoc(Loc);
-  assert(BufferID && "Invalid location!");
+  assert(BufferID && "Invalid Location!");
 
   auto &SB = getBufferInfo(BufferID);
   const char *Ptr = Loc.getPointer();
@@ -191,30 +191,6 @@ SourceMgr::getLineAndColumn(SMLoc Loc, unsigned BufferID) const {
   if (NewlineOffs == StringRef::npos)
     NewlineOffs = ~(size_t)0;
   return std::make_pair(LineNo, Ptr - BufStart - NewlineOffs);
-}
-
-// FIXME: Note that the formatting of source locations is spread between
-// multiple functions, some in SourceMgr and some in SMDiagnostic. A better
-// solution would be a general-purpose source location formatter
-// in one of those two classes, or possibly in SMLoc.
-
-/// Get a string with the source location formatted in the standard
-/// style, but without the line offset. If \p IncludePath is true, the path
-/// is included. If false, only the file name and extension are included.
-std::string SourceMgr::getFormattedLocationNoOffset(SMLoc Loc,
-                                                    bool IncludePath) const {
-  auto BufferID = FindBufferContainingLoc(Loc);
-  assert(BufferID && "Invalid location!");
-  auto FileSpec = getBufferInfo(BufferID).Buffer->getBufferIdentifier();
-
-  if (IncludePath) {
-    return FileSpec.str() + ":" + std::to_string(FindLineNumber(Loc, BufferID));
-  } else {
-    auto I = FileSpec.find_last_of("/\\");
-    I = (I == FileSpec.size()) ? 0 : (I + 1);
-    return FileSpec.substr(I).str() + ":" +
-           std::to_string(FindLineNumber(Loc, BufferID));
-  }
 }
 
 /// Given a line and column number in a mapped buffer, turn it into an SMLoc.
@@ -267,7 +243,7 @@ SMDiagnostic SourceMgr::GetMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
   SmallVector<std::pair<unsigned, unsigned>, 4> ColRanges;
   std::pair<unsigned, unsigned> LineAndCol;
   StringRef BufferID = "<unknown>";
-  StringRef LineStr;
+  std::string LineStr;
 
   if (Loc.isValid()) {
     unsigned CurBuf = FindBufferContainingLoc(Loc);
@@ -288,7 +264,7 @@ SMDiagnostic SourceMgr::GetMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
     const char *BufEnd = CurMB->getBufferEnd();
     while (LineEnd != BufEnd && LineEnd[0] != '\n' && LineEnd[0] != '\r')
       ++LineEnd;
-    LineStr = StringRef(LineStart, LineEnd - LineStart);
+    LineStr = std::string(LineStart, LineEnd);
 
     // Convert any ranges to column ranges that only intersect the line of the
     // location.
@@ -370,8 +346,8 @@ SMDiagnostic::SMDiagnostic(const SourceMgr &sm, SMLoc L, StringRef FN, int Line,
                            ArrayRef<std::pair<unsigned, unsigned>> Ranges,
                            ArrayRef<SMFixIt> Hints)
     : SM(&sm), Loc(L), Filename(std::string(FN)), LineNo(Line), ColumnNo(Col),
-      Kind(Kind), Message(Msg), LineContents(LineStr), Ranges(Ranges.vec()),
-      FixIts(Hints.begin(), Hints.end()) {
+      Kind(Kind), Message(std::string(Msg)), LineContents(std::string(LineStr)),
+      Ranges(Ranges.vec()), FixIts(Hints.begin(), Hints.end()) {
   llvm::sort(FixIts);
 }
 
@@ -386,12 +362,13 @@ static void buildFixItLine(std::string &CaretLine, std::string &FixItLine,
 
   size_t PrevHintEndCol = 0;
 
-  for (const llvm::SMFixIt &Fixit : FixIts) {
+  for (ArrayRef<SMFixIt>::iterator I = FixIts.begin(), E = FixIts.end(); I != E;
+       ++I) {
     // If the fixit contains a newline or tab, ignore it.
-    if (Fixit.getText().find_first_of("\n\r\t") != StringRef::npos)
+    if (I->getText().find_first_of("\n\r\t") != StringRef::npos)
       continue;
 
-    SMRange R = Fixit.getRange();
+    SMRange R = I->getRange();
 
     // If the line doesn't contain any part of the range, then ignore it.
     if (R.Start.getPointer() > LineEnd || R.End.getPointer() < LineStart)
@@ -420,15 +397,16 @@ static void buildFixItLine(std::string &CaretLine, std::string &FixItLine,
     // FIXME: This assertion is intended to catch unintended use of multibyte
     // characters in fixits. If we decide to do this, we'll have to track
     // separate byte widths for the source and fixit lines.
-    assert((size_t)sys::locale::columnWidth(Fixit.getText()) ==
-           Fixit.getText().size());
+    assert((size_t)sys::locale::columnWidth(I->getText()) ==
+           I->getText().size());
 
     // This relies on one byte per column in our fixit hints.
-    unsigned LastColumnModified = HintCol + Fixit.getText().size();
+    unsigned LastColumnModified = HintCol + I->getText().size();
     if (LastColumnModified > FixItLine.size())
       FixItLine.resize(LastColumnModified, ' ');
 
-    llvm::copy(Fixit.getText(), FixItLine.begin() + HintCol);
+    std::copy(I->getText().begin(), I->getText().end(),
+              FixItLine.begin() + HintCol);
 
     PrevHintEndCol = LastColumnModified;
 
@@ -522,7 +500,7 @@ void SMDiagnostic::print(const char *ProgName, raw_ostream &OS, bool ShowColors,
   // map like Clang's TextDiagnostic. For now, we'll just handle tabs by
   // expanding them later, and bail out rather than show incorrect ranges and
   // misaligned fixits for any other odd characters.
-  if (any_of(LineContents, isNonASCII)) {
+  if (find_if(LineContents, isNonASCII) != LineContents.end()) {
     printSourceLine(OS, LineContents);
     return;
   }
@@ -532,9 +510,11 @@ void SMDiagnostic::print(const char *ProgName, raw_ostream &OS, bool ShowColors,
   std::string CaretLine(NumColumns + 1, ' ');
 
   // Expand any ranges.
-  for (const std::pair<unsigned, unsigned> &R : Ranges)
+  for (unsigned r = 0, e = Ranges.size(); r != e; ++r) {
+    std::pair<unsigned, unsigned> R = Ranges[r];
     std::fill(&CaretLine[R.first],
               &CaretLine[std::min((size_t)R.second, CaretLine.size())], '~');
+  }
 
   // Add any fix-its.
   // FIXME: Find the beginning of the line properly for multibyte characters.

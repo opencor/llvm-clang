@@ -46,7 +46,6 @@ using namespace llvm::object;
 LTOModule::LTOModule(std::unique_ptr<Module> M, MemoryBufferRef MBRef,
                      llvm::TargetMachine *TM)
     : Mod(std::move(M)), MBRef(MBRef), _target(TM) {
-  assert(_target && "target machine is null");
   SymTab.addModule(Mod.get());
 }
 
@@ -222,8 +221,6 @@ LTOModule::makeLTOModule(MemoryBufferRef Buffer, const TargetOptions &options,
       CPU = "core2";
     else if (Triple.getArch() == llvm::Triple::x86)
       CPU = "yonah";
-    else if (Triple.isArm64e())
-      CPU = "apple-a12";
     else if (Triple.getArch() == llvm::Triple::aarch64 ||
              Triple.getArch() == llvm::Triple::aarch64_32)
       CPU = "cyclone";

@@ -114,20 +114,17 @@ class AArch64RegisterBankInfo final : public AArch64GenRegisterBankInfo {
   const InstructionMapping &
   getSameKindOfOperandsMapping(const MachineInstr &MI) const;
 
-  /// Maximum recursion depth for hasFPConstraints.
-  const unsigned MaxFPRSearchDepth = 2;
-
-  /// \returns true if \p MI only uses and defines FPRs.
+  /// Returns true if the output of \p MI must be stored on a FPR register.
   bool hasFPConstraints(const MachineInstr &MI, const MachineRegisterInfo &MRI,
-                     const TargetRegisterInfo &TRI, unsigned Depth = 0) const;
+                     const TargetRegisterInfo &TRI) const;
 
-  /// \returns true if \p MI only uses FPRs.
+  /// Returns true if the source registers of \p MI must all be FPRs.
   bool onlyUsesFP(const MachineInstr &MI, const MachineRegisterInfo &MRI,
-                  const TargetRegisterInfo &TRI, unsigned Depth = 0) const;
+                  const TargetRegisterInfo &TRI) const;
 
-  /// \returns true if \p MI only defines FPRs.
+  /// Returns true if the destination register of \p MI must be a FPR.
   bool onlyDefinesFP(const MachineInstr &MI, const MachineRegisterInfo &MRI,
-                     const TargetRegisterInfo &TRI, unsigned Depth = 0) const;
+                     const TargetRegisterInfo &TRI) const;
 
 public:
   AArch64RegisterBankInfo(const TargetRegisterInfo &TRI);

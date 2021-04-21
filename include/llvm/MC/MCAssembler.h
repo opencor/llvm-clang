@@ -202,7 +202,6 @@ private:
   bool relaxCVInlineLineTable(MCAsmLayout &Layout,
                               MCCVInlineLineTableFragment &DF);
   bool relaxCVDefRange(MCAsmLayout &Layout, MCCVDefRangeFragment &DF);
-  bool relaxPseudoProbeAddr(MCAsmLayout &Layout, MCPseudoProbeAddrFragment &DF);
 
   /// finishLayout - Finalize a layout, including fragment lowering.
   void finishLayout(MCAsmLayout &Layout);
@@ -211,12 +210,7 @@ private:
   handleFixup(const MCAsmLayout &Layout, MCFragment &F, const MCFixup &Fixup);
 
 public:
-  struct Symver {
-    StringRef Name;
-    const MCSymbol *Sym;
-    SMLoc Loc;
-  };
-  std::vector<Symver> Symvers;
+  std::vector<std::pair<StringRef, const MCSymbol *>> Symvers;
 
   /// Construct a new assembler instance.
   //

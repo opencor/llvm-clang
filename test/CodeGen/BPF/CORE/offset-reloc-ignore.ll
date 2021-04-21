@@ -1,6 +1,7 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfel -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfeb -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfel -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfeb -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK %s
 ; Source code:
 ;   #define _(x) (__builtin_preserve_access_index(x))
 ;   int get_value(const int *arg);
@@ -8,9 +9,7 @@
 ;     return get_value(_(&arg[4]));
 ;   }
 ; Compilation flag:
-;   clang -target bpf -O2 -g -S -emit-llvm -Xclang -disable-llvm-passes test.c
-
-target triple = "bpf"
+;   clang -target bpf -O2 -g -S -emit-llvm test.c
 
 ; Function Attrs: nounwind
 define dso_local i32 @test(i32* %arg) local_unnamed_addr #0 !dbg !10 {

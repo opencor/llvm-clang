@@ -84,7 +84,7 @@ void HexagonBlockRanges::RangeList::unionize(bool MergeAdjacent) {
   if (empty())
     return;
 
-  llvm::sort(*this);
+  llvm::sort(begin(), end());
   iterator Iter = begin();
 
   while (Iter != end()-1) {
@@ -275,7 +275,7 @@ HexagonBlockRanges::RegisterSet HexagonBlockRanges::expandToSubRegs(
     for (; I.isValid(); ++I)
       SRs.insert({*I, 0});
   } else {
-    assert(R.Reg.isVirtual());
+    assert(Register::isVirtualRegister(R.Reg));
     auto &RC = *MRI.getRegClass(R.Reg);
     unsigned PReg = *RC.begin();
     MCSubRegIndexIterator I(PReg, &TRI);
@@ -482,7 +482,7 @@ HexagonBlockRanges::RegToRangeMap HexagonBlockRanges::computeDeadMap(
     }
   }
   for (auto &P : LiveMap)
-    if (P.first.Reg.isVirtual())
+    if (Register::isVirtualRegister(P.first.Reg))
       addDeadRanges(P.first);
 
   LLVM_DEBUG(dbgs() << __func__ << ": dead map\n"

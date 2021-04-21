@@ -13,11 +13,6 @@ add_llvm_component_library(LLVMProfileData
 
   DEPENDS
   intrinsics_gen
-
-  LINK_COMPONENTS
-  Core
-  Support
-  Demangle
   )
 
 add_subdirectory(Coverage)

@@ -203,10 +203,9 @@ public:
     return !any();
   }
 
-  /// find_first_in - Returns the index of the first set / unset bit,
-  /// depending on \p Set, in the range [Begin, End).
-  /// Returns -1 if all bits in the range are unset / set.
-  int find_first_in(unsigned Begin, unsigned End, bool Set = true) const {
+  /// find_first_in - Returns the index of the first set bit in the range
+  /// [Begin, End).  Returns -1 if all bits in the range are unset.
+  int find_first_in(unsigned Begin, unsigned End) const {
     assert(Begin <= End && End <= Size);
     if (Begin == End)
       return -1;
@@ -215,14 +214,8 @@ public:
     unsigned LastWord = (End - 1) / BITWORD_SIZE;
 
     // Check subsequent words.
-    // The code below is based on search for the first _set_ bit. If
-    // we're searching for the first _unset_, we just take the
-    // complement of each word before we use it and apply
-    // the same method.
     for (unsigned i = FirstWord; i <= LastWord; ++i) {
       BitWord Copy = Bits[i];
-      if (!Set)
-        Copy = ~Copy;
 
       if (i == FirstWord) {
         unsigned FirstBit = Begin % BITWORD_SIZE;
@@ -273,7 +266,32 @@ public:
   /// find_first_unset_in - Returns the index of the first unset bit in the
   /// range [Begin, End).  Returns -1 if all bits in the range are set.
   int find_first_unset_in(unsigned Begin, unsigned End) const {
-    return find_first_in(Begin, End, /* Set = */ false);
+    assert(Begin <= End && End <= Size);
+    if (Begin == End)
+      return -1;
+
+    unsigned FirstWord = Begin / BITWORD_SIZE;
+    unsigned LastWord = (End - 1) / BITWORD_SIZE;
+
+    // Check subsequent words.
+    for (unsigned i = FirstWord; i <= LastWord; ++i) {
+      BitWord Copy = Bits[i];
+
+      if (i == FirstWord) {
+        unsigned FirstBit = Begin % BITWORD_SIZE;
+        Copy |= maskTrailingOnes<BitWord>(FirstBit);
+      }
+
+      if (i == LastWord) {
+        unsigned LastBit = (End - 1) % BITWORD_SIZE;
+        Copy |= maskTrailingZeros<BitWord>(LastBit + 1);
+      }
+      if (Copy != ~BitWord(0)) {
+        unsigned Result = i * BITWORD_SIZE + countTrailingOnes(Copy);
+        return Result < size() ? Result : -1;
+      }
+    }
+    return -1;
   }
 
   /// find_last_unset_in - Returns the index of the last unset bit in the

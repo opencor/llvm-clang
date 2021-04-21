@@ -158,7 +158,8 @@ public:
 
   void restrictToBlocks(SmallSetVector<BasicBlock *, 4> &Blocks) {
     for (auto II = Insts.begin(); II != Insts.end();) {
-      if (!llvm::is_contained(Blocks, (*II)->getParent())) {
+      if (std::find(Blocks.begin(), Blocks.end(), (*II)->getParent()) ==
+          Blocks.end()) {
         ActiveBlocks.remove((*II)->getParent());
         II = Insts.erase(II);
       } else {
@@ -276,7 +277,8 @@ public:
     auto VI = Values.begin();
     while (BI != Blocks.end()) {
       assert(VI != Values.end());
-      if (!llvm::is_contained(NewBlocks, *BI)) {
+      if (std::find(NewBlocks.begin(), NewBlocks.end(), *BI) ==
+          NewBlocks.end()) {
         BI = Blocks.erase(BI);
         VI = Values.erase(VI);
       } else {
@@ -692,8 +694,10 @@ Optional<SinkingInstructionCandidate> GVNSink::analyzeInstructionForSinking(
   ModelledPHI NewPHI(NewInsts, ActivePreds);
 
   // Does sinking this instruction render previous PHIs redundant?
-  if (NeededPHIs.erase(NewPHI))
+  if (NeededPHIs.find(NewPHI) != NeededPHIs.end()) {
+    NeededPHIs.erase(NewPHI);
     RecomputePHIContents = true;
+  }
 
   if (RecomputePHIContents) {
     // The needed PHIs have changed, so recompute the set of all needed
@@ -754,7 +758,8 @@ Optional<SinkingInstructionCandidate> GVNSink::analyzeInstructionForSinking(
   Cand.NumMemoryInsts = MemoryInstNum;
   Cand.NumBlocks = ActivePreds.size();
   Cand.NumPHIs = NeededPHIs.size();
-  append_range(Cand.Blocks, ActivePreds);
+  for (auto *C : ActivePreds)
+    Cand.Blocks.push_back(C);
 
   return Cand;
 }

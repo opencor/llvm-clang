@@ -326,7 +326,7 @@ bool HexagonShuffler::ValidResourceUsage(HexagonPacketSummary const &Summary) {
   }
 
   // Verify the CVI slot subscriptions.
-  llvm::stable_sort(*this, HexagonInstr::lessCVI);
+  std::stable_sort(begin(), end(), HexagonInstr::lessCVI);
   // create vector of hvx instructions to check
   HVXInstsT hvxInsts;
   hvxInsts.clear();
@@ -609,7 +609,8 @@ llvm::Optional<HexagonShuffler::HexagonPacket>
 HexagonShuffler::tryAuction(HexagonPacketSummary const &Summary) const {
   HexagonPacket PacketResult = Packet;
   HexagonUnitAuction AuctionCore(Summary.ReservedSlotMask);
-  llvm::stable_sort(PacketResult, HexagonInstr::lessCore);
+  std::stable_sort(PacketResult.begin(), PacketResult.end(),
+                   HexagonInstr::lessCore);
 
   const bool ValidSlots =
       llvm::all_of(insts(PacketResult), [&AuctionCore](HexagonInstr const &I) {

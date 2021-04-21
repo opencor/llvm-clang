@@ -17,6 +17,7 @@
 
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/IR/ValueMap.h"
+#include "llvm/Pass.h"
 
 namespace llvm {
 

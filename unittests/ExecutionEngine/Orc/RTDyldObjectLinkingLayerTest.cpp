@@ -10,6 +10,9 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
+#include "llvm/ExecutionEngine/Orc/Legacy.h"
+#include "llvm/ExecutionEngine/Orc/NullResolver.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/Constants.h"
@@ -59,13 +62,10 @@ static bool testSetProcessAllSections(std::unique_ptr<MemoryBuffer> Obj,
   };
 
   ObjLayer.setProcessAllSections(ProcessAllSections);
-  cantFail(ObjLayer.add(JD, std::move(Obj)));
+  cantFail(ObjLayer.add(JD, std::move(Obj), ES.allocateVModule()));
   ES.lookup(LookupKind::Static, makeJITDylibSearchOrder(&JD),
             SymbolLookupSet(Foo), SymbolState::Resolved, OnResolveDoNothing,
             NoDependenciesToRegister);
-
-  if (auto Err = ES.endSession())
-    ES.reportError(std::move(Err));
 
   return DebugSectionSeen;
 }
@@ -117,7 +117,7 @@ TEST(RTDyldObjectLinkingLayerTest, TestOverrideObjectFlags) {
   public:
     FunkySimpleCompiler(TargetMachine &TM) : SimpleCompiler(TM) {}
 
-    Expected<CompileResult> operator()(Module &M) override {
+    Expected<CompileResult> operator()(Module &M) {
       auto *Foo = M.getFunction("foo");
       assert(Foo && "Expected function Foo not found");
       Foo->setVisibility(GlobalValue::HiddenVisibility);
@@ -162,15 +162,12 @@ TEST(RTDyldObjectLinkingLayerTest, TestOverrideObjectFlags) {
 
   ObjLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
 
-  cantFail(CompileLayer.add(JD, std::move(M)));
+  cantFail(CompileLayer.add(JD, std::move(M), ES.allocateVModule()));
   ES.lookup(
       LookupKind::Static, makeJITDylibSearchOrder(&JD), SymbolLookupSet(Foo),
       SymbolState::Resolved,
       [](Expected<SymbolMap> R) { cantFail(std::move(R)); },
       NoDependenciesToRegister);
-
-  if (auto Err = ES.endSession())
-    ES.reportError(std::move(Err));
 }
 
 TEST(RTDyldObjectLinkingLayerTest, TestAutoClaimResponsibilityForSymbols) {
@@ -190,7 +187,7 @@ TEST(RTDyldObjectLinkingLayerTest, TestAutoClaimResponsibilityForSymbols) {
   public:
     FunkySimpleCompiler(TargetMachine &TM) : SimpleCompiler(TM) {}
 
-    Expected<CompileResult> operator()(Module &M) override {
+    Expected<CompileResult> operator()(Module &M) {
       Function *BarImpl = Function::Create(
           FunctionType::get(Type::getVoidTy(M.getContext()), {}, false),
           GlobalValue::ExternalLinkage, "bar", &M);
@@ -232,15 +229,12 @@ TEST(RTDyldObjectLinkingLayerTest, TestAutoClaimResponsibilityForSymbols) {
 
   ObjLayer.setAutoClaimResponsibilityForObjectSymbols(true);
 
-  cantFail(CompileLayer.add(JD, std::move(M)));
+  cantFail(CompileLayer.add(JD, std::move(M), ES.allocateVModule()));
   ES.lookup(
       LookupKind::Static, makeJITDylibSearchOrder(&JD), SymbolLookupSet(Foo),
       SymbolState::Resolved,
       [](Expected<SymbolMap> R) { cantFail(std::move(R)); },
       NoDependenciesToRegister);
-
-  if (auto Err = ES.endSession())
-    ES.reportError(std::move(Err));
 }
 
 } // end anonymous namespace

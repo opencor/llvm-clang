@@ -14,14 +14,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
-#include "GCNSubtarget.h"
+#include "AMDGPUSubtarget.h"
+#include "SIDefines.h"
 #include "llvm/Analysis/LegacyDivergenceAnalysis.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/IR/IntrinsicsAMDGPU.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #define DEBUG_TYPE "amdgpu-atomic-optimizer"
@@ -405,11 +404,6 @@ static APInt getIdentityValueForAtomicOp(AtomicRMWInst::BinOp Op,
   }
 }
 
-static Value *buildMul(IRBuilder<> &B, Value *LHS, Value *RHS) {
-  const ConstantInt *CI = dyn_cast<ConstantInt>(LHS);
-  return (CI && CI->isOne()) ? RHS : B.CreateMul(LHS, RHS);
-}
-
 void AMDGPUAtomicOptimizer::optimizeAtomic(Instruction &I,
                                            AtomicRMWInst::BinOp Op,
                                            unsigned ValIdx,
@@ -529,7 +523,7 @@ void AMDGPUAtomicOptimizer::optimizeAtomic(Instruction &I,
       // old value times the number of active lanes.
       Value *const Ctpop = B.CreateIntCast(
           B.CreateUnaryIntrinsic(Intrinsic::ctpop, Ballot), Ty, false);
-      NewV = buildMul(B, V, Ctpop);
+      NewV = B.CreateMul(V, Ctpop);
       break;
     }
 
@@ -549,7 +543,7 @@ void AMDGPUAtomicOptimizer::optimizeAtomic(Instruction &I,
       // old value times the parity of the number of active lanes.
       Value *const Ctpop = B.CreateIntCast(
           B.CreateUnaryIntrinsic(Intrinsic::ctpop, Ballot), Ty, false);
-      NewV = buildMul(B, V, B.CreateAnd(Ctpop, 1));
+      NewV = B.CreateMul(V, B.CreateAnd(Ctpop, 1));
       break;
     }
   }
@@ -628,7 +622,7 @@ void AMDGPUAtomicOptimizer::optimizeAtomic(Instruction &I,
         llvm_unreachable("Unhandled atomic op");
       case AtomicRMWInst::Add:
       case AtomicRMWInst::Sub:
-        LaneOffset = buildMul(B, V, Mbcnt);
+        LaneOffset = B.CreateMul(V, Mbcnt);
         break;
       case AtomicRMWInst::And:
       case AtomicRMWInst::Or:
@@ -639,7 +633,7 @@ void AMDGPUAtomicOptimizer::optimizeAtomic(Instruction &I,
         LaneOffset = B.CreateSelect(Cond, Identity, V);
         break;
       case AtomicRMWInst::Xor:
-        LaneOffset = buildMul(B, V, B.CreateAnd(Mbcnt, 1));
+        LaneOffset = B.CreateMul(V, B.CreateAnd(Mbcnt, 1));
         break;
       }
     }

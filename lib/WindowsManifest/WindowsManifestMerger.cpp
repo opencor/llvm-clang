@@ -16,7 +16,7 @@
 
 #include <map>
 
-#if LLVM_ENABLE_LIBXML2
+#if LLVM_LIBXML2_ENABLED
 #include <libxml/xmlreader.h>
 #endif
 
@@ -41,7 +41,7 @@ public:
 private:
   static void errorCallback(void *Ctx, const char *Format, ...);
   Error getParseError();
-#if LLVM_ENABLE_LIBXML2
+#if LLVM_LIBXML2_ENABLED
   xmlDocPtr CombinedDoc = nullptr;
   std::vector<xmlDocPtr> MergedDocs;
 
@@ -56,7 +56,7 @@ private:
   bool ParseErrorOccurred = false;
 };
 
-#if LLVM_ENABLE_LIBXML2
+#if LLVM_LIBXML2_ENABLED
 
 static constexpr std::pair<StringLiteral, StringLiteral> MtNsHrefsPrefixes[] = {
     {"urn:schemas-microsoft-com:asm.v1", "ms_asmv1"},

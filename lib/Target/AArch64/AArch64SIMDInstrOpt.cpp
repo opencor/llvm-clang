@@ -221,9 +221,8 @@ shouldReplaceInst(MachineFunction *MF, const MCInstrDesc *InstDesc,
   // if so, return it.
   std::string Subtarget = std::string(SchedModel.getSubtargetInfo()->getCPU());
   auto InstID = std::make_pair(InstDesc->getOpcode(), Subtarget);
-  auto It = SIMDInstrTable.find(InstID);
-  if (It != SIMDInstrTable.end())
-    return It->second;
+  if (SIMDInstrTable.find(InstID) != SIMDInstrTable.end())
+    return SIMDInstrTable[InstID];
 
   unsigned SCIdx = InstDesc->getSchedClass();
   const MCSchedClassDesc *SCDesc =
@@ -291,9 +290,8 @@ bool AArch64SIMDInstrOpt::shouldExitEarly(MachineFunction *MF, Subpass SP) {
   case Interleave:
     std::string Subtarget =
         std::string(SchedModel.getSubtargetInfo()->getCPU());
-    auto It = InterlEarlyExit.find(Subtarget);
-    if (It != InterlEarlyExit.end())
-      return It->second;
+    if (InterlEarlyExit.find(Subtarget) != InterlEarlyExit.end())
+      return InterlEarlyExit[Subtarget];
 
     for (auto &I : IRT) {
       OriginalMCID = &TII->get(I.OrigOpc);

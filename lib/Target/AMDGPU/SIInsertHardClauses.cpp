@@ -31,9 +31,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AMDGPU.h"
-#include "GCNSubtarget.h"
-#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "AMDGPUSubtarget.h"
+#include "SIInstrInfo.h"
 #include "llvm/ADT/SmallVector.h"
 
 using namespace llvm;

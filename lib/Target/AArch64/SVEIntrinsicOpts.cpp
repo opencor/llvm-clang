@@ -37,7 +37,7 @@
 using namespace llvm;
 using namespace llvm::PatternMatch;
 
-#define DEBUG_TYPE "aarch64-sve-intrinsic-opts"
+#define DEBUG_TYPE "sve-intrinsic-opts"
 
 namespace llvm {
 void initializeSVEIntrinsicOptsPass(PassRegistry &);
@@ -177,50 +177,22 @@ bool SVEIntrinsicOpts::optimizeConvertFromSVBool(IntrinsicInst *I) {
   if (isa<PHINode>(I->getArgOperand(0)))
     return processPhiNode(I);
 
-  SmallVector<Instruction *, 32> CandidatesForRemoval;
-  Value *Cursor = I->getOperand(0), *EarliestReplacement = nullptr;
-
-  const auto *IVTy = cast<VectorType>(I->getType());
-
-  // Walk the chain of conversions.
-  while (Cursor) {
-    // If the type of the cursor has fewer lanes than the final result, zeroing
-    // must take place, which breaks the equivalence chain.
-    const auto *CursorVTy = cast<VectorType>(Cursor->getType());
-    if (CursorVTy->getElementCount().getKnownMinValue() <
-        IVTy->getElementCount().getKnownMinValue())
-      break;
-
-    // If the cursor has the same type as I, it is a viable replacement.
-    if (Cursor->getType() == IVTy)
-      EarliestReplacement = Cursor;
-
-    auto *IntrinsicCursor = dyn_cast<IntrinsicInst>(Cursor);
-
-    // If this is not an SVE conversion intrinsic, this is the end of the chain.
-    if (!IntrinsicCursor || !(IntrinsicCursor->getIntrinsicID() ==
-                                  Intrinsic::aarch64_sve_convert_to_svbool ||
-                              IntrinsicCursor->getIntrinsicID() ==
-                                  Intrinsic::aarch64_sve_convert_from_svbool))
-      break;
-
-    CandidatesForRemoval.insert(CandidatesForRemoval.begin(), IntrinsicCursor);
-    Cursor = IntrinsicCursor->getOperand(0);
-  }
-
-  // If no viable replacement in the conversion chain was found, there is
-  // nothing to do.
-  if (!EarliestReplacement)
+  // If we have a reinterpret intrinsic I of type A which is converting from
+  // another reinterpret Y of type B, and the source type of Y is A, then we can
+  // elide away both reinterprets if there are no other users of Y.
+  auto *Y = isReinterpretToSVBool(I->getArgOperand(0));
+  if (!Y)
     return false;
 
-  I->replaceAllUsesWith(EarliestReplacement);
-  I->eraseFromParent();
+  Value *SourceVal = Y->getArgOperand(0);
+  if (I->getType() != SourceVal->getType())
+    return false;
 
-  while (!CandidatesForRemoval.empty()) {
-    Instruction *Candidate = CandidatesForRemoval.pop_back_val();
-    if (Candidate->use_empty())
-      Candidate->eraseFromParent();
-  }
+  I->replaceAllUsesWith(SourceVal);
+  I->eraseFromParent();
+  if (Y->use_empty())
+    Y->eraseFromParent();
+
   return true;
 }
 
@@ -276,8 +248,10 @@ bool SVEIntrinsicOpts::runOnModule(Module &M) {
     case Intrinsic::aarch64_sve_ptest_any:
     case Intrinsic::aarch64_sve_ptest_first:
     case Intrinsic::aarch64_sve_ptest_last:
-      for (User *U : F.users())
-        Functions.insert(cast<Instruction>(U)->getFunction());
+      for (auto I = F.user_begin(), E = F.user_end(); I != E;) {
+        auto *Inst = dyn_cast<Instruction>(*I++);
+        Functions.insert(Inst->getFunction());
+      }
       break;
     default:
       break;

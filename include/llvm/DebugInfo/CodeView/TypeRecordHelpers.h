@@ -9,8 +9,7 @@
 #ifndef LLVM_DEBUGINFO_CODEVIEW_TYPERECORDHELPERS_H
 #define LLVM_DEBUGINFO_CODEVIEW_TYPERECORDHELPERS_H
 
-#include "llvm/DebugInfo/CodeView/CVRecord.h"
-#include "llvm/DebugInfo/CodeView/TypeIndex.h"
+#include "llvm/DebugInfo/CodeView/TypeRecord.h"
 
 namespace llvm {
 namespace codeview {

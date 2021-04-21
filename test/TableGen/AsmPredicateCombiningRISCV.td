@@ -59,7 +59,6 @@ class CompressPat<dag input, dag output, list<Predicate> predicates> {
   dag Input = input;
   dag Output = output;
   list<Predicate> Predicates = predicates;
-  bit isCompressOnly = false;
 }
 
 // COMPRESS-LABEL: static bool compressInst

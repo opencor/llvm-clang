@@ -22,5 +22,8 @@ executable("llvm-cxxfilt") {
     "//llvm/lib/Demangle",
     "//llvm/lib/Support",
   ]
-  sources = [ "llvm-cxxfilt.cpp" ]
+  sources = [
+    # Make `gn format` not collapse this, for sync_source_lists_from_cmake.py.
+    "llvm-cxxfilt.cpp",
+  ]
 }

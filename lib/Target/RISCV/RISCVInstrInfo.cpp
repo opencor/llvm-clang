@@ -11,10 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVInstrInfo.h"
-#include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCV.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "Utils/RISCVMatInt.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -45,7 +45,6 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::LBU:
   case RISCV::LH:
   case RISCV::LHU:
-  case RISCV::FLH:
   case RISCV::LW:
   case RISCV::FLW:
   case RISCV::LWU:
@@ -71,7 +70,6 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   case RISCV::SB:
   case RISCV::SH:
   case RISCV::SW:
-  case RISCV::FSH:
   case RISCV::FSW:
   case RISCV::SD:
   case RISCV::FSD:
@@ -98,37 +96,18 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     return;
   }
 
-  // FPR->FPR copies and VR->VR copies.
+  // FPR->FPR copies
   unsigned Opc;
-  bool IsScalableVector = false;
-  if (RISCV::FPR16RegClass.contains(DstReg, SrcReg))
-    Opc = RISCV::FSGNJ_H;
-  else if (RISCV::FPR32RegClass.contains(DstReg, SrcReg))
+  if (RISCV::FPR32RegClass.contains(DstReg, SrcReg))
     Opc = RISCV::FSGNJ_S;
   else if (RISCV::FPR64RegClass.contains(DstReg, SrcReg))
     Opc = RISCV::FSGNJ_D;
-  else if (RISCV::VRRegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
-    IsScalableVector = true;
-  } else if (RISCV::VRM2RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV2R_V;
-    IsScalableVector = true;
-  } else if (RISCV::VRM4RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV4R_V;
-    IsScalableVector = true;
-  } else if (RISCV::VRM8RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV8R_V;
-    IsScalableVector = true;
-  } else
+  else
     llvm_unreachable("Impossible reg-to-reg copy");
 
-  if (IsScalableVector)
-    BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
-  else
-    BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
-        .addReg(SrcReg, getKillRegState(KillSrc))
-        .addReg(SrcReg, getKillRegState(KillSrc));
+  BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addReg(SrcReg, getKillRegState(KillSrc));
 }
 
 void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
@@ -140,18 +119,11 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   if (I != MBB.end())
     DL = I->getDebugLoc();
 
-  MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = MF->getFrameInfo();
-  MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
-
   unsigned Opcode;
+
   if (RISCV::GPRRegClass.hasSubClassEq(RC))
     Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
              RISCV::SW : RISCV::SD;
-  else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FSH;
   else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
     Opcode = RISCV::FSW;
   else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
@@ -162,8 +134,7 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   BuildMI(MBB, I, DL, get(Opcode))
       .addReg(SrcReg, getKillRegState(IsKill))
       .addFrameIndex(FI)
-      .addImm(0)
-      .addMemOperand(MMO);
+      .addImm(0);
 }
 
 void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -175,18 +146,11 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   if (I != MBB.end())
     DL = I->getDebugLoc();
 
-  MachineFunction *MF = MBB.getParent();
-  const MachineFrameInfo &MFI = MF->getFrameInfo();
-  MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
-
   unsigned Opcode;
+
   if (RISCV::GPRRegClass.hasSubClassEq(RC))
     Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
              RISCV::LW : RISCV::LD;
-  else if (RISCV::FPR16RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FLH;
   else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
     Opcode = RISCV::FLW;
   else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
@@ -194,10 +158,7 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   else
     llvm_unreachable("Can't load this register from stack slot");
 
-  BuildMI(MBB, I, DL, get(Opcode), DstReg)
-    .addFrameIndex(FI)
-    .addImm(0)
-    .addMemOperand(MMO);
+  BuildMI(MBB, I, DL, get(Opcode), DstReg).addFrameIndex(FI).addImm(0);
 }
 
 void RISCVInstrInfo::movImm(MachineBasicBlock &MBB,
@@ -551,46 +512,15 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
 
 bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   const unsigned Opcode = MI.getOpcode();
-  switch (Opcode) {
-  default:
-    break;
-  case RISCV::FSGNJ_D:
-  case RISCV::FSGNJ_S:
-    // The canonical floating-point move is fsgnj rd, rs, rs.
-    return MI.getOperand(1).isReg() && MI.getOperand(2).isReg() &&
-           MI.getOperand(1).getReg() == MI.getOperand(2).getReg();
-  case RISCV::ADDI:
-  case RISCV::ORI:
-  case RISCV::XORI:
-    return (MI.getOperand(1).isReg() &&
-            MI.getOperand(1).getReg() == RISCV::X0) ||
-           (MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0);
+  switch(Opcode) {
+    default:
+      break;
+    case RISCV::ADDI:
+    case RISCV::ORI:
+    case RISCV::XORI:
+      return (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::X0);
   }
   return MI.isAsCheapAsAMove();
-}
-
-Optional<DestSourcePair>
-RISCVInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
-  if (MI.isMoveReg())
-    return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
-  switch (MI.getOpcode()) {
-  default:
-    break;
-  case RISCV::ADDI:
-    // Operand 1 can be a frameindex but callers expect registers
-    if (MI.getOperand(1).isReg() && MI.getOperand(2).isImm() &&
-        MI.getOperand(2).getImm() == 0)
-      return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
-    break;
-  case RISCV::FSGNJ_D:
-  case RISCV::FSGNJ_S:
-    // The canonical floating-point move is fsgnj rd, rs, rs.
-    if (MI.getOperand(1).isReg() && MI.getOperand(2).isReg() &&
-        MI.getOperand(1).getReg() == MI.getOperand(2).getReg())
-      return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
-    break;
-  }
-  return None;
 }
 
 bool RISCVInstrInfo::verifyInstruction(const MachineInstr &MI,
@@ -621,8 +551,14 @@ bool RISCVInstrInfo::verifyInstruction(const MachineInstr &MI,
         case RISCVOp::OPERAND_SIMM12:
           Ok = isInt<12>(Imm);
           break;
+        case RISCVOp::OPERAND_SIMM13_LSB0:
+          Ok = isShiftedInt<12, 1>(Imm);
+          break;
         case RISCVOp::OPERAND_UIMM20:
           Ok = isUInt<20>(Imm);
+          break;
+        case RISCVOp::OPERAND_SIMM21_LSB0:
+          Ok = isShiftedInt<20, 1>(Imm);
           break;
         case RISCVOp::OPERAND_UIMMLOG2XLEN:
           if (STI.getTargetTriple().isArch64Bit())
@@ -763,7 +699,10 @@ outliner::OutlinedFunction RISCVInstrInfo::getOutliningCandidateInfo(
     return !LRU.available(RISCV::X5);
   };
 
-  llvm::erase_if(RepeatedSequenceLocs, CannotInsertCall);
+  RepeatedSequenceLocs.erase(std::remove_if(RepeatedSequenceLocs.begin(),
+                                            RepeatedSequenceLocs.end(),
+                                            CannotInsertCall),
+                             RepeatedSequenceLocs.end());
 
   // If the sequence doesn't have enough candidates left, then we're done.
   if (RepeatedSequenceLocs.size() < 2)

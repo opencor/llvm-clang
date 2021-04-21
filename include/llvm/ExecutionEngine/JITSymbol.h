@@ -429,7 +429,7 @@ public:
   virtual JITSymbol findSymbol(const std::string &Name) = 0;
 
 private:
-  void anchor() override;
+  virtual void anchor();
 };
 
 } // end namespace llvm

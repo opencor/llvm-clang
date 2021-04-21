@@ -12,10 +12,29 @@
 //===----------------------------------------------------------------------===//
 
 #include "SIMachineScheduler.h"
+#include "AMDGPU.h"
 #include "SIInstrInfo.h"
+#include "SIRegisterInfo.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/LiveInterval.h"
 #include "llvm/CodeGen/LiveIntervals.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineScheduler.h"
+#include "llvm/CodeGen/RegisterPressure.h"
+#include "llvm/CodeGen/SlotIndexes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <map>
+#include <set>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
@@ -356,8 +375,8 @@ void SIScheduleBlock::initRegPressure(MachineBasicBlock::iterator BeginBlock,
   // Comparing to LiveInRegs is not sufficient to differenciate 4 vs 5, 7
   // The use of findDefBetween removes the case 4.
   for (const auto &RegMaskPair : RPTracker.getPressure().LiveOutRegs) {
-    Register Reg = RegMaskPair.RegUnit;
-    if (Reg.isVirtual() &&
+    unsigned Reg = RegMaskPair.RegUnit;
+    if (Register::isVirtualRegister(Reg) &&
         isDefBetween(Reg, LIS->getInstructionIndex(*BeginBlock).getRegSlot(),
                      LIS->getInstructionIndex(*EndBlock).getRegSlot(), MRI,
                      LIS)) {
@@ -744,7 +763,8 @@ void SIScheduleBlockCreator::colorHighLatenciesGroups() {
           // depend (order dependency) on one of the
           // instruction in the block, and are required for the
           // high latency instruction we add.
-          llvm::append_range(AdditionalElements, SubGraph);
+          AdditionalElements.insert(AdditionalElements.end(),
+                                    SubGraph.begin(), SubGraph.end());
         }
       }
       if (CompatibleGroup) {
@@ -1662,9 +1682,9 @@ SIScheduleBlock *SIScheduleBlockScheduler::pickBlock() {
 // Tracking of currently alive registers to determine VGPR Usage.
 
 void SIScheduleBlockScheduler::addLiveRegs(std::set<unsigned> &Regs) {
-  for (Register Reg : Regs) {
+  for (unsigned Reg : Regs) {
     // For now only track virtual registers.
-    if (!Reg.isVirtual())
+    if (!Register::isVirtualRegister(Reg))
       continue;
     // If not already in the live set, then add it.
     (void) LiveRegs.insert(Reg);
@@ -1722,9 +1742,9 @@ SIScheduleBlockScheduler::checkRegUsageImpact(std::set<unsigned> &InRegs,
   std::vector<int> DiffSetPressure;
   DiffSetPressure.assign(DAG->getTRI()->getNumRegPressureSets(), 0);
 
-  for (Register Reg : InRegs) {
+  for (unsigned Reg : InRegs) {
     // For now only track virtual registers.
-    if (!Reg.isVirtual())
+    if (!Register::isVirtualRegister(Reg))
       continue;
     if (LiveRegsConsumers[Reg] > 1)
       continue;
@@ -1734,9 +1754,9 @@ SIScheduleBlockScheduler::checkRegUsageImpact(std::set<unsigned> &InRegs,
     }
   }
 
-  for (Register Reg : OutRegs) {
+  for (unsigned Reg : OutRegs) {
     // For now only track virtual registers.
-    if (!Reg.isVirtual())
+    if (!Register::isVirtualRegister(Reg))
       continue;
     PSetIterator PSetI = DAG->getMRI()->getPressureSets(Reg);
     for (; PSetI.isValid(); ++PSetI) {
@@ -1882,9 +1902,9 @@ SIScheduleDAGMI::fillVgprSgprCost(_Iterator First, _Iterator End,
   VgprUsage = 0;
   SgprUsage = 0;
   for (_Iterator RegI = First; RegI != End; ++RegI) {
-    Register Reg = *RegI;
+    unsigned Reg = *RegI;
     // For now only track virtual registers
-    if (!Reg.isVirtual())
+    if (!Register::isVirtualRegister(Reg))
       continue;
     PSetIterator PSetI = MRI.getPressureSets(Reg);
     for (; PSetI.isValid(); ++PSetI) {

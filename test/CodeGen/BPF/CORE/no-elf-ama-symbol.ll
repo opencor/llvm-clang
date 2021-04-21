@@ -1,6 +1,7 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=obj -o - %t1 | llvm-readelf -s - | FileCheck -check-prefixes=CHECK %s
-; RUN: llc -filetype=obj -addrsig -o - %t1 | llvm-readelf -s - | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfel -filetype=obj -o - %s | llvm-readelf -s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfeb -filetype=obj -o - %s | llvm-readelf -s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfel -filetype=obj -addrsig -o - %s | llvm-readelf -s | FileCheck -check-prefixes=CHECK %s
+; RUN: llc -march=bpfeb -filetype=obj -addrsig -o - %s | llvm-readelf -s | FileCheck -check-prefixes=CHECK %s
 ;
 ; Source Code:
 ;   struct tt { int a; } __attribute__((preserve_access_index));
@@ -8,9 +9,7 @@
 ;     return arg->a;
 ;   }
 ; Compilation flag:
-;   clang -target bpf -O2 -g -S -emit-llvm -Xclang -disable-llvm-passes t.c
-
-target triple = "bpf"
+;   clang -target bpf -O2 -g -S -emit-llvm t.c
 
 %struct.tt = type { i32 }
 

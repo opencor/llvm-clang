@@ -11,13 +11,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVMCTargetDesc.h"
-#include "RISCVBaseInfo.h"
 #include "RISCVELFStreamer.h"
 #include "RISCVInstPrinter.h"
 #include "RISCVMCAsmInfo.h"
 #include "RISCVTargetStreamer.h"
 #include "TargetInfo/RISCVTargetInfo.h"
+#include "Utils/RISCVBaseInfo.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/CodeGen/Register.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -55,7 +56,7 @@ static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
                                        const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
 
-  MCRegister SP = MRI.getDwarfRegNum(RISCV::X2, true);
+  Register SP = MRI.getDwarfRegNum(RISCV::X2, true);
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 
@@ -67,7 +68,7 @@ static MCSubtargetInfo *createRISCVMCSubtargetInfo(const Triple &TT,
   std::string CPUName = std::string(CPU);
   if (CPUName.empty())
     CPUName = TT.isArch64Bit() ? "generic-rv64" : "generic-rv32";
-  return createRISCVMCSubtargetInfoImpl(TT, CPUName, /*TuneCPU*/ CPUName, FS);
+  return createRISCVMCSubtargetInfoImpl(TT, CPUName, FS);
 }
 
 static MCInstPrinter *createRISCVMCInstPrinter(const Triple &T,

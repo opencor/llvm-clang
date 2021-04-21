@@ -1,7 +1,4 @@
-# RUN: llvm-mc --disassemble %s -triple powerpc64-unknown-unknown -mcpu=pwr7 | FileCheck %s --check-prefixes=CHECK,MODERN
-# RUN: llvm-mc --disassemble %s -triple powerpc64-unknown-linux-gnu -mcpu=pwr7 | FileCheck %s --check-prefixes=CHECK,MODERN
-# RUN: llvm-mc --disassemble %s -triple powerpc64-ibm-aix-xcoff -mcpu=pwr7 | FileCheck %s --check-prefixes=CHECK,OLD
-# RUN: llvm-mc --disassemble %s -triple powerpc64-ibm-aix-xcoff -mattr=+modern-aix-as -mcpu=pwr7 | FileCheck %s --check-prefixes=CHECK,MODERN
+# RUN: llvm-mc --disassemble %s -triple powerpc64-unknown-unknown -mcpu=pwr7 | FileCheck %s
 
 # FIXME: decode as beqlr 0
 # CHECK: bclr 12, 2
@@ -2215,12 +2212,10 @@
 # CHECK: mfxer 2
 0x7c 0x41 0x02 0xa6
 
-# MODERN: mtudscr 2
-# OLD: mtspr 3, 2
+# CHECK: mtudscr 2
 0x7c 0x43 0x03 0xa6
 
-# MODERN: mfudscr 2
-# OLD: mfspr 2, 3
+# CHECK: mfudscr 2
 0x7c 0x43 0x02 0xa6
 
 # CHECK: mtlr 2

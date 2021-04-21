@@ -27,6 +27,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/GlobalsModRef.h"
@@ -55,7 +56,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
-#include "llvm/Transforms/Utils/LoopSimplify.h"
 #include "llvm/Transforms/Utils/LoopVersioning.h"
 #include "llvm/Transforms/Utils/ScalarEvolutionExpander.h"
 #include "llvm/Transforms/Utils/SizeOpts.h"
@@ -308,8 +308,8 @@ public:
   /// We need a check if one is a pointer for a candidate load and the other is
   /// a pointer for a possibly intervening store.
   bool needsChecking(unsigned PtrIdx1, unsigned PtrIdx2,
-                     const SmallPtrSetImpl<Value *> &PtrsWrittenOnFwdingPath,
-                     const SmallPtrSetImpl<Value *> &CandLoadPtrs) {
+                     const SmallPtrSet<Value *, 4> &PtrsWrittenOnFwdingPath,
+                     const std::set<Value *> &CandLoadPtrs) {
     Value *Ptr1 =
         LAI.getRuntimePointerChecking()->getPointerInfo(PtrIdx1).PointerValue;
     Value *Ptr2 =
@@ -384,9 +384,11 @@ public:
         findPointersWrittenOnForwardingPath(Candidates);
 
     // Collect the pointers of the candidate loads.
-    SmallPtrSet<Value *, 4> CandLoadPtrs;
-    for (const auto &Candidate : Candidates)
-      CandLoadPtrs.insert(Candidate.getLoadPtr());
+    // FIXME: SmallPtrSet does not work with std::inserter.
+    std::set<Value *> CandLoadPtrs;
+    transform(Candidates,
+                   std::inserter(CandLoadPtrs, CandLoadPtrs.begin()),
+                   std::mem_fn(&StoreToLoadForwardingCandidate::getLoadPtr));
 
     const auto &AllChecks = LAI.getRuntimePointerChecking()->getChecks();
     SmallVector<RuntimePointerCheck, 4> Checks;
@@ -486,6 +488,7 @@ public:
 
     // Filter the candidates further.
     SmallVector<StoreToLoadForwardingCandidate, 4> Candidates;
+    unsigned NumForwarding = 0;
     for (const StoreToLoadForwardingCandidate &Cand : StoreToLoadDependences) {
       LLVM_DEBUG(dbgs() << "Candidate " << Cand);
 
@@ -505,17 +508,12 @@ public:
       if (!Cand.isDependenceDistanceOfOne(PSE, L))
         continue;
 
-      assert(isa<SCEVAddRecExpr>(PSE.getSCEV(Cand.Load->getPointerOperand())) &&
-             "Loading from something other than indvar?");
-      assert(
-          isa<SCEVAddRecExpr>(PSE.getSCEV(Cand.Store->getPointerOperand())) &&
-          "Storing to something other than indvar?");
-
-      Candidates.push_back(Cand);
+      ++NumForwarding;
       LLVM_DEBUG(
           dbgs()
-          << Candidates.size()
+          << NumForwarding
           << ". Valid store-to-load forwarding across the loop backedge\n");
+      Candidates.push_back(Cand);
     }
     if (Candidates.empty())
       return false;
@@ -563,19 +561,10 @@ public:
       // Point of no-return, start the transformation.  First, version the loop
       // if necessary.
 
-      LoopVersioning LV(LAI, Checks, L, LI, DT, PSE.getSE());
+      LoopVersioning LV(LAI, L, LI, DT, PSE.getSE(), false);
+      LV.setAliasChecks(std::move(Checks));
+      LV.setSCEVChecks(LAI.getPSE().getUnionPredicate());
       LV.versionLoop();
-
-      // After versioning, some of the candidates' pointers could stop being
-      // SCEVAddRecs. We need to filter them out.
-      auto NoLongerGoodCandidate = [this](
-          const StoreToLoadForwardingCandidate &Cand) {
-        return !isa<SCEVAddRecExpr>(
-                    PSE.getSCEV(Cand.Load->getPointerOperand())) ||
-               !isa<SCEVAddRecExpr>(
-                    PSE.getSCEV(Cand.Store->getPointerOperand()));
-      };
-      llvm::erase_if(Candidates, NoLongerGoodCandidate);
     }
 
     // Next, propagate the value stored by the store to the users of the load.
@@ -584,7 +573,7 @@ public:
                      "storeforward");
     for (const auto &Cand : Candidates)
       propagateStoredValueToLoadUsers(Cand, SEE);
-    NumLoopLoadEliminted += Candidates.size();
+    NumLoopLoadEliminted += NumForwarding;
 
     return true;
   }
@@ -610,7 +599,6 @@ private:
 static bool
 eliminateLoadsAcrossLoops(Function &F, LoopInfo &LI, DominatorTree &DT,
                           BlockFrequencyInfo *BFI, ProfileSummaryInfo *PSI,
-                          ScalarEvolution *SE, AssumptionCache *AC,
                           function_ref<const LoopAccessInfo &(Loop &)> GetLAI) {
   // Build up a worklist of inner-loops to transform to avoid iterator
   // invalidation.
@@ -619,21 +607,15 @@ eliminateLoadsAcrossLoops(Function &F, LoopInfo &LI, DominatorTree &DT,
   // which merely optimizes the use of loads in a loop.
   SmallVector<Loop *, 8> Worklist;
 
-  bool Changed = false;
-
   for (Loop *TopLevelLoop : LI)
-    for (Loop *L : depth_first(TopLevelLoop)) {
-      Changed |= simplifyLoop(L, &DT, &LI, SE, AC, /*MSSAU*/ nullptr, false);
+    for (Loop *L : depth_first(TopLevelLoop))
       // We only handle inner-most loops.
-      if (L->isInnermost())
+      if (L->empty())
         Worklist.push_back(L);
-    }
 
   // Now walk the identified inner loops.
+  bool Changed = false;
   for (Loop *L : Worklist) {
-    // Match historical behavior
-    if (!L->isRotatedForm() || !L->getExitingBlock())
-      continue;
     // The actual work is performed by LoadEliminationForLoop.
     LoadEliminationForLoop LEL(L, &LI, GetLAI(*L), &DT, BFI, PSI);
     Changed |= LEL.processLoop();
@@ -667,7 +649,7 @@ public:
 
     // Process each loop nest in the function.
     return eliminateLoadsAcrossLoops(
-        F, LI, DT, BFI, PSI, /*SE*/ nullptr, /*AC*/ nullptr,
+        F, LI, DT, BFI, PSI,
         [&LAA](Loop &L) -> const LoopAccessInfo & { return LAA.getInfo(&L); });
   }
 
@@ -724,9 +706,8 @@ PreservedAnalyses LoopLoadEliminationPass::run(Function &F,
 
   auto &LAM = AM.getResult<LoopAnalysisManagerFunctionProxy>(F).getManager();
   bool Changed = eliminateLoadsAcrossLoops(
-      F, LI, DT, BFI, PSI, &SE, &AC, [&](Loop &L) -> const LoopAccessInfo & {
-        LoopStandardAnalysisResults AR = {AA,  AC,  DT,      LI,  SE,
-                                          TLI, TTI, nullptr, MSSA};
+      F, LI, DT, BFI, PSI, [&](Loop &L) -> const LoopAccessInfo & {
+        LoopStandardAnalysisResults AR = {AA, AC, DT, LI, SE, TLI, TTI, MSSA};
         return LAM.getResult<LoopAccessAnalysis>(L, AR);
       });
 

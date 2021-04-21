@@ -1,4 +1,4 @@
-; RUN: opt -inline -early-cse -earlycse-debug-hash < %s
+; RUN: opt -inline -early-cse < %s
 ; This test used to crash (PR35469).
 
 define void @func1() {

@@ -182,7 +182,7 @@ def : InstRW<[WLat1, FXU, NormalGr], (instregex "LLIL(F|H|L)$")>;
 
 def : InstRW<[WLat1, FXU, NormalGr], (instregex "LG(F|H)I$")>;
 def : InstRW<[WLat1, FXU, NormalGr], (instregex "LHI(Mux)?$")>;
-def : InstRW<[WLat1, FXU, NormalGr], (instregex "LR$")>;
+def : InstRW<[WLat1, FXU, NormalGr], (instregex "LR(Mux)?$")>;
 
 // Load and test
 def : InstRW<[WLat1LSU, WLat1LSU, LSU, FXU, NormalGr], (instregex "LT(G)?$")>;

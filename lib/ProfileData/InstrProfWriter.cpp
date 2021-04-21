@@ -165,9 +165,8 @@ public:
 
 } // end namespace llvm
 
-InstrProfWriter::InstrProfWriter(bool Sparse, bool InstrEntryBBEnabled)
-    : Sparse(Sparse), InstrEntryBBEnabled(InstrEntryBBEnabled),
-      InfoObj(new InstrProfRecordWriterTrait()) {}
+InstrProfWriter::InstrProfWriter(bool Sparse)
+    : Sparse(Sparse), InfoObj(new InstrProfRecordWriterTrait()) {}
 
 InstrProfWriter::~InstrProfWriter() { delete InfoObj; }
 
@@ -241,7 +240,7 @@ void InstrProfWriter::addRecord(StringRef Name, uint64_t Hash,
     // We've never seen a function with this name and hash, add it.
     Dest = std::move(I);
     if (Weight > 1)
-      Dest.scale(Weight, 1, MapWarn);
+      Dest.scale(Weight, MapWarn);
   } else {
     // We're updating a function we've seen before.
     Dest.merge(I, Weight, MapWarn);
@@ -309,9 +308,6 @@ void InstrProfWriter::writeImpl(ProfOStream &OS) {
     Header.Version |= VARIANT_MASK_IR_PROF;
     Header.Version |= VARIANT_MASK_CSIR_PROF;
   }
-  if (InstrEntryBBEnabled)
-    Header.Version |= VARIANT_MASK_INSTR_ENTRY;
-
   Header.Unused = 0;
   Header.HashType = static_cast<uint64_t>(IndexedInstrProf::HashType);
   Header.HashOffset = 0;
@@ -445,8 +441,6 @@ Error InstrProfWriter::writeText(raw_fd_ostream &OS) {
     OS << "# IR level Instrumentation Flag\n:ir\n";
   else if (ProfileKind == PF_IRLevelWithCS)
     OS << "# CSIR level Instrumentation Flag\n:csir\n";
-  if (InstrEntryBBEnabled)
-    OS << "# Always instrument the function entry block\n:entry_first\n";
   InstrProfSymtab Symtab;
 
   using FuncPair = detail::DenseMapPair<uint64_t, InstrProfRecord>;

@@ -97,7 +97,7 @@ private:
   CondRegArray collectCondsInRegs(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator CopyDefI);
 
-  Register promoteCondToReg(MachineBasicBlock &MBB,
+  unsigned promoteCondToReg(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator TestPos,
                             DebugLoc TestLoc, X86::CondCode Cond);
   std::pair<unsigned, bool>
@@ -739,7 +739,8 @@ CondRegArray X86FlagsCopyLoweringPass::collectCondsInRegs(
        llvm::reverse(llvm::make_range(MBB.begin(), TestPos))) {
     X86::CondCode Cond = X86::getCondFromSETCC(MI);
     if (Cond != X86::COND_INVALID && !MI.mayStore() &&
-        MI.getOperand(0).isReg() && MI.getOperand(0).getReg().isVirtual()) {
+        MI.getOperand(0).isReg() &&
+        Register::isVirtualRegister(MI.getOperand(0).getReg())) {
       assert(MI.getOperand(0).isDef() &&
              "A non-storing SETcc should always define a register!");
       CondRegs[Cond] = MI.getOperand(0).getReg();
@@ -753,7 +754,7 @@ CondRegArray X86FlagsCopyLoweringPass::collectCondsInRegs(
   return CondRegs;
 }
 
-Register X86FlagsCopyLoweringPass::promoteCondToReg(
+unsigned X86FlagsCopyLoweringPass::promoteCondToReg(
     MachineBasicBlock &TestMBB, MachineBasicBlock::iterator TestPos,
     DebugLoc TestLoc, X86::CondCode Cond) {
   Register Reg = MRI->createVirtualRegister(PromoteRC);
@@ -981,4 +982,5 @@ void X86FlagsCopyLoweringPass::rewriteSetCC(MachineBasicBlock &TestMBB,
   MIB.setMemRefs(SetCCI.memoperands());
 
   SetCCI.eraseFromParent();
+  return;
 }

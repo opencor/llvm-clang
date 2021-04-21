@@ -117,7 +117,7 @@ bool LocalStackSlotPass::runOnMachineFunction(MachineFunction &MF) {
 
   // If the target doesn't want/need this pass, or if there are no locals
   // to consider, early exit.
-  if (LocalObjectCount == 0 || !TRI->requiresVirtualBaseRegisters(MF))
+  if (!TRI->requiresVirtualBaseRegisters(MF) || LocalObjectCount == 0)
     return true;
 
   // Make sure we have enough space to store the local offsets.
@@ -416,16 +416,15 @@ bool LocalStackSlotPass::insertFrameReferenceRegisters(MachineFunction &Fn) {
       const TargetRegisterClass *RC = TRI->getPointerRegClass(*MF);
       BaseReg = Fn.getRegInfo().createVirtualRegister(RC);
 
-      LLVM_DEBUG(dbgs() << "  Materializing base register"
+      LLVM_DEBUG(dbgs() << "  Materializing base register " << BaseReg
                         << " at frame local offset "
-                        << LocalOffset + InstrOffset);
+                        << LocalOffset + InstrOffset << "\n");
 
       // Tell the target to insert the instruction to initialize
       // the base register.
       //            MachineBasicBlock::iterator InsertionPt = Entry->begin();
-      BaseReg = TRI->materializeFrameBaseRegister(Entry, FrameIdx, InstrOffset);
-
-      LLVM_DEBUG(dbgs() << " into " << printReg(BaseReg, TRI) << '\n');
+      TRI->materializeFrameBaseRegister(Entry, BaseReg, FrameIdx,
+                                        InstrOffset);
 
       // The base register already includes any offset specified
       // by the instruction, so account for that so it doesn't get

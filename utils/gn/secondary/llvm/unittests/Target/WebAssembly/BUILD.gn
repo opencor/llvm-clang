@@ -12,5 +12,8 @@ unittest("WebAssemblyTests") {
     "//llvm/lib/Target/WebAssembly/TargetInfo",
   ]
   include_dirs = [ "//llvm/lib/Target/WebAssembly" ]
-  sources = [ "WebAssemblyExceptionInfoTest.cpp" ]
+  sources = [
+    # Make `gn format` not collapse this, for sync_source_lists_from_cmake.py.
+    "WebAssemblyExceptionInfoTest.cpp",
+  ]
 }

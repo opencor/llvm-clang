@@ -25,20 +25,20 @@ public:
   using CompileFunction = JITCompileCallbackManager::CompileFunction;
 
   CompileCallbackMaterializationUnit(SymbolStringPtr Name,
-                                     CompileFunction Compile)
+                                     CompileFunction Compile, VModuleKey K)
       : MaterializationUnit(SymbolFlagsMap({{Name, JITSymbolFlags::Exported}}),
-                            nullptr),
+                            nullptr, std::move(K)),
         Name(std::move(Name)), Compile(std::move(Compile)) {}
 
   StringRef getName() const override { return "<Compile Callbacks>"; }
 
 private:
-  void materialize(std::unique_ptr<MaterializationResponsibility> R) override {
+  void materialize(MaterializationResponsibility R) override {
     SymbolMap Result;
     Result[Name] = JITEvaluatedSymbol(Compile(), JITSymbolFlags::Exported);
     // No dependencies, so these calls cannot fail.
-    cantFail(R->notifyResolved(Result));
-    cantFail(R->notifyEmitted());
+    cantFail(R.notifyResolved(Result));
+    cantFail(R.notifyEmitted());
   }
 
   void discard(const JITDylib &JD, const SymbolStringPtr &Name) override {
@@ -54,8 +54,8 @@ private:
 namespace llvm {
 namespace orc {
 
-TrampolinePool::~TrampolinePool() {}
 void IndirectStubsManager::anchor() {}
+void TrampolinePool::anchor() {}
 
 Expected<JITTargetAddress>
 JITCompileCallbackManager::getCompileCallback(CompileFunction Compile) {
@@ -65,9 +65,10 @@ JITCompileCallbackManager::getCompileCallback(CompileFunction Compile) {
 
     std::lock_guard<std::mutex> Lock(CCMgrMutex);
     AddrToSymbol[*TrampolineAddr] = CallbackName;
-    cantFail(
-        CallbacksJD.define(std::make_unique<CompileCallbackMaterializationUnit>(
-            std::move(CallbackName), std::move(Compile))));
+    cantFail(CallbacksJD.define(
+        std::make_unique<CompileCallbackMaterializationUnit>(
+            std::move(CallbackName), std::move(Compile),
+            ES.allocateVModule())));
     return *TrampolineAddr;
   } else
     return TrampolineAddr.takeError();
@@ -148,7 +149,7 @@ createLocalCompileCallbackManager(const Triple &T, ExecutionSession &ES,
     }
 
     case Triple::x86_64: {
-      if (T.getOS() == Triple::OSType::Win32) {
+      if ( T.getOS() == Triple::OSType::Win32 ) {
         typedef orc::LocalJITCompileCallbackManager<orc::OrcX86_64_Win32> CCMgrT;
         return CCMgrT::Create(ES, ErrorHandlerAddress);
       } else {

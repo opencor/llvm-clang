@@ -13,10 +13,12 @@
 //
 
 #include "AMDGPUAsmPrinter.h"
+#include "AMDGPUSubtarget.h"
 #include "AMDGPUTargetMachine.h"
 #include "MCTargetDesc/AMDGPUInstPrinter.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "R600AsmPrinter.h"
+#include "SIInstrInfo.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/IR/Constants.h"
@@ -321,10 +323,7 @@ void AMDGPUAsmPrinter::emitInstruction(const MachineInstr *MI) {
     // The isPseudo check really shouldn't be here, but unfortunately there are
     // some negative lit tests that depend on being able to continue through
     // here even when pseudo instructions haven't been lowered.
-    //
-    // We also overestimate branch sizes with the offset bug.
-    if (!MI->isPseudo() && STI.isCPUStringValid(STI.getCPU()) &&
-        (!STI.hasOffset3fBug() || !MI->isBranch())) {
+    if (!MI->isPseudo() && STI.isCPUStringValid(STI.getCPU())) {
       SmallVector<MCFixup, 4> Fixups;
       SmallVector<char, 16> CodeBytes;
       raw_svector_ostream CodeStream(CodeBytes);

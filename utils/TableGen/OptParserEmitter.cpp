@@ -20,7 +20,7 @@
 
 using namespace llvm;
 
-static std::string getOptionName(const Record &R) {
+static const std::string getOptionName(const Record &R) {
   // Use the record name unless EnumName is defined.
   if (isa<UnsetInit>(R.getValueInit("EnumName")))
     return std::string(R.getName());
@@ -35,20 +35,19 @@ static raw_ostream &write_cstring(raw_ostream &OS, llvm::StringRef Str) {
   return OS;
 }
 
-static std::string getOptionSpelling(const Record &R, size_t &PrefixLength) {
+static const std::string getOptionSpelling(const Record &R,
+                                           size_t &PrefixLength) {
   std::vector<StringRef> Prefixes = R.getValueAsListOfStrings("Prefixes");
   StringRef Name = R.getValueAsString("Name");
-
   if (Prefixes.empty()) {
     PrefixLength = 0;
     return Name.str();
   }
-
   PrefixLength = Prefixes[0].size();
   return (Twine(Prefixes[0]) + Twine(Name)).str();
 }
 
-static std::string getOptionSpelling(const Record &R) {
+static const std::string getOptionSpelling(const Record &R) {
   size_t PrefixLength;
   return getOptionSpelling(R, PrefixLength);
 }
@@ -60,28 +59,74 @@ static void emitNameUsingSpelling(raw_ostream &OS, const Record &R) {
   OS << "[" << PrefixLength << "]";
 }
 
-class MarshallingInfo {
+class MarshallingKindInfo {
 public:
-  static constexpr const char *MacroName = "OPTION_WITH_MARSHALLING";
   const Record &R;
+  const char *MacroName;
   bool ShouldAlwaysEmit;
-  StringRef MacroPrefix;
   StringRef KeyPath;
   StringRef DefaultValue;
   StringRef NormalizedValuesScope;
-  StringRef ImpliedCheck;
-  StringRef ImpliedValue;
-  StringRef ShouldParse;
+
+  void emit(raw_ostream &OS) const {
+    write_cstring(OS, StringRef(getOptionSpelling(R)));
+    OS << ", ";
+    OS << ShouldAlwaysEmit;
+    OS << ", ";
+    OS << KeyPath;
+    OS << ", ";
+    emitScopedNormalizedValue(OS, DefaultValue);
+    OS << ", ";
+    emitSpecific(OS);
+  }
+
+  virtual Optional<StringRef> emitValueTable(raw_ostream &OS) const {
+    return None;
+  }
+
+  virtual ~MarshallingKindInfo() = default;
+
+  static std::unique_ptr<MarshallingKindInfo> create(const Record &R);
+
+protected:
+  void emitScopedNormalizedValue(raw_ostream &OS,
+                                 StringRef NormalizedValue) const {
+    if (!NormalizedValuesScope.empty())
+      OS << NormalizedValuesScope << "::";
+    OS << NormalizedValue;
+  }
+
+  virtual void emitSpecific(raw_ostream &OS) const = 0;
+  MarshallingKindInfo(const Record &R, const char *MacroName)
+      : R(R), MacroName(MacroName) {}
+};
+
+class MarshallingFlagInfo final : public MarshallingKindInfo {
+public:
+  bool IsPositive;
+
+  void emitSpecific(raw_ostream &OS) const override { OS << IsPositive; }
+
+  static std::unique_ptr<MarshallingKindInfo> create(const Record &R) {
+    std::unique_ptr<MarshallingFlagInfo> Ret(new MarshallingFlagInfo(R));
+    Ret->IsPositive = R.getValueAsBit("IsPositive");
+    return Ret;
+  }
+
+private:
+  MarshallingFlagInfo(const Record &R)
+      : MarshallingKindInfo(R, "OPTION_WITH_MARSHALLING_FLAG") {}
+};
+
+class MarshallingStringInfo final : public MarshallingKindInfo {
+public:
+  StringRef NormalizerRetTy;
   StringRef Normalizer;
   StringRef Denormalizer;
-  StringRef ValueMerger;
-  StringRef ValueExtractor;
   int TableIndex = -1;
   std::vector<StringRef> Values;
   std::vector<StringRef> NormalizedValues;
   std::string ValueTableName;
-
-  static size_t NextTableIndex;
 
   static constexpr const char *ValueTablePreamble = R"(
 struct SimpleEnumValue {
@@ -98,39 +143,17 @@ struct SimpleEnumValueTable {
   static constexpr const char *ValueTablesDecl =
       "static const SimpleEnumValueTable SimpleEnumValueTables[] = ";
 
-  MarshallingInfo(const Record &R) : R(R) {}
-
-  std::string getMacroName() const {
-    return (MacroPrefix + MarshallingInfo::MacroName).str();
-  }
-
-  void emit(raw_ostream &OS) const {
-    write_cstring(OS, StringRef(getOptionSpelling(R)));
-    OS << ", ";
-    OS << ShouldParse;
-    OS << ", ";
-    OS << ShouldAlwaysEmit;
-    OS << ", ";
-    OS << KeyPath;
-    OS << ", ";
-    emitScopedNormalizedValue(OS, DefaultValue);
-    OS << ", ";
-    OS << ImpliedCheck;
-    OS << ", ";
-    emitScopedNormalizedValue(OS, ImpliedValue);
+  void emitSpecific(raw_ostream &OS) const override {
+    emitScopedNormalizedValue(OS, NormalizerRetTy);
     OS << ", ";
     OS << Normalizer;
     OS << ", ";
     OS << Denormalizer;
     OS << ", ";
-    OS << ValueMerger;
-    OS << ", ";
-    OS << ValueExtractor;
-    OS << ", ";
     OS << TableIndex;
   }
 
-  Optional<StringRef> emitValueTable(raw_ostream &OS) const {
+  Optional<StringRef> emitValueTable(raw_ostream &OS) const override {
     if (TableIndex == -1)
       return {};
     OS << "static const SimpleEnumValue " << ValueTableName << "[] = {\n";
@@ -146,66 +169,73 @@ struct SimpleEnumValueTable {
     return StringRef(ValueTableName);
   }
 
-private:
-  void emitScopedNormalizedValue(raw_ostream &OS,
-                                 StringRef NormalizedValue) const {
-    if (!NormalizedValuesScope.empty())
-      OS << NormalizedValuesScope << "::";
-    OS << NormalizedValue;
+  static std::unique_ptr<MarshallingKindInfo> create(const Record &R) {
+    assert(!isa<UnsetInit>(R.getValueInit("NormalizerRetTy")) &&
+           "String options must have a type");
+
+    std::unique_ptr<MarshallingStringInfo> Ret(new MarshallingStringInfo(R));
+    Ret->NormalizerRetTy = R.getValueAsString("NormalizerRetTy");
+
+    Ret->Normalizer = R.getValueAsString("Normalizer");
+    Ret->Denormalizer = R.getValueAsString("Denormalizer");
+
+    if (!isa<UnsetInit>(R.getValueInit("NormalizedValues"))) {
+      assert(!isa<UnsetInit>(R.getValueInit("Values")) &&
+             "Cannot provide normalized values for value-less options");
+      Ret->TableIndex = NextTableIndex++;
+      Ret->NormalizedValues = R.getValueAsListOfStrings("NormalizedValues");
+      Ret->Values.reserve(Ret->NormalizedValues.size());
+      Ret->ValueTableName = getOptionName(R) + "ValueTable";
+
+      StringRef ValuesStr = R.getValueAsString("Values");
+      for (;;) {
+        size_t Idx = ValuesStr.find(',');
+        if (Idx == StringRef::npos)
+          break;
+        if (Idx > 0)
+          Ret->Values.push_back(ValuesStr.slice(0, Idx));
+        ValuesStr = ValuesStr.slice(Idx + 1, StringRef::npos);
+      }
+      if (!ValuesStr.empty())
+        Ret->Values.push_back(ValuesStr);
+
+      assert(Ret->Values.size() == Ret->NormalizedValues.size() &&
+             "The number of normalized values doesn't match the number of "
+             "values");
+    }
+
+    return Ret;
   }
+
+private:
+  MarshallingStringInfo(const Record &R)
+      : MarshallingKindInfo(R, "OPTION_WITH_MARSHALLING_STRING") {}
+
+  static size_t NextTableIndex;
 };
 
-size_t MarshallingInfo::NextTableIndex = 0;
+size_t MarshallingStringInfo::NextTableIndex = 0;
 
-static MarshallingInfo createMarshallingInfo(const Record &R) {
+std::unique_ptr<MarshallingKindInfo>
+MarshallingKindInfo::create(const Record &R) {
   assert(!isa<UnsetInit>(R.getValueInit("KeyPath")) &&
          !isa<UnsetInit>(R.getValueInit("DefaultValue")) &&
-         !isa<UnsetInit>(R.getValueInit("ValueMerger")) &&
-         "MarshallingInfo must have a provide a keypath, default value and a "
-         "value merger");
+         "Must provide at least a key-path and a default value for emitting "
+         "marshalling information");
 
-  MarshallingInfo Ret(R);
+  std::unique_ptr<MarshallingKindInfo> Ret = nullptr;
+  StringRef MarshallingKindStr = R.getValueAsString("MarshallingKind");
 
-  Ret.ShouldAlwaysEmit = R.getValueAsBit("ShouldAlwaysEmit");
-  Ret.MacroPrefix = R.getValueAsString("MacroPrefix");
-  Ret.KeyPath = R.getValueAsString("KeyPath");
-  Ret.DefaultValue = R.getValueAsString("DefaultValue");
-  Ret.NormalizedValuesScope = R.getValueAsString("NormalizedValuesScope");
-  Ret.ImpliedCheck = R.getValueAsString("ImpliedCheck");
-  Ret.ImpliedValue =
-      R.getValueAsOptionalString("ImpliedValue").getValueOr(Ret.DefaultValue);
+  if (MarshallingKindStr == "flag")
+    Ret = MarshallingFlagInfo::create(R);
+  else if (MarshallingKindStr == "string")
+    Ret = MarshallingStringInfo::create(R);
 
-  Ret.ShouldParse = R.getValueAsString("ShouldParse");
-  Ret.Normalizer = R.getValueAsString("Normalizer");
-  Ret.Denormalizer = R.getValueAsString("Denormalizer");
-  Ret.ValueMerger = R.getValueAsString("ValueMerger");
-  Ret.ValueExtractor = R.getValueAsString("ValueExtractor");
-
-  if (!isa<UnsetInit>(R.getValueInit("NormalizedValues"))) {
-    assert(!isa<UnsetInit>(R.getValueInit("Values")) &&
-           "Cannot provide normalized values for value-less options");
-    Ret.TableIndex = MarshallingInfo::NextTableIndex++;
-    Ret.NormalizedValues = R.getValueAsListOfStrings("NormalizedValues");
-    Ret.Values.reserve(Ret.NormalizedValues.size());
-    Ret.ValueTableName = getOptionName(R) + "ValueTable";
-
-    StringRef ValuesStr = R.getValueAsString("Values");
-    for (;;) {
-      size_t Idx = ValuesStr.find(',');
-      if (Idx == StringRef::npos)
-        break;
-      if (Idx > 0)
-        Ret.Values.push_back(ValuesStr.slice(0, Idx));
-      ValuesStr = ValuesStr.slice(Idx + 1, StringRef::npos);
-    }
-    if (!ValuesStr.empty())
-      Ret.Values.push_back(ValuesStr);
-
-    assert(Ret.Values.size() == Ret.NormalizedValues.size() &&
-           "The number of normalized values doesn't match the number of "
-           "values");
-  }
-
+  Ret->ShouldAlwaysEmit = R.getValueAsBit("ShouldAlwaysEmit");
+  Ret->KeyPath = R.getValueAsString("KeyPath");
+  Ret->DefaultValue = R.getValueAsString("DefaultValue");
+  if (!isa<UnsetInit>(R.getValueInit("NormalizedValuesScope")))
+    Ret->NormalizedValuesScope = R.getValueAsString("NormalizedValuesScope");
   return Ret;
 }
 
@@ -228,12 +258,13 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
   PrefixesT Prefixes;
   Prefixes.insert(std::make_pair(PrefixKeyT(), "prefix_0"));
   unsigned CurPrefix = 0;
-  for (const Record &R : llvm::make_pointee_range(Opts)) {
-    std::vector<StringRef> RPrefixes = R.getValueAsListOfStrings("Prefixes");
-    PrefixKeyT PrefixKey(RPrefixes.begin(), RPrefixes.end());
+  for (unsigned i = 0, e = Opts.size(); i != e; ++i) {
+    const Record &R = *Opts[i];
+    std::vector<StringRef> prf = R.getValueAsListOfStrings("Prefixes");
+    PrefixKeyT prfkey(prf.begin(), prf.end());
     unsigned NewPrefix = CurPrefix + 1;
-    std::string Prefix = (Twine("prefix_") + Twine(NewPrefix)).str();
-    if (Prefixes.insert(std::make_pair(PrefixKey, Prefix)).second)
+    if (Prefixes.insert(std::make_pair(prfkey, (Twine("prefix_") +
+                                              Twine(NewPrefix)).str())).second)
       CurPrefix = NewPrefix;
   }
 
@@ -243,16 +274,19 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
   OS << "// Prefixes\n\n";
   OS << "#ifdef PREFIX\n";
   OS << "#define COMMA ,\n";
-  for (const auto &Prefix : Prefixes) {
+  for (PrefixesT::const_iterator I = Prefixes.begin(), E = Prefixes.end();
+                                  I != E; ++I) {
     OS << "PREFIX(";
 
     // Prefix name.
-    OS << Prefix.second;
+    OS << I->second;
 
     // Prefix values.
     OS << ", {";
-    for (StringRef PrefixKey : Prefix.first)
-      OS << "\"" << PrefixKey << "\" COMMA ";
+    for (PrefixKeyT::const_iterator PI = I->first.begin(),
+                                    PE = I->first.end(); PI != PE; ++PI) {
+      OS << "\"" << *PI << "\" COMMA ";
+    }
     OS << "nullptr})\n";
   }
   OS << "#undef COMMA\n";
@@ -261,7 +295,9 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
   OS << "/////////\n";
   OS << "// Groups\n\n";
   OS << "#ifdef OPTION\n";
-  for (const Record &R : llvm::make_pointee_range(Groups)) {
+  for (unsigned i = 0, e = Groups.size(); i != e; ++i) {
+    const Record &R = *Groups[i];
+
     // Start a single option entry.
     OS << "OPTION(";
 
@@ -308,8 +344,8 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
 
   auto WriteOptRecordFields = [&](raw_ostream &OS, const Record &R) {
     // The option prefix;
-    std::vector<StringRef> RPrefixes = R.getValueAsListOfStrings("Prefixes");
-    OS << Prefixes[PrefixKeyT(RPrefixes.begin(), RPrefixes.end())] << ", ";
+    std::vector<StringRef> prf = R.getValueAsListOfStrings("Prefixes");
+    OS << Prefixes[PrefixKeyT(prf.begin(), prf.end())] << ", ";
 
     // The option string.
     emitNameUsingSpelling(OS, R);
@@ -346,8 +382,8 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
       OS << "nullptr";
     } else {
       OS << "\"";
-      for (StringRef AliasArg : AliasArgs)
-        OS << AliasArg << "\\0";
+      for (size_t i = 0, e = AliasArgs.size(); i != e; ++i)
+        OS << AliasArgs[i] << "\\0";
       OS << "\"";
     }
 
@@ -391,63 +427,39 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
       OS << "nullptr";
   };
 
-  auto IsMarshallingOption = [](const Record &R) {
-    return !isa<UnsetInit>(R.getValueInit("KeyPath")) &&
-           !R.getValueAsString("KeyPath").empty();
-  };
+  std::vector<std::unique_ptr<MarshallingKindInfo>> OptsWithMarshalling;
+  for (unsigned I = 0, E = Opts.size(); I != E; ++I) {
+    const Record &R = *Opts[I];
 
-  std::vector<const Record *> OptsWithMarshalling;
-  for (const Record &R : llvm::make_pointee_range(Opts)) {
     // Start a single option entry.
     OS << "OPTION(";
     WriteOptRecordFields(OS, R);
     OS << ")\n";
-    if (IsMarshallingOption(R))
-      OptsWithMarshalling.push_back(&R);
+    if (!isa<UnsetInit>(R.getValueInit("MarshallingKind")))
+      OptsWithMarshalling.push_back(MarshallingKindInfo::create(R));
   }
   OS << "#endif // OPTION\n";
 
-  auto CmpMarshallingOpts = [](const Record *const *A, const Record *const *B) {
-    unsigned AID = (*A)->getID();
-    unsigned BID = (*B)->getID();
-
-    if (AID < BID)
-      return -1;
-    if (AID > BID)
-      return 1;
-    return 0;
-  };
-  // The RecordKeeper stores records (options) in lexicographical order, and we
-  // have reordered the options again when generating prefix groups. We need to
-  // restore the original definition order of options with marshalling to honor
-  // the topology of the dependency graph implied by `DefaultAnyOf`.
-  array_pod_sort(OptsWithMarshalling.begin(), OptsWithMarshalling.end(),
-                 CmpMarshallingOpts);
-
-  std::vector<MarshallingInfo> MarshallingInfos;
-  for (const auto *R : OptsWithMarshalling)
-    MarshallingInfos.push_back(createMarshallingInfo(*R));
-
-  for (const auto &MI : MarshallingInfos) {
-    OS << "#ifdef " << MI.getMacroName() << "\n";
-    OS << MI.getMacroName() << "(";
-    WriteOptRecordFields(OS, MI.R);
+  for (const auto &KindInfo : OptsWithMarshalling) {
+    OS << "#ifdef " << KindInfo->MacroName << "\n";
+    OS << KindInfo->MacroName << "(";
+    WriteOptRecordFields(OS, KindInfo->R);
     OS << ", ";
-    MI.emit(OS);
+    KindInfo->emit(OS);
     OS << ")\n";
-    OS << "#endif // " << MI.getMacroName() << "\n";
+    OS << "#endif // " << KindInfo->MacroName << "\n";
   }
 
   OS << "\n";
   OS << "#ifdef SIMPLE_ENUM_VALUE_TABLE";
   OS << "\n";
-  OS << MarshallingInfo::ValueTablePreamble;
+  OS << MarshallingStringInfo::ValueTablePreamble;
   std::vector<StringRef> ValueTableNames;
-  for (const auto &MI : MarshallingInfos)
-    if (auto MaybeValueTableName = MI.emitValueTable(OS))
+  for (const auto &KindInfo : OptsWithMarshalling)
+    if (auto MaybeValueTableName = KindInfo->emitValueTable(OS))
       ValueTableNames.push_back(*MaybeValueTableName);
 
-  OS << MarshallingInfo::ValueTablesDecl << "{";
+  OS << MarshallingStringInfo::ValueTablesDecl << "{";
   for (auto ValueTableName : ValueTableNames)
     OS << "{" << ValueTableName << ", sizeof(" << ValueTableName
        << ") / sizeof(SimpleEnumValue)"
@@ -463,7 +475,8 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
   OS << "#ifdef OPTTABLE_ARG_INIT\n";
   OS << "//////////\n";
   OS << "// Option Values\n\n";
-  for (const Record &R : llvm::make_pointee_range(Opts)) {
+  for (unsigned I = 0, E = Opts.size(); I != E; ++I) {
+    const Record &R = *Opts[I];
     if (isa<UnsetInit>(R.getValueInit("ValuesCode")))
       continue;
     OS << "{\n";

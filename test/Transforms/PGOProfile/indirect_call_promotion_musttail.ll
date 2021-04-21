@@ -6,21 +6,13 @@ target triple = "x86_64-unknown-linux-gnu"
 
 @foo = common global i32* ()* null, align 8
 
-define i32* @func1() {
-  ret i32* null
-}
+declare i32* @func1()
 
-define i32* @func2() {
-  ret i32* null
-}
+declare i32* @func2()
 
-define i32* @func3() {
-  ret i32* null
-}
+declare i32* @func3()
 
-define i32* @func4() {
-  ret i32* null
-}
+declare i32* @func4()
 
 define i32* @bar() {
 entry:

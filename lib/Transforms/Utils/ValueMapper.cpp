@@ -167,9 +167,12 @@ public:
   void flush();
 
 private:
+  void mapGlobalInitializer(GlobalVariable &GV, Constant &Init);
   void mapAppendingVariable(GlobalVariable &GV, Constant *InitPrefix,
                             bool IsOldCtorDtor,
                             ArrayRef<Constant *> NewMembers);
+  void mapGlobalIndirectSymbol(GlobalIndirectSymbol &GIS, Constant &Target);
+  void remapFunction(Function &F, ValueToValueMapTy &VM);
 
   ValueToValueMapTy &getVM() { return *MCs[CurrentMCID].VM; }
   ValueMaterializer *getMaterializer() { return MCs[CurrentMCID].Materializer; }
@@ -819,15 +822,11 @@ void Mapper::flush() {
       break;
     case WorklistEntry::MapAppendingVar: {
       unsigned PrefixSize = AppendingInits.size() - E.AppendingGVNumNewMembers;
-      // mapAppendingVariable call can change AppendingInits if initalizer for
-      // the variable depends on another appending global, because of that inits
-      // need to be extracted and updated before the call.
-      SmallVector<Constant *, 8> NewInits(
-          drop_begin(AppendingInits, PrefixSize));
-      AppendingInits.resize(PrefixSize);
       mapAppendingVariable(*E.Data.AppendingGV.GV,
                            E.Data.AppendingGV.InitPrefix,
-                           E.AppendingGVIsOldCtorDtor, makeArrayRef(NewInits));
+                           E.AppendingGVIsOldCtorDtor,
+                           makeArrayRef(AppendingInits).slice(PrefixSize));
+      AppendingInits.resize(PrefixSize);
       break;
     }
     case WorklistEntry::MapGlobalIndirectSymbol:
@@ -901,13 +900,14 @@ void Mapper::remapInstruction(Instruction *I) {
     LLVMContext &C = CB->getContext();
     AttributeList Attrs = CB->getAttributes();
     for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
-      for (Attribute::AttrKind TypedAttr :
-           {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
-        if (Type *Ty = Attrs.getAttribute(i, TypedAttr).getValueAsType()) {
-          Attrs = Attrs.replaceAttributeType(C, i, TypedAttr,
-                                             TypeMapper->remapType(Ty));
-          break;
-        }
+      if (Attrs.hasAttribute(i, Attribute::ByVal)) {
+        Type *Ty = Attrs.getAttribute(i, Attribute::ByVal).getValueAsType();
+        if (!Ty)
+          continue;
+
+        Attrs = Attrs.removeAttribute(C, i, Attribute::ByVal);
+        Attrs = Attrs.addAttribute(
+            C, i, Attribute::getWithByValType(C, TypeMapper->remapType(Ty)));
       }
     }
     CB->setAttributes(Attrs);

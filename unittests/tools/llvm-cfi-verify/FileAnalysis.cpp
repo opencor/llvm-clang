@@ -65,7 +65,7 @@ public:
   BasicFileAnalysisTest(StringRef Trip)
       : SuccessfullyInitialised(false), Analysis(Trip) {}
 protected:
-  void SetUp() override {
+  virtual void SetUp() {
     IgnoreDWARFFlag = true;
     SuccessfullyInitialised = true;
     if (auto Err = Analysis.initialiseDisassemblyMembers()) {

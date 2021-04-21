@@ -738,17 +738,21 @@ namespace {
 constexpr uint32_t kNoneUdtKind = 0;
 constexpr uint32_t kSimpleUdtKind = 1;
 constexpr uint32_t kUnknownUdtKind = 2;
+const StringRef NoneLabel("<none type>");
+const StringRef SimpleLabel("<simple type>");
+const StringRef UnknownLabel("<unknown type>");
+
 } // namespace
 
-static std::string getUdtStatLabel(uint32_t Kind) {
+static StringRef getUdtStatLabel(uint32_t Kind) {
   if (Kind == kNoneUdtKind)
-    return "<none type>";
+    return NoneLabel;
 
   if (Kind == kSimpleUdtKind)
-    return "<simple type>";
+    return SimpleLabel;
 
   if (Kind == kUnknownUdtKind)
-    return "<unknown type>";
+    return UnknownLabel;
 
   return formatTypeLeafKind(static_cast<TypeLeafKind>(Kind));
 }
@@ -756,7 +760,7 @@ static std::string getUdtStatLabel(uint32_t Kind) {
 static uint32_t getLongestTypeLeafName(const StatCollection &Stats) {
   size_t L = 0;
   for (const auto &Stat : Stats.Individual) {
-    std::string Label = getUdtStatLabel(Stat.first);
+    StringRef Label = getUdtStatLabel(Stat.first);
     L = std::max(L, Label.size());
   }
   return static_cast<uint32_t>(L);
@@ -865,7 +869,7 @@ Error DumpOutputStyle::dumpUdtStats() {
 
   P.formatLine("{0}", fmt_repeat('-', TableWidth));
   for (const auto &Stat : UdtTargetStats.getStatsSortedBySize()) {
-    std::string Label = getUdtStatLabel(Stat.first);
+    StringRef Label = getUdtStatLabel(Stat.first);
     P.formatLine("{0} | {1:N}  {2:N}",
                  fmt_align(Label, AlignStyle::Right, FieldWidth),
                  fmt_align(Stat.second.Count, AlignStyle::Right, CD),
@@ -1907,6 +1911,7 @@ void DumpOutputStyle::dumpSectionHeaders(StringRef Label, DbgHeaderType Type) {
                             P.getIndentLevel(), Header.Characteristics, 1, ""));
     ++I;
   }
+  return;
 }
 
 Error DumpOutputStyle::dumpSectionContribs() {

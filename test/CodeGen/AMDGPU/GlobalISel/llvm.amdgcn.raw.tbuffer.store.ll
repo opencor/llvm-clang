@@ -6,6 +6,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -14,7 +15,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 0)
   ret void
@@ -25,6 +26,7 @@ define amdgpu_ps void @raw_tbuffer_store_v2f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK-LABEL: name: raw_tbuffer_store_v2f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1, $vgpr2
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr2
@@ -35,7 +37,7 @@ define amdgpu_ps void @raw_tbuffer_store_v2f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK:   [[COPY7:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:vreg_64 = REG_SEQUENCE [[COPY]], %subreg.sub0, [[COPY1]], %subreg.sub1
   ; CHECK:   [[REG_SEQUENCE1:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY2]], %subreg.sub0, [[COPY3]], %subreg.sub1, [[COPY4]], %subreg.sub2, [[COPY5]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_XY_OFFEN_exact [[REG_SEQUENCE]], [[COPY6]], [[REG_SEQUENCE1]], [[COPY7]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 8 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_XY_OFFEN_exact [[REG_SEQUENCE]], [[COPY6]], [[REG_SEQUENCE1]], [[COPY7]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 8 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.v2f32(<2 x float> %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 0)
   ret void
@@ -46,6 +48,7 @@ define amdgpu_ps void @raw_tbuffer_store_v3f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK-LABEL: name: raw_tbuffer_store_v3f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1, $vgpr2, $vgpr3
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -57,7 +60,7 @@ define amdgpu_ps void @raw_tbuffer_store_v3f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK:   [[COPY8:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:vreg_96 = REG_SEQUENCE [[COPY]], %subreg.sub0, [[COPY1]], %subreg.sub1, [[COPY2]], %subreg.sub2
   ; CHECK:   [[REG_SEQUENCE1:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY3]], %subreg.sub0, [[COPY4]], %subreg.sub1, [[COPY5]], %subreg.sub2, [[COPY6]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_XYZ_OFFEN_exact [[REG_SEQUENCE]], [[COPY7]], [[REG_SEQUENCE1]], [[COPY8]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 12 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_XYZ_OFFEN_exact [[REG_SEQUENCE]], [[COPY7]], [[REG_SEQUENCE1]], [[COPY8]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 12 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.v3f32(<3 x float> %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 0)
   ret void
@@ -68,6 +71,7 @@ define amdgpu_ps void @raw_tbuffer_store_v4f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK-LABEL: name: raw_tbuffer_store_v4f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -80,7 +84,7 @@ define amdgpu_ps void @raw_tbuffer_store_v4f32__sgpr_rsrc__vgpr_voffset__sgpr_so
   ; CHECK:   [[COPY9:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:vreg_128 = REG_SEQUENCE [[COPY]], %subreg.sub0, [[COPY1]], %subreg.sub1, [[COPY2]], %subreg.sub2, [[COPY3]], %subreg.sub3
   ; CHECK:   [[REG_SEQUENCE1:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY4]], %subreg.sub0, [[COPY5]], %subreg.sub1, [[COPY6]], %subreg.sub2, [[COPY7]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_XYZW_OFFEN_exact [[REG_SEQUENCE]], [[COPY8]], [[REG_SEQUENCE1]], [[COPY9]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 16 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_XYZW_OFFEN_exact [[REG_SEQUENCE]], [[COPY8]], [[REG_SEQUENCE1]], [[COPY9]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 16 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.v4f32(<4 x float> %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 0)
   ret void
@@ -91,6 +95,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__sgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__sgpr_voffset__sgpr_soffset
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $sgpr7, $vgpr0
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -100,7 +105,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__sgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr7
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[COPY7:%[0-9]+]]:vgpr_32 = COPY [[COPY5]]
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY7]], [[REG_SEQUENCE]], [[COPY6]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY7]], [[REG_SEQUENCE]], [[COPY6]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
   ret void
@@ -112,6 +117,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   liveins: $sgpr2, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -135,7 +141,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[V_CMP_EQ_U64_e64_1:%[0-9]+]]:sreg_32_xm0_xexec = V_CMP_EQ_U64_e64 [[REG_SEQUENCE2]], [[COPY8]], implicit $exec
   ; CHECK:   [[S_AND_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_B32 [[V_CMP_EQ_U64_e64_1]], [[V_CMP_EQ_U64_e64_]], implicit-def $scc
   ; CHECK:   [[REG_SEQUENCE3:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[V_READFIRSTLANE_B32_]], %subreg.sub0, [[V_READFIRSTLANE_B32_1]], %subreg.sub1, [[V_READFIRSTLANE_B32_2]], %subreg.sub2, [[V_READFIRSTLANE_B32_3]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[COPY6]], 0, 94, 1, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[COPY6]], 0, 94, 1, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   [[S_AND_SAVEEXEC_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_SAVEEXEC_B32 killed [[S_AND_B32_]], implicit-def $exec, implicit-def $scc, implicit $exec
   ; CHECK:   $exec_lo = S_XOR_B32_term $exec_lo, [[S_AND_SAVEEXEC_B32_]], implicit-def $scc
   ; CHECK:   S_CBRANCH_EXECNZ %bb.2, implicit $exec
@@ -154,6 +160,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__vgpr_voffset__vgpr_soff
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   liveins: $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5, $vgpr6
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -180,7 +187,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__vgpr_voffset__vgpr_soff
   ; CHECK:   [[V_READFIRSTLANE_B32_4:%[0-9]+]]:sreg_32_xm0 = V_READFIRSTLANE_B32 [[COPY6]], implicit $exec
   ; CHECK:   [[V_CMP_EQ_U32_e64_:%[0-9]+]]:sreg_32_xm0_xexec = V_CMP_EQ_U32_e64 [[V_READFIRSTLANE_B32_4]], [[COPY6]], implicit $exec
   ; CHECK:   [[S_AND_B32_1:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_B32 [[V_CMP_EQ_U32_e64_]], [[S_AND_B32_]], implicit-def $scc
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[V_READFIRSTLANE_B32_4]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[V_READFIRSTLANE_B32_4]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   [[S_AND_SAVEEXEC_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_SAVEEXEC_B32 killed [[S_AND_B32_1]], implicit-def $exec, implicit-def $scc, implicit $exec
   ; CHECK:   $exec_lo = S_XOR_B32_term $exec_lo, [[S_AND_SAVEEXEC_B32_]], implicit-def $scc
   ; CHECK:   S_CBRANCH_EXECNZ %bb.2, implicit $exec
@@ -199,6 +206,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__sgpr_voffset__vgpr_soff
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   liveins: $sgpr2, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -226,7 +234,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__vgpr_rsrc__sgpr_voffset__vgpr_soff
   ; CHECK:   [[V_READFIRSTLANE_B32_4:%[0-9]+]]:sreg_32_xm0 = V_READFIRSTLANE_B32 [[COPY6]], implicit $exec
   ; CHECK:   [[V_CMP_EQ_U32_e64_:%[0-9]+]]:sreg_32_xm0_xexec = V_CMP_EQ_U32_e64 [[V_READFIRSTLANE_B32_4]], [[COPY6]], implicit $exec
   ; CHECK:   [[S_AND_B32_1:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_B32 [[V_CMP_EQ_U32_e64_]], [[S_AND_B32_]], implicit-def $scc
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY7]], [[REG_SEQUENCE3]], [[V_READFIRSTLANE_B32_4]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY7]], [[REG_SEQUENCE3]], [[V_READFIRSTLANE_B32_4]], 0, 78, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   [[S_AND_SAVEEXEC_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_SAVEEXEC_B32 killed [[S_AND_B32_1]], implicit-def $exec, implicit-def $scc, implicit $exec
   ; CHECK:   $exec_lo = S_XOR_B32_term $exec_lo, [[S_AND_SAVEEXEC_B32_]], implicit-def $scc
   ; CHECK:   S_CBRANCH_EXECNZ %bb.2, implicit $exec
@@ -244,6 +252,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_glc
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -252,7 +261,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 1, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 1, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 1)
   ret void
@@ -263,6 +272,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_slc
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -271,7 +281,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 1, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 1, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 2)
   ret void
@@ -282,6 +292,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_slc_glc
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -290,7 +301,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 1, 1, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 1, 1, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 3)
   ret void
@@ -301,6 +312,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_dlc
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -309,7 +321,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 0, 0, 1, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 0, 78, 0, 0, 0, 1, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 78, i32 4)
   ret void
@@ -321,6 +333,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vdpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vdpr_voffset__sgpr_soffset__voffset0
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -328,7 +341,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vdpr_voffset__sgpr_soff
   ; CHECK:   [[COPY4:%[0-9]+]]:sreg_32 = COPY $sgpr5
   ; CHECK:   [[COPY5:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFSET_exact [[COPY]], [[REG_SEQUENCE]], [[COPY5]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFSET_exact [[COPY]], [[REG_SEQUENCE]], [[COPY5]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 0, i32 %soffset, i32 94, i32 0)
   ret void
@@ -338,6 +351,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset__voffset4095
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -345,7 +359,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY4:%[0-9]+]]:sreg_32 = COPY $sgpr5
   ; CHECK:   [[COPY5:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFSET_exact [[COPY]], [[REG_SEQUENCE]], [[COPY5]], 4095, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 4095, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFSET_exact [[COPY]], [[REG_SEQUENCE]], [[COPY5]], 4095, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 4095, align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 4095, i32 %soffset, i32 94, i32 0)
   ret void
@@ -355,6 +369,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset__voffset4096
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -364,7 +379,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4096
   ; CHECK:   [[COPY6:%[0-9]+]]:vgpr_32 = COPY [[S_MOV_B32_]]
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY6]], [[REG_SEQUENCE]], [[COPY5]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 4096, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY6]], [[REG_SEQUENCE]], [[COPY5]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 4096, align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 4096, i32 %soffset, i32 94, i32 0)
   ret void
@@ -374,6 +389,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_voffset_add16
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -382,7 +398,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 16, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 16, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 16, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 16, align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %voffset = add i32 %voffset.base, 16
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -393,6 +409,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset__voffset_add4095
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -401,7 +418,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY6:%[0-9]+]]:sreg_32 = COPY $sgpr6
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 4095, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 4095, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[COPY6]], 4095, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 4095, align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %voffset = add i32 %voffset.base, 4095
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -412,6 +429,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset__voffset_add4096
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -423,7 +441,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4096
   ; CHECK:   [[COPY7:%[0-9]+]]:vgpr_32 = COPY [[S_MOV_B32_]]
   ; CHECK:   [[V_ADD_U32_e64_:%[0-9]+]]:vgpr_32 = V_ADD_U32_e64 [[COPY5]], [[COPY7]], 0, implicit $exec
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[V_ADD_U32_e64_]], [[REG_SEQUENCE]], [[COPY6]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 4096, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[V_ADD_U32_e64_]], [[REG_SEQUENCE]], [[COPY6]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 4096, align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %voffset = add i32 %voffset.base, 4096
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -434,6 +452,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_soffset4095
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -442,7 +461,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4095
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_MOV_B32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_MOV_B32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 4095, i32 94, i32 0)
   ret void
@@ -452,6 +471,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_soffset4096
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -460,7 +480,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[COPY5:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4096
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_MOV_B32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_MOV_B32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 4096, i32 94, i32 0)
   ret void
@@ -470,6 +490,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_soffset_add16
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -480,7 +501,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 16
   ; CHECK:   [[S_ADD_I32_:%[0-9]+]]:sreg_32 = S_ADD_I32 [[COPY6]], [[S_MOV_B32_]], implicit-def $scc
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %soffset = add i32 %soffset.base, 16
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -491,6 +512,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_soffset_add4095
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -501,7 +523,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4095
   ; CHECK:   [[S_ADD_I32_:%[0-9]+]]:sreg_32 = S_ADD_I32 [[COPY6]], [[S_MOV_B32_]], implicit-def $scc
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %soffset = add i32 %soffset.base, 4095
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -512,6 +534,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK-LABEL: name: raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soffset_soffset_add4096
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   liveins: $sgpr2, $sgpr3, $sgpr4, $sgpr5, $sgpr6, $vgpr0, $vgpr1
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:sreg_32 = COPY $sgpr2
   ; CHECK:   [[COPY2:%[0-9]+]]:sreg_32 = COPY $sgpr3
@@ -522,7 +545,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[REG_SEQUENCE:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[COPY1]], %subreg.sub0, [[COPY2]], %subreg.sub1, [[COPY3]], %subreg.sub2, [[COPY4]], %subreg.sub3
   ; CHECK:   [[S_MOV_B32_:%[0-9]+]]:sreg_32 = S_MOV_B32 4096
   ; CHECK:   [[S_ADD_I32_:%[0-9]+]]:sreg_32 = S_ADD_I32 [[COPY6]], [[S_MOV_B32_]], implicit-def $scc
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   S_ENDPGM 0
   %soffset = add i32 %soffset.base, 4096
   call void @llvm.amdgcn.raw.tbuffer.store.f32(float %val, <4 x i32> %rsrc, i32 %voffset, i32 %soffset, i32 94, i32 0)
@@ -535,6 +558,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   liveins: $sgpr2, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -560,7 +584,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[V_CMP_EQ_U64_e64_1:%[0-9]+]]:sreg_32_xm0_xexec = V_CMP_EQ_U64_e64 [[REG_SEQUENCE2]], [[COPY8]], implicit $exec
   ; CHECK:   [[S_AND_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_B32 [[V_CMP_EQ_U64_e64_1]], [[V_CMP_EQ_U64_e64_]], implicit-def $scc
   ; CHECK:   [[REG_SEQUENCE3:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[V_READFIRSTLANE_B32_]], %subreg.sub0, [[V_READFIRSTLANE_B32_1]], %subreg.sub1, [[V_READFIRSTLANE_B32_2]], %subreg.sub2, [[V_READFIRSTLANE_B32_3]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource", align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[COPY5]], [[REG_SEQUENCE3]], [[S_ADD_I32_]], 0, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7", align 1, addrspace 4)
   ; CHECK:   [[S_AND_SAVEEXEC_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_SAVEEXEC_B32 killed [[S_AND_B32_]], implicit-def $exec, implicit-def $scc, implicit $exec
   ; CHECK:   $exec_lo = S_XOR_B32_term $exec_lo, [[S_AND_SAVEEXEC_B32_]], implicit-def $scc
   ; CHECK:   S_CBRANCH_EXECNZ %bb.2, implicit $exec
@@ -580,6 +604,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK: bb.1 (%ir-block.0):
   ; CHECK:   successors: %bb.2(0x80000000)
   ; CHECK:   liveins: $sgpr2, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5
+  ; CHECK:   $vcc_hi = IMPLICIT_DEF
   ; CHECK:   [[COPY:%[0-9]+]]:vgpr_32 = COPY $vgpr0
   ; CHECK:   [[COPY1:%[0-9]+]]:vgpr_32 = COPY $vgpr1
   ; CHECK:   [[COPY2:%[0-9]+]]:vgpr_32 = COPY $vgpr2
@@ -606,7 +631,7 @@ define amdgpu_ps void @raw_tbuffer_store_f32__sgpr_rsrc__vgpr_voffset__sgpr_soff
   ; CHECK:   [[V_CMP_EQ_U64_e64_1:%[0-9]+]]:sreg_32_xm0_xexec = V_CMP_EQ_U64_e64 [[REG_SEQUENCE2]], [[COPY9]], implicit $exec
   ; CHECK:   [[S_AND_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_B32 [[V_CMP_EQ_U64_e64_1]], [[V_CMP_EQ_U64_e64_]], implicit-def $scc
   ; CHECK:   [[REG_SEQUENCE3:%[0-9]+]]:sgpr_128 = REG_SEQUENCE [[V_READFIRSTLANE_B32_]], %subreg.sub0, [[V_READFIRSTLANE_B32_1]], %subreg.sub1, [[V_READFIRSTLANE_B32_2]], %subreg.sub2, [[V_READFIRSTLANE_B32_3]], %subreg.sub3
-  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[V_ADD_U32_e64_]], [[REG_SEQUENCE3]], [[COPY6]], 904, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "BufferResource" + 5000, align 1, addrspace 4)
+  ; CHECK:   TBUFFER_STORE_FORMAT_X_OFFEN_exact [[COPY]], [[V_ADD_U32_e64_]], [[REG_SEQUENCE3]], [[COPY6]], 904, 94, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable store 4 into custom "TargetCustom7" + 5000, align 1, addrspace 4)
   ; CHECK:   [[S_AND_SAVEEXEC_B32_:%[0-9]+]]:sreg_32_xm0_xexec = S_AND_SAVEEXEC_B32 killed [[S_AND_B32_]], implicit-def $exec, implicit-def $scc, implicit $exec
   ; CHECK:   $exec_lo = S_XOR_B32_term $exec_lo, [[S_AND_SAVEEXEC_B32_]], implicit-def $scc
   ; CHECK:   S_CBRANCH_EXECNZ %bb.2, implicit $exec

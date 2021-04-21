@@ -22,7 +22,9 @@
 #include "llvm/ProfileData/InstrProf.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 

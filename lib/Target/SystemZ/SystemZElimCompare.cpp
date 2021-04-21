@@ -640,22 +640,18 @@ bool SystemZElimCompare::fuseCompareOperations(
   MachineOperand CCMask(MBBI->getOperand(1));
   assert((CCMask.getImm() & ~SystemZ::CCMASK_ICMP) == 0 &&
          "Invalid condition-code mask for integer comparison");
-  // This is only valid for CompareAndBranch and CompareAndSibcall.
+  // This is only valid for CompareAndBranch.
   MachineOperand Target(MBBI->getOperand(
-    (Type == SystemZII::CompareAndBranch ||
-     Type == SystemZII::CompareAndSibcall) ? 2 : 0));
+    Type == SystemZII::CompareAndBranch ? 2 : 0));
   const uint32_t *RegMask;
   if (Type == SystemZII::CompareAndSibcall)
-    RegMask = MBBI->getOperand(3).getRegMask();
+    RegMask = MBBI->getOperand(2).getRegMask();
 
   // Clear out all current operands.
   int CCUse = MBBI->findRegisterUseOperandIdx(SystemZ::CC, false, TRI);
   assert(CCUse >= 0 && "BRC/BCR must use CC");
   Branch->RemoveOperand(CCUse);
-  // Remove regmask (sibcall).
-  if (Type == SystemZII::CompareAndSibcall)
-    Branch->RemoveOperand(3);
-  // Remove target (branch or sibcall).
+  // Remove target (branch) or regmask (sibcall).
   if (Type == SystemZII::CompareAndBranch ||
       Type == SystemZII::CompareAndSibcall)
     Branch->RemoveOperand(2);
@@ -682,10 +678,8 @@ bool SystemZElimCompare::fuseCompareOperations(
                            RegState::ImplicitDefine | RegState::Dead);
   }
 
-  if (Type == SystemZII::CompareAndSibcall) {
-    MIB.add(Target);
+  if (Type == SystemZII::CompareAndSibcall)
     MIB.addRegMask(RegMask);
-  }
 
   // Clear any intervening kills of SrcReg and SrcReg2.
   MBBI = Compare;

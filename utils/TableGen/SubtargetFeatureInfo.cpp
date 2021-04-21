@@ -7,10 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "SubtargetFeatureInfo.h"
+
 #include "Types.h"
 #include "llvm/Config/llvm-config.h"
-#include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
+
 #include <map>
 
 using namespace llvm;
@@ -112,7 +113,7 @@ void SubtargetFeatureInfo::emitComputeAssemblerAvailableFeatures(
     StringRef TargetName, StringRef ClassName, StringRef FuncName,
     SubtargetFeatureInfoMap &SubtargetFeatures, raw_ostream &OS) {
   OS << "FeatureBitset " << TargetName << ClassName << "::\n"
-     << FuncName << "(const FeatureBitset &FB) const {\n";
+     << FuncName << "(const FeatureBitset& FB) const {\n";
   OS << "  FeatureBitset Features;\n";
   for (const auto &SF : SubtargetFeatures) {
     const SubtargetFeatureInfo &SFI = SF.second;

@@ -31,7 +31,6 @@ namespace ISD {
     unsigned IsInReg : 1;    ///< Passed in register
     unsigned IsSRet : 1;     ///< Hidden struct-ret ptr
     unsigned IsByVal : 1;    ///< Struct passed by value
-    unsigned IsByRef : 1;    ///< Passed in memory
     unsigned IsNest : 1;     ///< Nested fn static chain
     unsigned IsReturned : 1; ///< Always returned
     unsigned IsSplit : 1;
@@ -44,31 +43,25 @@ namespace ISD {
     unsigned IsHva : 1;        ///< HVA field for
     unsigned IsHvaStart : 1;   ///< HVA structure start
     unsigned IsSecArgPass : 1; ///< Second argument
-    unsigned ByValOrByRefAlign : 4; ///< Log 2 of byval/byref alignment
+    unsigned ByValAlign : 4;   ///< Log 2 of byval alignment
     unsigned OrigAlign : 5;    ///< Log 2 of original alignment
     unsigned IsInConsecutiveRegsLast : 1;
     unsigned IsInConsecutiveRegs : 1;
     unsigned IsCopyElisionCandidate : 1; ///< Argument copy elision candidate
     unsigned IsPointer : 1;
 
-    unsigned ByValOrByRefSize; ///< Byval or byref struct size
+    unsigned ByValSize; ///< Byval struct size
 
     unsigned PointerAddrSpace; ///< Address space of pointer argument
 
-    /// Set the alignment used by byref or byval parameters.
-    void setAlignImpl(Align A) {
-      ByValOrByRefAlign = encode(A);
-      assert(getNonZeroByValAlign() == A && "bitfield overflow");
-    }
-
   public:
     ArgFlagsTy()
-      : IsZExt(0), IsSExt(0), IsInReg(0), IsSRet(0), IsByVal(0), IsByRef(0),
-          IsNest(0), IsReturned(0), IsSplit(0), IsInAlloca(0), IsPreallocated(0),
+        : IsZExt(0), IsSExt(0), IsInReg(0), IsSRet(0), IsByVal(0), IsNest(0),
+          IsReturned(0), IsSplit(0), IsInAlloca(0), IsPreallocated(0),
           IsSplitEnd(0), IsSwiftSelf(0), IsSwiftError(0), IsCFGuardTarget(0),
-          IsHva(0), IsHvaStart(0), IsSecArgPass(0), ByValOrByRefAlign(0),
-          OrigAlign(0), IsInConsecutiveRegsLast(0), IsInConsecutiveRegs(0),
-          IsCopyElisionCandidate(0), IsPointer(0), ByValOrByRefSize(0),
+          IsHva(0), IsHvaStart(0), IsSecArgPass(0), ByValAlign(0), OrigAlign(0),
+          IsInConsecutiveRegsLast(0), IsInConsecutiveRegs(0),
+          IsCopyElisionCandidate(0), IsPointer(0), ByValSize(0),
           PointerAddrSpace(0) {
       static_assert(sizeof(*this) == 3 * sizeof(unsigned), "flags are too big");
     }
@@ -87,9 +80,6 @@ namespace ISD {
 
     bool isByVal() const { return IsByVal; }
     void setByVal() { IsByVal = 1; }
-
-    bool isByRef() const { return IsByRef; }
-    void setByRef() { IsByRef = 1; }
 
     bool isInAlloca() const { return IsInAlloca; }
     void setInAlloca() { IsInAlloca = 1; }
@@ -122,12 +112,10 @@ namespace ISD {
     void setReturned() { IsReturned = 1; }
 
     bool isInConsecutiveRegs()  const { return IsInConsecutiveRegs; }
-    void setInConsecutiveRegs(bool Flag = true) { IsInConsecutiveRegs = Flag; }
+    void setInConsecutiveRegs() { IsInConsecutiveRegs = 1; }
 
     bool isInConsecutiveRegsLast() const { return IsInConsecutiveRegsLast; }
-    void setInConsecutiveRegsLast(bool Flag = true) {
-      IsInConsecutiveRegsLast = Flag;
-    }
+    void setInConsecutiveRegsLast() { IsInConsecutiveRegsLast = 1; }
 
     bool isSplit()   const { return IsSplit; }
     void setSplit()  { IsSplit = 1; }
@@ -143,22 +131,17 @@ namespace ISD {
 
     LLVM_ATTRIBUTE_DEPRECATED(unsigned getByValAlign() const,
                               "Use getNonZeroByValAlign() instead") {
-      MaybeAlign A = decodeMaybeAlign(ByValOrByRefAlign);
+      MaybeAlign A = decodeMaybeAlign(ByValAlign);
       return A ? A->value() : 0;
     }
     Align getNonZeroByValAlign() const {
-      MaybeAlign A = decodeMaybeAlign(ByValOrByRefAlign);
+      MaybeAlign A = decodeMaybeAlign(ByValAlign);
       assert(A && "ByValAlign must be defined");
       return *A;
     }
     void setByValAlign(Align A) {
-      assert(isByVal() && !isByRef());
-      setAlignImpl(A);
-    }
-
-    void setByRefAlign(Align A) {
-      assert(!isByVal() && isByRef());
-      setAlignImpl(A);
+      ByValAlign = encode(A);
+      assert(getNonZeroByValAlign() == A && "bitfield overflow");
     }
 
     LLVM_ATTRIBUTE_DEPRECATED(unsigned getOrigAlign() const,
@@ -174,23 +157,8 @@ namespace ISD {
       assert(getNonZeroOrigAlign() == A && "bitfield overflow");
     }
 
-    unsigned getByValSize() const {
-      assert(isByVal() && !isByRef());
-      return ByValOrByRefSize;
-    }
-    void setByValSize(unsigned S) {
-      assert(isByVal() && !isByRef());
-      ByValOrByRefSize = S;
-    }
-
-    unsigned getByRefSize() const {
-      assert(!isByVal() && isByRef());
-      return ByValOrByRefSize;
-    }
-    void setByRefSize(unsigned S) {
-      assert(!isByVal() && isByRef());
-      ByValOrByRefSize = S;
-    }
+    unsigned getByValSize() const { return ByValSize; }
+    void setByValSize(unsigned S) { ByValSize = S; }
 
     unsigned getPointerAddrSpace() const { return PointerAddrSpace; }
     void setPointerAddrSpace(unsigned AS) { PointerAddrSpace = AS; }

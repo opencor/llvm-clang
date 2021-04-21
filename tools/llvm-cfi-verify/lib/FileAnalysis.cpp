@@ -179,7 +179,7 @@ bool FileAnalysis::willTrapOnCFIViolation(const Instr &InstrMeta) const {
   if (!MIA->evaluateBranch(InstrMeta.Instruction, InstrMeta.VMAddress,
                            InstrMeta.InstructionSize, Target))
     return false;
-  return TrapOnFailFunctionAddresses.contains(Target);
+  return TrapOnFailFunctionAddresses.count(Target) > 0;
 }
 
 bool FileAnalysis::canFallThrough(const Instr &InstrMeta) const {
@@ -558,7 +558,7 @@ Error FileAnalysis::parseSymbolTable() {
     auto SymNameOrErr = Sym.getName();
     if (!SymNameOrErr)
       consumeError(SymNameOrErr.takeError());
-    else if (TrapOnFailFunctions.contains(*SymNameOrErr)) {
+    else if (TrapOnFailFunctions.count(*SymNameOrErr) > 0) {
       auto AddrOrErr = Sym.getAddress();
       if (!AddrOrErr)
         consumeError(AddrOrErr.takeError());
@@ -568,13 +568,11 @@ Error FileAnalysis::parseSymbolTable() {
   }
   if (auto *ElfObject = dyn_cast<object::ELFObjectFileBase>(Object)) {
     for (const auto &Addr : ElfObject->getPltAddresses()) {
-      if (!Addr.first)
-        continue;
-      object::SymbolRef Sym(*Addr.first, Object);
+      object::SymbolRef Sym(Addr.first, Object);
       auto SymNameOrErr = Sym.getName();
       if (!SymNameOrErr)
         consumeError(SymNameOrErr.takeError());
-      else if (TrapOnFailFunctions.contains(*SymNameOrErr))
+      else if (TrapOnFailFunctions.count(*SymNameOrErr) > 0)
         TrapOnFailFunctionAddresses.insert(Addr.second);
     }
   }

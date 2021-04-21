@@ -1,3 +1,7 @@
+set(LLVM_TARGET_DEFINITIONS InstCombineTables.td)
+tablegen(LLVM InstCombineTables.inc -gen-searchable-tables)
+add_public_tablegen_target(InstCombineTableGen)
+
 add_llvm_component_library(LLVMInstCombine
   InstructionCombining.cpp
   InstCombineAddSub.cpp
@@ -21,10 +25,4 @@ add_llvm_component_library(LLVMInstCombine
 
   DEPENDS
   intrinsics_gen
-
-  LINK_COMPONENTS
-  Analysis
-  Core
-  Support
-  TransformUtils
   )

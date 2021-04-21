@@ -10,19 +10,20 @@
 
 !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name:         .dynamic
     Type:         SHT_DYNAMIC
     Address:      0x1000
 ProgramHeaders:
-  - Type:     PT_LOAD
-    VAddr:    0x1000
-    FirstSec: .dynamic
-    LastSec:  .dynamic
-  - Type:     PT_DYNAMIC
-    VAddr:    0x1000
-    FirstSec: .dynamic
-    LastSec:  .dynamic
+  - Type: PT_LOAD
+    VAddr: 0x1000
+    Sections:
+      - Section: .dynamic
+  - Type: PT_DYNAMIC
+    VAddr: 0x1000
+    Sections:
+      - Section: .dynamic

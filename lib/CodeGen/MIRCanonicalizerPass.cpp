@@ -85,7 +85,9 @@ static std::vector<MachineBasicBlock *> GetRPOList(MachineFunction &MF) {
     return {};
   ReversePostOrderTraversal<MachineBasicBlock *> RPOT(&*MF.begin());
   std::vector<MachineBasicBlock *> RPOList;
-  append_range(RPOList, RPOT);
+  for (auto MBB : RPOT) {
+    RPOList.push_back(MBB);
+  }
 
   return RPOList;
 }
@@ -106,7 +108,7 @@ rescheduleLexographically(std::vector<MachineInstr *> instructions,
     OS.flush();
 
     // Trim the assignment, or start from the beginning in the case of a store.
-    const size_t i = S.find('=');
+    const size_t i = S.find("=");
     StringInstrMap.push_back({(i == std::string::npos) ? S : S.substr(i), II});
   }
 
@@ -196,7 +198,8 @@ static bool rescheduleCanonically(unsigned &PseudoIdempotentInstCount,
 
       if (II->getOperand(i).isReg()) {
         if (!Register::isVirtualRegister(II->getOperand(i).getReg()))
-          if (!llvm::is_contained(PhysRegDefs, II->getOperand(i).getReg())) {
+          if (llvm::find(PhysRegDefs, II->getOperand(i).getReg()) ==
+              PhysRegDefs.end()) {
             continue;
           }
       }
@@ -273,9 +276,9 @@ static bool rescheduleCanonically(unsigned &PseudoIdempotentInstCount,
   // Sort the defs for users of multiple defs lexographically.
   for (const auto &E : MultiUserLookup) {
 
-    auto UseI = llvm::find_if(MBB->instrs(), [&](MachineInstr &MI) -> bool {
-      return &MI == E.second;
-    });
+    auto UseI =
+        std::find_if(MBB->instr_begin(), MBB->instr_end(),
+                     [&](MachineInstr &MI) -> bool { return &MI == E.second; });
 
     if (UseI == MBB->instr_end())
       continue;

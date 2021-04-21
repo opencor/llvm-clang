@@ -892,9 +892,9 @@ static void dumpBytes(StringRef Path) {
 bool opts::pretty::shouldDumpSymLevel(SymLevel Search) {
   if (SymTypes.empty())
     return true;
-  if (llvm::is_contained(SymTypes, Search))
+  if (llvm::find(SymTypes, Search) != SymTypes.end())
     return true;
-  if (llvm::is_contained(SymTypes, SymLevel::All))
+  if (llvm::find(SymTypes, SymLevel::All) != SymTypes.end())
     return true;
   return false;
 }

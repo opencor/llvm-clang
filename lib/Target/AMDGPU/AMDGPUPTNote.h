@@ -16,7 +16,6 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPUPTNOTE_H
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUPTNOTE_H
 
-namespace llvm {
 namespace AMDGPU {
 
 namespace ElfNote {
@@ -42,7 +41,7 @@ enum NoteType{
     NT_AMDGPU_HSA_HLDEBUG_TARGET = 102
 };
 
-} // End namespace ElfNote
-} // End namespace AMDGPU
-} // End namespace llvm
+}
+}
+
 #endif // LLVM_LIB_TARGET_AMDGPU_AMDGPUNOTETYPE_H

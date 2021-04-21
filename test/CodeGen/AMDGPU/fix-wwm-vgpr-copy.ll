@@ -1,5 +1,11 @@
 ; RUN: llc -mtriple=amdgcn--amdpal -march=amdgcn -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
+declare i64 @llvm.amdgcn.icmp.i32(i32, i32, i32) #0
+declare i32 @llvm.amdgcn.set.inactive.i32(i32, i32) #0
+declare i32 @llvm.amdgcn.wwm.i32(i32) #1
+declare void @llvm.amdgcn.tbuffer.store.f32(float, <4 x i32>, i32, i32, i32, i32, i32, i32, i1, i1) #2
+declare void @llvm.amdgcn.exp.f32(i32, i32, float, float, float, float, i1, i1) #2
+
 define amdgpu_hs void @foo(i32 inreg %arg, <4 x i32> inreg %buffer) {
 entry:
   br label %work
@@ -13,7 +19,7 @@ bb602:
   br i1 %tmp607, label %bb49, label %bb54
 
 bb49:
-  call void @llvm.amdgcn.raw.tbuffer.store.f32(float 1.0, <4 x i32> %buffer, i32 4, i32 1, i32 116, i32 1)
+  tail call void @llvm.amdgcn.tbuffer.store.f32(float 1.000000e+00, <4 x i32> %buffer, i32 0, i32 1, i32 1, i32 4, i32 4, i32 7, i1 true, i1 false) #7
   ret void
 
 bb54:
@@ -36,10 +42,6 @@ work:
   br i1 %tmp34, label %bb602, label %bb42
 }
 
-declare i32 @llvm.amdgcn.set.inactive.i32(i32, i32) #0
-declare i32 @llvm.amdgcn.wwm.i32(i32) #1
-declare void @llvm.amdgcn.raw.tbuffer.store.f32(float, <4 x i32>, i32, i32, i32 immarg, i32 immarg) #2
-
-attributes #0 = { convergent nounwind readnone willreturn }
-attributes #1 = { convergent nounwind readnone speculatable willreturn }
-attributes #2 = { nounwind willreturn writeonly }
+attributes #0 = { convergent nounwind readnone }
+attributes #1 = { nounwind readnone speculatable }
+attributes #2 = { nounwind writeonly }

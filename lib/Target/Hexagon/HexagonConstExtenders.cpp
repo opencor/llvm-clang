@@ -242,15 +242,18 @@ namespace {
         return *this;
       }
       bool isVReg() const {
-        return Reg != 0 && !Reg.isStack() && Reg.isVirtual();
+        return Reg != 0 && !llvm::Register::isStackSlot(Reg) &&
+               llvm::Register::isVirtualRegister(Reg);
       }
-      bool isSlot() const { return Reg != 0 && Reg.isStack(); }
+      bool isSlot() const {
+        return Reg != 0 && llvm::Register::isStackSlot(Reg);
+      }
       operator MachineOperand() const {
         if (isVReg())
           return MachineOperand::CreateReg(Reg, /*Def*/false, /*Imp*/false,
                           /*Kill*/false, /*Dead*/false, /*Undef*/false,
                           /*EarlyClobber*/false, Sub);
-        if (Reg.isStack()) {
+        if (llvm::Register::isStackSlot(Reg)) {
           int FI = llvm::Register::stackSlot2Index(Reg);
           return MachineOperand::CreateFI(FI);
         }
@@ -262,8 +265,7 @@ namespace {
         // For std::map.
         return Reg < R.Reg || (Reg == R.Reg && Sub < R.Sub);
       }
-      llvm::Register Reg;
-      unsigned Sub = 0;
+      unsigned Reg = 0, Sub = 0;
     };
 
     struct ExtExpr {

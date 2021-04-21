@@ -390,7 +390,7 @@ bool HexagonHardwareLoops::runOnMachineFunction(MachineFunction &MF) {
   TRI = HST.getRegisterInfo();
 
   for (auto &L : *MLI)
-    if (L->isOutermost()) {
+    if (!L->getParentLoop()) {
       bool L0Used = false;
       bool L1Used = false;
       Changed |= convertToHardwareLoop(L, L0Used, L1Used);
@@ -1432,7 +1432,7 @@ bool HexagonHardwareLoops::loopCountMayWrapOrUnderFlow(
   Register Reg = InitVal->getReg();
 
   // We don't know the value of a physical register.
-  if (!Reg.isVirtual())
+  if (!Register::isVirtualRegister(Reg))
     return true;
 
   MachineInstr *Def = MRI->getVRegDef(Reg);
@@ -1510,7 +1510,7 @@ bool HexagonHardwareLoops::checkForImmediate(const MachineOperand &MO,
   int64_t TV;
 
   Register R = MO.getReg();
-  if (!R.isVirtual())
+  if (!Register::isVirtualRegister(R))
     return false;
   MachineInstr *DI = MRI->getVRegDef(R);
   unsigned DOpc = DI->getOpcode();

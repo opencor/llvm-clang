@@ -14,7 +14,6 @@
 #define LLVM_CODEGEN_MACHINEFRAMEINFO_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/Register.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/DataTypes.h"
 #include <cassert>
@@ -32,7 +31,7 @@ class AllocaInst;
 /// Callee saved reg can also be saved to a different register rather than
 /// on the stack by setting DstReg instead of FrameIdx.
 class CalleeSavedInfo {
-  Register Reg;
+  unsigned Reg;
   union {
     int FrameIdx;
     unsigned DstReg;
@@ -59,14 +58,14 @@ public:
   : Reg(R), FrameIdx(FI), Restored(true), SpilledToReg(false) {}
 
   // Accessors.
-  Register getReg()                        const { return Reg; }
+  unsigned getReg()                        const { return Reg; }
   int getFrameIdx()                        const { return FrameIdx; }
   unsigned getDstReg()                     const { return DstReg; }
   void setFrameIdx(int FI) {
     FrameIdx = FI;
     SpilledToReg = false;
   }
-  void setDstReg(Register SpillReg) {
+  void setDstReg(unsigned SpillReg) {
     DstReg = SpillReg;
     SpilledToReg = true;
   }

@@ -25,7 +25,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/CodeGen/Register.h"
 #include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/Support/Allocator.h"
@@ -598,9 +597,10 @@ namespace llvm {
     /// @p End.
     bool isUndefIn(ArrayRef<SlotIndex> Undefs, SlotIndex Begin,
                    SlotIndex End) const {
-      return llvm::any_of(Undefs, [Begin, End](SlotIndex Idx) -> bool {
-        return Begin <= Idx && Idx < End;
-      });
+      return std::any_of(Undefs.begin(), Undefs.end(),
+                [Begin,End] (SlotIndex Idx) -> bool {
+                  return Begin <= Idx && Idx < End;
+                });
     }
 
     /// Flush segment set into the regular segment vector.
@@ -704,16 +704,12 @@ namespace llvm {
   private:
     SubRange *SubRanges = nullptr; ///< Single linked list of subregister live
                                    /// ranges.
-    const Register Reg; // the register or stack slot of this interval.
-    float Weight = 0.0; // weight of this interval
 
   public:
-    Register reg() const { return Reg; }
-    float weight() const { return Weight; }
-    void incrementWeight(float Inc) { Weight += Inc; }
-    void setWeight(float Value) { Weight = Value; }
+    const unsigned reg;  // the register or stack slot of this interval.
+    float weight;        // weight of this interval
 
-    LiveInterval(unsigned Reg, float Weight) : Reg(Reg), Weight(Weight) {}
+    LiveInterval(unsigned Reg, float Weight) : reg(Reg), weight(Weight) {}
 
     ~LiveInterval() {
       clearSubRanges();
@@ -735,10 +731,10 @@ namespace llvm {
         ++*this;
         return res;
       }
-      bool operator!=(const SingleLinkedListIterator<T> &Other) const {
+      bool operator!=(const SingleLinkedListIterator<T> &Other) {
         return P != Other.operator->();
       }
-      bool operator==(const SingleLinkedListIterator<T> &Other) const {
+      bool operator==(const SingleLinkedListIterator<T> &Other) {
         return P == Other.operator->();
       }
       T &operator*() const {
@@ -810,10 +806,14 @@ namespace llvm {
     unsigned getSize() const;
 
     /// isSpillable - Can this interval be spilled?
-    bool isSpillable() const { return Weight != huge_valf; }
+    bool isSpillable() const {
+      return weight != huge_valf;
+    }
 
     /// markNotSpillable - Mark interval as not spillable
-    void markNotSpillable() { Weight = huge_valf; }
+    void markNotSpillable() {
+      weight = huge_valf;
+    }
 
     /// For a given lane mask @p LaneMask, compute indexes at which the
     /// lane is marked undefined by subregister <def,read-undef> definitions.
@@ -834,7 +834,7 @@ namespace llvm {
     ///    function will be applied to the L0010 and L0008 subranges.
     ///
     /// \p Indexes and \p TRI are required to clean up the VNIs that
-    /// don't define the related lane masks after they get shrunk. E.g.,
+    /// don't defne the related lane masks after they get shrunk. E.g.,
     /// when L000F gets split into L0007 and L0008 maybe only a subset
     /// of the VNIs that defined L000F defines L0007.
     ///
@@ -870,7 +870,7 @@ namespace llvm {
     bool operator<(const LiveInterval& other) const {
       const SlotIndex &thisIndex = beginIndex();
       const SlotIndex &otherIndex = other.beginIndex();
-      return std::tie(thisIndex, Reg) < std::tie(otherIndex, other.Reg);
+      return std::tie(thisIndex, reg) < std::tie(otherIndex, other.reg);
     }
 
     void print(raw_ostream &OS) const;

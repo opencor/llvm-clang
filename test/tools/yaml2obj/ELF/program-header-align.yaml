@@ -12,9 +12,10 @@
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_NONE
 Sections:
   - Name:         .tdata
     Type:         SHT_PROGBITS
@@ -25,8 +26,9 @@ Sections:
 ProgramHeaders:
   - Type:  PT_TLS
     Align: 16
-    FirstSec: .tdata
-    LastSec:  .tbss
+    Sections:
+      - Section: .tdata
+      - Section: .tbss
 
 ## If Align is not specified, p_align is inferred from the maximum alignment
 ## of contained sections.
@@ -36,9 +38,10 @@ ProgramHeaders:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_NONE
 Sections:
   - Name:         .text
     Type:         SHT_PROGBITS
@@ -47,6 +50,7 @@ Sections:
     Type:         SHT_PROGBITS
     AddressAlign: 16
 ProgramHeaders:
-  - Type:     PT_LOAD
-    FirstSec: .text
-    LastSec:  .text.hot
+  - Type: PT_LOAD
+    Sections:
+      - Section: .text
+      - Section: .text.hot

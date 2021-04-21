@@ -20,7 +20,6 @@ unittest("ClangTidyTests") {
     "//clang/lib/Tooling/Core",
     "//clang/lib/Tooling/Transformer",
     "//llvm/lib/Support",
-    "//llvm/lib/Testing/Support",
   ]
   include_dirs = [ "//clang-tools-extra/clang-tidy" ]
   sources = [
@@ -33,7 +32,6 @@ unittest("ClangTidyTests") {
     "LLVMModuleTest.cpp",
     "NamespaceAliaserTest.cpp",
     "ObjCModuleTest.cpp",
-    "OptionsProviderTest.cpp",
     "OverlappingReplacementsTest.cpp",
     "ReadabilityModuleTest.cpp",
     "TransformerClangTidyCheckTest.cpp",

@@ -85,11 +85,12 @@ namespace {
 
 /// Helper class for values going out through an ABI boundary (used for handling
 /// function return values and call parameters).
-struct ARMOutgoingValueHandler : public CallLowering::OutgoingValueHandler {
-  ARMOutgoingValueHandler(MachineIRBuilder &MIRBuilder,
-                          MachineRegisterInfo &MRI, MachineInstrBuilder &MIB,
-                          CCAssignFn *AssignFn)
-      : OutgoingValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB) {}
+struct OutgoingValueHandler : public CallLowering::ValueHandler {
+  OutgoingValueHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
+                       MachineInstrBuilder &MIB, CCAssignFn *AssignFn)
+      : ValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB) {}
+
+  bool isIncomingArgumentHandler() const override { return false; }
 
   Register getStackAddress(uint64_t Size, int64_t Offset,
                            MachinePointerInfo &MPO) override {
@@ -257,14 +258,13 @@ bool ARMCallLowering::lowerReturnVal(MachineIRBuilder &MIRBuilder,
   CCAssignFn *AssignFn =
       TLI.CCAssignFnForReturn(F.getCallingConv(), F.isVarArg());
 
-  ARMOutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), Ret,
-                                     AssignFn);
+  OutgoingValueHandler RetHandler(MIRBuilder, MF.getRegInfo(), Ret, AssignFn);
   return handleAssignments(MIRBuilder, SplitRetInfos, RetHandler);
 }
 
 bool ARMCallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
-                                  const Value *Val, ArrayRef<Register> VRegs,
-                                  FunctionLoweringInfo &FLI) const {
+                                  const Value *Val,
+                                  ArrayRef<Register> VRegs) const {
   assert(!Val == VRegs.empty() && "Return value without a vreg");
 
   auto const &ST = MIRBuilder.getMF().getSubtarget<ARMSubtarget>();
@@ -282,10 +282,12 @@ namespace {
 
 /// Helper class for values coming in through an ABI boundary (used for handling
 /// formal arguments and call return values).
-struct ARMIncomingValueHandler : public CallLowering::IncomingValueHandler {
-  ARMIncomingValueHandler(MachineIRBuilder &MIRBuilder,
-                          MachineRegisterInfo &MRI, CCAssignFn AssignFn)
-      : IncomingValueHandler(MIRBuilder, MRI, AssignFn) {}
+struct IncomingValueHandler : public CallLowering::ValueHandler {
+  IncomingValueHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
+                       CCAssignFn AssignFn)
+      : ValueHandler(MIRBuilder, MRI, AssignFn) {}
+
+  bool isIncomingArgumentHandler() const override { return true; }
 
   Register getStackAddress(uint64_t Size, int64_t Offset,
                            MachinePointerInfo &MPO) override {
@@ -335,8 +337,8 @@ struct ARMIncomingValueHandler : public CallLowering::IncomingValueHandler {
     assert(VA.isRegLoc() && "Value shouldn't be assigned to reg");
     assert(VA.getLocReg() == PhysReg && "Assigning to the wrong reg?");
 
-    uint64_t ValSize = VA.getValVT().getFixedSizeInBits();
-    uint64_t LocSize = VA.getLocVT().getFixedSizeInBits();
+    auto ValSize = VA.getValVT().getSizeInBits();
+    auto LocSize = VA.getLocVT().getSizeInBits();
 
     assert(ValSize <= 64 && "Unsupported value size");
     assert(LocSize <= 64 && "Unsupported location size");
@@ -397,10 +399,10 @@ struct ARMIncomingValueHandler : public CallLowering::IncomingValueHandler {
   virtual void markPhysRegUsed(unsigned PhysReg) = 0;
 };
 
-struct FormalArgHandler : public ARMIncomingValueHandler {
+struct FormalArgHandler : public IncomingValueHandler {
   FormalArgHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
                    CCAssignFn AssignFn)
-      : ARMIncomingValueHandler(MIRBuilder, MRI, AssignFn) {}
+      : IncomingValueHandler(MIRBuilder, MRI, AssignFn) {}
 
   void markPhysRegUsed(unsigned PhysReg) override {
     MIRBuilder.getMRI()->addLiveIn(PhysReg);
@@ -410,10 +412,9 @@ struct FormalArgHandler : public ARMIncomingValueHandler {
 
 } // end anonymous namespace
 
-bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
-                                           const Function &F,
-                                           ArrayRef<ArrayRef<Register>> VRegs,
-                                           FunctionLoweringInfo &FLI) const {
+bool ARMCallLowering::lowerFormalArguments(
+    MachineIRBuilder &MIRBuilder, const Function &F,
+    ArrayRef<ArrayRef<Register>> VRegs) const {
   auto &TLI = *getTLI<ARMTargetLowering>();
   auto Subtarget = TLI.getSubtarget();
 
@@ -434,7 +435,7 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   for (auto &Arg : F.args()) {
     if (!isSupportedType(DL, TLI, Arg.getType()))
       return false;
-    if (Arg.hasPassPointeeByValueCopyAttr())
+    if (Arg.hasPassPointeeByValueAttr())
       return false;
   }
 
@@ -468,10 +469,10 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
 
 namespace {
 
-struct CallReturnHandler : public ARMIncomingValueHandler {
+struct CallReturnHandler : public IncomingValueHandler {
   CallReturnHandler(MachineIRBuilder &MIRBuilder, MachineRegisterInfo &MRI,
                     MachineInstrBuilder MIB, CCAssignFn *AssignFn)
-      : ARMIncomingValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB) {}
+      : IncomingValueHandler(MIRBuilder, MRI, AssignFn), MIB(MIB) {}
 
   void markPhysRegUsed(unsigned PhysReg) override {
     MIB.addDef(PhysReg, RegState::Implicit);
@@ -481,16 +482,15 @@ struct CallReturnHandler : public ARMIncomingValueHandler {
 };
 
 // FIXME: This should move to the ARMSubtarget when it supports all the opcodes.
-unsigned getCallOpcode(const MachineFunction &MF, const ARMSubtarget &STI,
-                       bool isDirect) {
+unsigned getCallOpcode(const ARMSubtarget &STI, bool isDirect) {
   if (isDirect)
     return STI.isThumb() ? ARM::tBL : ARM::BL;
 
   if (STI.isThumb())
-    return gettBLXrOpcode(MF);
+    return ARM::tBLXr;
 
   if (STI.hasV5TOps())
-    return getBLXOpcode(MF);
+    return ARM::BLX;
 
   if (STI.hasV4TOps())
     return ARM::BX_CALL;
@@ -518,7 +518,7 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder, CallLoweringInfo &
   // Create the call instruction so we can add the implicit uses of arg
   // registers, but don't insert it yet.
   bool IsDirect = !Info.Callee.isReg();
-  auto CallOpcode = getCallOpcode(MF, STI, IsDirect);
+  auto CallOpcode = getCallOpcode(STI, IsDirect);
   auto MIB = MIRBuilder.buildInstrNoInsert(CallOpcode);
 
   bool IsThumb = STI.isThumb();
@@ -538,10 +538,14 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder, CallLoweringInfo &
 
   MIB.addRegMask(TRI->getCallPreservedMask(MF, Info.CallConv));
 
+  bool IsVarArg = false;
   SmallVector<ArgInfo, 8> ArgInfos;
   for (auto Arg : Info.OrigArgs) {
     if (!isSupportedType(DL, TLI, Arg.Ty))
       return false;
+
+    if (!Arg.IsFixed)
+      IsVarArg = true;
 
     if (Arg.Flags[0].isByVal())
       return false;
@@ -549,8 +553,8 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder, CallLoweringInfo &
     splitToValueTypes(Arg, ArgInfos, MF);
   }
 
-  auto ArgAssignFn = TLI.CCAssignFnForCall(Info.CallConv, Info.IsVarArg);
-  ARMOutgoingValueHandler ArgHandler(MIRBuilder, MRI, MIB, ArgAssignFn);
+  auto ArgAssignFn = TLI.CCAssignFnForCall(Info.CallConv, IsVarArg);
+  OutgoingValueHandler ArgHandler(MIRBuilder, MRI, MIB, ArgAssignFn);
   if (!handleAssignments(MIRBuilder, ArgInfos, ArgHandler))
     return false;
 
@@ -563,7 +567,7 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder, CallLoweringInfo &
 
     ArgInfos.clear();
     splitToValueTypes(Info.OrigRet, ArgInfos, MF);
-    auto RetAssignFn = TLI.CCAssignFnForReturn(Info.CallConv, Info.IsVarArg);
+    auto RetAssignFn = TLI.CCAssignFnForReturn(Info.CallConv, IsVarArg);
     CallReturnHandler RetHandler(MIRBuilder, MRI, MIB, RetAssignFn);
     if (!handleAssignments(MIRBuilder, ArgInfos, RetHandler))
       return false;

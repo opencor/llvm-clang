@@ -186,7 +186,7 @@ TEST_F(ValueHandle, AssertingVH_ReducesToPointer) {
   EXPECT_EQ(sizeof(CastInst *), sizeof(AssertingVH<CastInst>));
 }
 
-#elif LLVM_ENABLE_ABI_BREAKING_CHECKS // && !NDEBUG
+#else  // !NDEBUG
 
 #ifdef GTEST_HAS_DEATH_TEST
 
@@ -530,7 +530,6 @@ TEST_F(ValueHandle, TrackingVH_Tracks) {
 }
 
 #ifdef GTEST_HAS_DEATH_TEST
-#if LLVM_ENABLE_ABI_BREAKING_CHECKS
 
 TEST_F(ValueHandle, PoisoningVH_Asserts) {
   PoisoningVH<Value> VH(BitcastV.get());
@@ -549,8 +548,6 @@ TEST_F(ValueHandle, PoisoningVH_Asserts) {
 
   // Don't clear anything out here as destroying the handles should be fine.
 }
-
-#endif // LLVM_ENABLE_ABI_BREAKING_CHECKS
 
 TEST_F(ValueHandle, TrackingVH_Asserts) {
   {

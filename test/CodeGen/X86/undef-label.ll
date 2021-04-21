@@ -4,9 +4,9 @@
 ; This is a case where we would incorrectly conclude that LBB0_1 could only
 ; be reached via fall through and would therefore omit the label.
 
-@g = dso_local global i32 0
+@g = global i32 0
 
-define dso_local void @xyz() {
+define void @xyz() {
 ; CHECK-LABEL: xyz:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    movl $g, %eax

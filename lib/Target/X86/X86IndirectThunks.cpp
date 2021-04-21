@@ -95,6 +95,7 @@ struct LVIThunkInserter : ThunkInserter<LVIThunkInserter> {
     BuildMI(&MF.front(), DebugLoc(), TII->get(X86::LFENCE));
     BuildMI(&MF.front(), DebugLoc(), TII->get(X86::JMP64r)).addReg(X86::R11);
     MF.front().addLiveIn(X86::R11);
+    return;
   }
 };
 

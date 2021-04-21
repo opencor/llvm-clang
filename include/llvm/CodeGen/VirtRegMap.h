@@ -19,7 +19,6 @@
 #include "llvm/ADT/IndexedMap.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TileShapeInfo.h"
 #include "llvm/Pass.h"
 #include <cassert>
 
@@ -61,10 +60,6 @@ class TargetInstrInfo;
     /// mapping.
     IndexedMap<unsigned, VirtReg2IndexFunctor> Virt2SplitMap;
 
-    /// Virt2ShapeMap - For X86 AMX register whose register is bound shape
-    /// information.
-    DenseMap<unsigned, ShapeT> Virt2ShapeMap;
-
     /// createSpillSlot - Allocate a spill slot for RC from MFI.
     unsigned createSpillSlot(const TargetRegisterClass *RC);
 
@@ -103,29 +98,14 @@ class TargetInstrInfo;
 
     /// returns the physical register mapped to the specified
     /// virtual register
-    MCRegister getPhys(Register virtReg) const {
+    Register getPhys(Register virtReg) const {
       assert(virtReg.isVirtual());
-      return MCRegister::from(Virt2PhysMap[virtReg.id()]);
+      return Virt2PhysMap[virtReg.id()];
     }
 
     /// creates a mapping for the specified virtual register to
     /// the specified physical register
     void assignVirt2Phys(Register virtReg, MCPhysReg physReg);
-
-    bool isShapeMapEmpty() const { return Virt2ShapeMap.empty(); }
-
-    bool hasShape(Register virtReg) const {
-      return getShape(virtReg).isValid();
-    }
-
-    ShapeT getShape(Register virtReg) const {
-      assert(virtReg.isVirtual());
-      return Virt2ShapeMap.lookup(virtReg);
-    }
-
-    void assignVirt2Shape(Register virtReg, ShapeT shape) {
-      Virt2ShapeMap[virtReg.id()] = shape;
-    }
 
     /// clears the specified virtual register's, physical
     /// register mapping
@@ -151,15 +131,12 @@ class TargetInstrInfo;
     bool hasKnownPreference(Register VirtReg);
 
     /// records virtReg is a split live interval from SReg.
-    void setIsSplitFromReg(Register virtReg, Register SReg) {
+    void setIsSplitFromReg(Register virtReg, unsigned SReg) {
       Virt2SplitMap[virtReg.id()] = SReg;
-      if (hasShape(SReg)) {
-        Virt2ShapeMap[virtReg.id()] = getShape(SReg);
-      }
     }
 
     /// returns the live interval virtReg is split from.
-    Register getPreSplitReg(Register virtReg) const {
+    unsigned getPreSplitReg(Register virtReg) const {
       return Virt2SplitMap[virtReg.id()];
     }
 
@@ -167,8 +144,8 @@ class TargetInstrInfo;
     /// from through splitting.
     /// A register that was not created by splitting is its own original.
     /// This operation is idempotent.
-    Register getOriginal(Register VirtReg) const {
-      Register Orig = getPreSplitReg(VirtReg);
+    unsigned getOriginal(unsigned VirtReg) const {
+      unsigned Orig = getPreSplitReg(VirtReg);
       return Orig ? Orig : VirtReg;
     }
 

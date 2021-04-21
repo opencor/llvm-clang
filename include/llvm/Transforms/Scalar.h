@@ -14,7 +14,6 @@
 #ifndef LLVM_TRANSFORMS_SCALAR_H
 #define LLVM_TRANSFORMS_SCALAR_H
 
-#include "llvm/Transforms/Utils/SimplifyCFGOptions.h"
 #include <functional>
 
 namespace llvm {
@@ -26,6 +25,12 @@ class Pass;
 
 //===----------------------------------------------------------------------===//
 //
+// ConstantPropagation - A worklist driven constant propagation pass
+//
+FunctionPass *createConstantPropagationPass();
+
+//===----------------------------------------------------------------------===//
+//
 // AlignmentFromAssumptions - Use assume intrinsics to set load/store
 // alignments.
 //
@@ -33,15 +38,16 @@ FunctionPass *createAlignmentFromAssumptionsPass();
 
 //===----------------------------------------------------------------------===//
 //
-// AnnotationRemarks - Emit remarks for !annotation metadata.
-//
-FunctionPass *createAnnotationRemarksLegacyPass();
-
-//===----------------------------------------------------------------------===//
-//
 // SCCP - Sparse conditional constant propagation.
 //
 FunctionPass *createSCCPPass();
+
+//===----------------------------------------------------------------------===//
+//
+// DeadInstElimination - This pass quickly removes trivially dead instructions
+// without modifying the CFG of the function.  It is a FunctionPass.
+//
+Pass *createDeadInstEliminationPass();
 
 //===----------------------------------------------------------------------===//
 //
@@ -157,12 +163,6 @@ Pass *createLoopInterchangePass();
 
 //===----------------------------------------------------------------------===//
 //
-// LoopFlatten - This pass flattens nested loops into a single loop.
-//
-FunctionPass *createLoopFlattenPass();
-
-//===----------------------------------------------------------------------===//
-//
 // LoopStrengthReduce - This pass is strength reduces GEP instructions that use
 // a loop's canonical induction variable as one of their indices.
 //
@@ -190,8 +190,7 @@ Pass *createLoopUnrollPass(int OptLevel = 2, bool OnlyWhenForced = false,
                            int Count = -1, int AllowPartial = -1,
                            int Runtime = -1, int UpperBound = -1,
                            int AllowPeeling = -1);
-// Create an unrolling pass for full unrolling that uses exact trip count only
-// and also does peeling.
+// Create an unrolling pass for full unrolling that uses exact trip count only.
 Pass *createSimpleLoopUnrollPass(int OptLevel = 2, bool OnlyWhenForced = false,
                                  bool ForgetAllSCEV = false);
 
@@ -211,7 +210,7 @@ Pass *createLoopRerollPass();
 //
 // LoopRotate - This pass is a simple loop rotating pass.
 //
-Pass *createLoopRotatePass(int MaxHeaderSize = -1, bool PrepareForLTO = false);
+Pass *createLoopRotatePass(int MaxHeaderSize = -1);
 
 //===----------------------------------------------------------------------===//
 //
@@ -246,12 +245,10 @@ FunctionPass *createReassociatePass();
 //===----------------------------------------------------------------------===//
 //
 // JumpThreading - Thread control through mult-pred/multi-succ blocks where some
-// preds always go to some succ. If FreezeSelectCond is true, unfold the
-// condition of a select that unfolds to branch. Thresholds other than minus one
-// override the internal BB duplication default threshold.
+// preds always go to some succ. Thresholds other than minus one override the
+// internal BB duplication default threshold.
 //
-FunctionPass *createJumpThreadingPass(bool FreezeSelectCond = false,
-                                      int Threshold = -1);
+FunctionPass *createJumpThreadingPass(int Threshold = -1);
 
 //===----------------------------------------------------------------------===//
 //
@@ -259,7 +256,8 @@ FunctionPass *createJumpThreadingPass(bool FreezeSelectCond = false,
 // simplify terminator instructions, convert switches to lookup tables, etc.
 //
 FunctionPass *createCFGSimplificationPass(
-    SimplifyCFGOptions Options = SimplifyCFGOptions(),
+    unsigned Threshold = 1, bool ForwardSwitchCond = false,
+    bool ConvertSwitch = false, bool KeepLoops = true, bool SinkCommon = false,
     std::function<bool(const Function &)> Ftor = nullptr);
 
 //===----------------------------------------------------------------------===//
@@ -348,13 +346,6 @@ FunctionPass *createConstantHoistingPass();
 
 //===----------------------------------------------------------------------===//
 //
-// ConstraintElimination - This pass eliminates conditions based on found
-//                         constraints.
-//
-FunctionPass *createConstraintEliminationPass();
-
-//===----------------------------------------------------------------------===//
-//
 // Sink - Code Sinking
 //
 FunctionPass *createSinkingPass();
@@ -376,13 +367,6 @@ Pass *createLowerGuardIntrinsicPass();
 // LowerMatrixIntrinsics - Lower matrix intrinsics to vector operations.
 //
 Pass *createLowerMatrixIntrinsicsPass();
-
-//===----------------------------------------------------------------------===//
-//
-// LowerMatrixIntrinsicsMinimal - Lower matrix intrinsics to vector operations
-//                               (lightweight, does not require extra analysis)
-//
-Pass *createLowerMatrixIntrinsicsMinimalPass();
 
 //===----------------------------------------------------------------------===//
 //
@@ -539,21 +523,6 @@ Pass *createLoopSimplifyCFGPass();
 // transformations.
 //
 Pass *createWarnMissedTransformationsPass();
-
-//===----------------------------------------------------------------------===//
-//
-// This pass does instruction simplification on each
-// instruction in a function.
-//
-FunctionPass *createInstSimplifyLegacyPass();
-
-
-//===----------------------------------------------------------------------===//
-//
-// createScalarizeMaskedMemIntrinPass - Replace masked load, store, gather
-// and scatter intrinsics with scalar code when target doesn't support them.
-//
-FunctionPass *createScalarizeMaskedMemIntrinLegacyPass();
 } // End llvm namespace
 
 #endif

@@ -215,14 +215,16 @@ void SCEVDivision::visitMulExpr(const SCEVMulExpr *Numerator) {
     return cannotDivide(Numerator);
 
   // The Remainder is obtained by replacing Denominator by 0 in Numerator.
-  ValueToSCEVMapTy RewriteMap;
-  RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] = Zero;
-  Remainder = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap);
+  ValueToValueMap RewriteMap;
+  RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] =
+      cast<SCEVConstant>(Zero)->getValue();
+  Remainder = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap, true);
 
   if (Remainder->isZero()) {
     // The Quotient is obtained by replacing Denominator by 1 in Numerator.
-    RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] = One;
-    Quotient = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap);
+    RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] =
+        cast<SCEVConstant>(One)->getValue();
+    Quotient = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap, true);
     return;
   }
 

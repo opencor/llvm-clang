@@ -20,7 +20,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/PassInstrumentation.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -199,18 +198,6 @@ bool llvm::applyDebugifyMetadata(
   return true;
 }
 
-static bool applyDebugify(Function &F) {
-  Module &M = *F.getParent();
-  auto FuncIt = F.getIterator();
-  return applyDebugifyMetadata(M, make_range(FuncIt, std::next(FuncIt)),
-                               "FunctionDebugify: ", /*ApplyToMF=*/nullptr);
-}
-
-static bool applyDebugify(Module &M) {
-  return applyDebugifyMetadata(M, M.functions(),
-                               "ModuleDebugify: ", /*ApplyToMF=*/nullptr);
-}
-
 bool llvm::stripDebugifyMetadata(Module &M) {
   bool Changed = false;
 
@@ -239,7 +226,9 @@ bool llvm::stripDebugifyMetadata(Module &M) {
   NamedMDNode *NMD = M.getModuleFlagsMetadata();
   if (!NMD)
     return Changed;
-  SmallVector<MDNode *, 4> Flags(NMD->operands());
+  SmallVector<MDNode *, 4> Flags;
+  for (MDNode *Flag : NMD->operands())
+    Flags.push_back(Flag);
   NMD->clearOperands();
   for (MDNode *Flag : Flags) {
     MDString *Key = dyn_cast_or_null<MDString>(Flag->getOperand(1));
@@ -394,7 +383,10 @@ bool checkDebugifyMetadata(Module &M,
 /// ModulePass for attaching synthetic debug info to everything, used with the
 /// legacy module pass manager.
 struct DebugifyModulePass : public ModulePass {
-  bool runOnModule(Module &M) override { return applyDebugify(M); }
+  bool runOnModule(Module &M) override {
+    return applyDebugifyMetadata(M, M.functions(),
+                                 "ModuleDebugify: ", /*ApplyToMF*/ nullptr);
+  }
 
   DebugifyModulePass() : ModulePass(ID) {}
 
@@ -408,7 +400,12 @@ struct DebugifyModulePass : public ModulePass {
 /// FunctionPass for attaching synthetic debug info to instructions within a
 /// single function, used with the legacy module pass manager.
 struct DebugifyFunctionPass : public FunctionPass {
-  bool runOnFunction(Function &F) override { return applyDebugify(F); }
+  bool runOnFunction(Function &F) override {
+    Module &M = *F.getParent();
+    auto FuncIt = F.getIterator();
+    return applyDebugifyMetadata(M, make_range(FuncIt, std::next(FuncIt)),
+                                 "FunctionDebugify: ", /*ApplyToMF*/ nullptr);
+  }
 
   DebugifyFunctionPass() : FunctionPass(ID) {}
 
@@ -475,32 +472,9 @@ private:
 
 } // end anonymous namespace
 
-void llvm::exportDebugifyStats(StringRef Path, const DebugifyStatsMap &Map) {
-  std::error_code EC;
-  raw_fd_ostream OS{Path, EC};
-  if (EC) {
-    errs() << "Could not open file: " << EC.message() << ", " << Path << '\n';
-    return;
-  }
+ModulePass *createDebugifyModulePass() { return new DebugifyModulePass(); }
 
-  OS << "Pass Name" << ',' << "# of missing debug values" << ','
-     << "# of missing locations" << ',' << "Missing/Expected value ratio" << ','
-     << "Missing/Expected location ratio" << '\n';
-  for (const auto &Entry : Map) {
-    StringRef Pass = Entry.first;
-    DebugifyStatistics Stats = Entry.second;
-
-    OS << Pass << ',' << Stats.NumDbgValuesMissing << ','
-       << Stats.NumDbgLocsMissing << ',' << Stats.getMissingValueRatio() << ','
-       << Stats.getEmptyLocationRatio() << '\n';
-  }
-}
-
-ModulePass *llvm::createDebugifyModulePass() {
-  return new DebugifyModulePass();
-}
-
-FunctionPass *llvm::createDebugifyFunctionPass() {
+FunctionPass *createDebugifyFunctionPass() {
   return new DebugifyFunctionPass();
 }
 
@@ -510,15 +484,15 @@ PreservedAnalyses NewPMDebugifyPass::run(Module &M, ModuleAnalysisManager &) {
   return PreservedAnalyses::all();
 }
 
-ModulePass *llvm::createCheckDebugifyModulePass(bool Strip,
-                                                StringRef NameOfWrappedPass,
-                                                DebugifyStatsMap *StatsMap) {
+ModulePass *createCheckDebugifyModulePass(bool Strip,
+                                          StringRef NameOfWrappedPass,
+                                          DebugifyStatsMap *StatsMap) {
   return new CheckDebugifyModulePass(Strip, NameOfWrappedPass, StatsMap);
 }
 
-FunctionPass *
-llvm::createCheckDebugifyFunctionPass(bool Strip, StringRef NameOfWrappedPass,
-                                      DebugifyStatsMap *StatsMap) {
+FunctionPass *createCheckDebugifyFunctionPass(bool Strip,
+                                              StringRef NameOfWrappedPass,
+                                              DebugifyStatsMap *StatsMap) {
   return new CheckDebugifyFunctionPass(Strip, NameOfWrappedPass, StatsMap);
 }
 
@@ -527,41 +501,6 @@ PreservedAnalyses NewPMCheckDebugifyPass::run(Module &M,
   checkDebugifyMetadata(M, M.functions(), "", "CheckModuleDebugify", false,
                         nullptr);
   return PreservedAnalyses::all();
-}
-
-static bool isIgnoredPass(StringRef PassID) {
-  return isSpecialPass(PassID, {"PassManager", "PassAdaptor",
-                                "AnalysisManagerProxy", "PrintFunctionPass",
-                                "PrintModulePass", "BitcodeWriterPass",
-                                "ThinLTOBitcodeWriterPass", "VerifierPass"});
-}
-
-void DebugifyEachInstrumentation::registerCallbacks(
-    PassInstrumentationCallbacks &PIC) {
-  PIC.registerBeforeNonSkippedPassCallback([](StringRef P, Any IR) {
-    if (isIgnoredPass(P))
-      return;
-    if (any_isa<const Function *>(IR))
-      applyDebugify(*const_cast<Function *>(any_cast<const Function *>(IR)));
-    else if (any_isa<const Module *>(IR))
-      applyDebugify(*const_cast<Module *>(any_cast<const Module *>(IR)));
-  });
-  PIC.registerAfterPassCallback([this](StringRef P, Any IR,
-                                       const PreservedAnalyses &PassPA) {
-    if (isIgnoredPass(P))
-      return;
-    if (any_isa<const Function *>(IR)) {
-      auto &F = *const_cast<Function *>(any_cast<const Function *>(IR));
-      Module &M = *F.getParent();
-      auto It = F.getIterator();
-      checkDebugifyMetadata(M, make_range(It, std::next(It)), P,
-                            "CheckFunctionDebugify", /*Strip=*/true, &StatsMap);
-    } else if (any_isa<const Module *>(IR)) {
-      auto &M = *const_cast<Module *>(any_cast<const Module *>(IR));
-      checkDebugifyMetadata(M, M.functions(), P, "CheckModuleDebugify",
-                            /*Strip=*/true, &StatsMap);
-    }
-  });
 }
 
 char DebugifyModulePass::ID = 0;

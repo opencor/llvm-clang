@@ -31,7 +31,6 @@ LLVMState::LLVMState(const std::string &Triple, const std::string &CpuName,
   TheTargetMachine.reset(
       static_cast<LLVMTargetMachine *>(TheTarget->createTargetMachine(
           Triple, CpuName, Features, Options, Reloc::Model::Static)));
-  assert(TheTargetMachine && "unable to create target machine");
   TheExegesisTarget = ExegesisTarget::lookup(TheTargetMachine->getTargetTriple());
   if (!TheExegesisTarget) {
     errs() << "no exegesis target for " << Triple << ", using default\n";
@@ -68,7 +67,6 @@ bool LLVMState::canAssemble(const MCInst &Inst) const {
       TheTargetMachine->getTarget().createMCCodeEmitter(
           *TheTargetMachine->getMCInstrInfo(), *TheTargetMachine->getMCRegisterInfo(),
           Context));
-  assert(CodeEmitter && "unable to create code emitter");
   SmallVector<char, 16> Tmp;
   raw_svector_ostream OS(Tmp);
   SmallVector<MCFixup, 4> Fixups;

@@ -26,5 +26,5 @@ private:
   GCOVOptions GCOVOpts;
 };
 
-} // namespace llvm
+} // End llvm namespace
 #endif

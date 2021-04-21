@@ -22,7 +22,6 @@
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Testing/Support/SupportHelpers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <fstream>
@@ -31,8 +30,6 @@
 #include <tuple>
 
 using namespace llvm;
-using llvm::unittest::TempDir;
-using llvm::unittest::TempFile;
 
 namespace {
 
@@ -48,6 +45,8 @@ class TempEnvVar {
     EXPECT_EQ(nullptr, old_value) << old_value;
 #if HAVE_SETENV
     setenv(name, value, true);
+#else
+#   define SKIP_ENVIRONMENT_TESTS
 #endif
   }
 
@@ -138,6 +137,36 @@ TEST(CommandLineTest, ModifyExisitingOption) {
   ASSERT_EQ(cl::Hidden, TestOption.getOptionHiddenFlag()) <<
     "Failed to modify option's hidden flag.";
 }
+#ifndef SKIP_ENVIRONMENT_TESTS
+
+const char test_env_var[] = "LLVM_TEST_COMMAND_LINE_FLAGS";
+
+cl::opt<std::string> EnvironmentTestOption("env-test-opt");
+TEST(CommandLineTest, ParseEnvironment) {
+  TempEnvVar TEV(test_env_var, "-env-test-opt=hello");
+  EXPECT_EQ("", EnvironmentTestOption);
+  cl::ParseEnvironmentOptions("CommandLineTest", test_env_var);
+  EXPECT_EQ("hello", EnvironmentTestOption);
+}
+
+// This test used to make valgrind complain
+// ("Conditional jump or move depends on uninitialised value(s)")
+//
+// Warning: Do not run any tests after this one that try to gain access to
+// registered command line options because this will likely result in a
+// SEGFAULT. This can occur because the cl::opt in the test below is declared
+// on the stack which will be destroyed after the test completes but the
+// command line system will still hold a pointer to a deallocated cl::Option.
+TEST(CommandLineTest, ParseEnvironmentToLocalVar) {
+  // Put cl::opt on stack to check for proper initialization of fields.
+  StackOption<std::string> EnvironmentTestOptionLocal("env-test-opt-local");
+  TempEnvVar TEV(test_env_var, "-env-test-opt-local=hello-local");
+  EXPECT_EQ("", EnvironmentTestOptionLocal);
+  cl::ParseEnvironmentOptions("CommandLineTest", test_env_var);
+  EXPECT_EQ("hello-local", EnvironmentTestOptionLocal);
+}
+
+#endif  // SKIP_ENVIRONMENT_TESTS
 
 TEST(CommandLineTest, UseOptionCategory) {
   StackOption<int> TestOption2("test-option", cl::cat(TestCategory));
@@ -199,15 +228,14 @@ typedef void ParserFunction(StringRef Source, StringSaver &Saver,
                             bool MarkEOLs);
 
 void testCommandLineTokenizer(ParserFunction *parse, StringRef Input,
-                              ArrayRef<const char *> Output,
-                              bool MarkEOLs = false) {
+                              const char *const Output[], size_t OutputSize) {
   SmallVector<const char *, 0> Actual;
   BumpPtrAllocator A;
   StringSaver Saver(A);
-  parse(Input, Saver, Actual, MarkEOLs);
-  EXPECT_EQ(Output.size(), Actual.size());
+  parse(Input, Saver, Actual, /*MarkEOLs=*/false);
+  EXPECT_EQ(OutputSize, Actual.size());
   for (unsigned I = 0, E = Actual.size(); I != E; ++I) {
-    if (I < Output.size()) {
+    if (I < OutputSize) {
       EXPECT_STREQ(Output[I], Actual[I]);
     }
   }
@@ -220,7 +248,8 @@ TEST(CommandLineTest, TokenizeGNUCommandLine) {
   const char *const Output[] = {
       "foo bar",     "foo bar",   "foo bar",          "foo\\bar",
       "-DFOO=bar()", "foobarbaz", "C:\\src\\foo.cpp", "C:srcfoo.cpp"};
-  testCommandLineTokenizer(cl::TokenizeGNUCommandLine, Input, Output);
+  testCommandLineTokenizer(cl::TokenizeGNUCommandLine, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeWindowsCommandLine1) {
@@ -228,85 +257,75 @@ TEST(CommandLineTest, TokenizeWindowsCommandLine1) {
       R"(a\b c\\d e\\"f g" h\"i j\\\"k "lmn" o pqr "st \"u" \v)";
   const char *const Output[] = { "a\\b", "c\\\\d", "e\\f g", "h\"i", "j\\\"k",
                                  "lmn", "o", "pqr", "st \"u", "\\v" };
-  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input, Output);
+  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeWindowsCommandLine2) {
   const char Input[] = "clang -c -DFOO=\"\"\"ABC\"\"\" x.cpp";
   const char *const Output[] = { "clang", "-c", "-DFOO=\"ABC\"", "x.cpp"};
-  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input, Output);
+  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeWindowsCommandLineQuotedLastArgument) {
   const char Input1[] = R"(a b c d "")";
   const char *const Output1[] = {"a", "b", "c", "d", ""};
-  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input1, Output1);
+  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input1, Output1,
+                           array_lengthof(Output1));
   const char Input2[] = R"(a b c d ")";
   const char *const Output2[] = {"a", "b", "c", "d"};
-  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input2, Output2);
-}
-
-TEST(CommandLineTest, TokenizeAndMarkEOLs) {
-  // Clang uses EOL marking in response files to support options that consume
-  // the rest of the arguments on the current line, but do not consume arguments
-  // from subsequent lines. For example, given these rsp files contents:
-  // /c /Zi /O2
-  // /Oy- /link /debug /opt:ref
-  // /Zc:ThreadsafeStatics-
-  //
-  // clang-cl needs to treat "/debug /opt:ref" as linker flags, and everything
-  // else as compiler flags. The tokenizer inserts nullptr sentinels into the
-  // output so that clang-cl can find the end of the current line.
-  const char Input[] = "clang -Xclang foo\n\nfoo\"bar\"baz\n x.cpp\n";
-  const char *const Output[] = {"clang", "-Xclang", "foo",
-                                nullptr, nullptr,   "foobarbaz",
-                                nullptr, "x.cpp",   nullptr};
-  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input, Output,
-                           /*MarkEOLs=*/true);
-  testCommandLineTokenizer(cl::TokenizeGNUCommandLine, Input, Output,
-                           /*MarkEOLs=*/true);
+  testCommandLineTokenizer(cl::TokenizeWindowsCommandLine, Input2, Output2,
+                           array_lengthof(Output2));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile1) {
   const char *Input = "\\";
   const char *const Output[] = { "\\" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile2) {
   const char *Input = "\\abc";
   const char *const Output[] = { "abc" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile3) {
   const char *Input = "abc\\";
   const char *const Output[] = { "abc\\" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile4) {
   const char *Input = "abc\\\n123";
   const char *const Output[] = { "abc123" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile5) {
   const char *Input = "abc\\\r\n123";
   const char *const Output[] = { "abc123" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile6) {
   const char *Input = "abc\\\n";
   const char *const Output[] = { "abc" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile7) {
   const char *Input = "abc\\\r\n";
   const char *const Output[] = { "abc" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile8) {
@@ -328,13 +347,15 @@ TEST(CommandLineTest, TokenizeConfigFile9) {
 TEST(CommandLineTest, TokenizeConfigFile10) {
   const char *Input = "\\\nabc";
   const char *const Output[] = { "abc" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, TokenizeConfigFile11) {
   const char *Input = "\\\r\nabc";
   const char *const Output[] = { "abc" };
-  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output);
+  testCommandLineTokenizer(cl::tokenizeConfigFile, Input, Output,
+                           array_lengthof(Output));
 }
 
 TEST(CommandLineTest, AliasesWithArguments) {
@@ -742,18 +763,6 @@ TEST(CommandLineTest, DefaultOptions) {
 TEST(CommandLineTest, ArgumentLimit) {
   std::string args(32 * 4096, 'a');
   EXPECT_FALSE(llvm::sys::commandLineFitsWithinSystemLimits("cl", args.data()));
-  std::string args2(256, 'a');
-  EXPECT_TRUE(llvm::sys::commandLineFitsWithinSystemLimits("cl", args2.data()));
-  if (Triple(sys::getProcessTriple()).isOSWindows()) {
-    // We use 32000 as a limit for command line length. Program name ('cl'),
-    // separating spaces and termination null character occupy 5 symbols.
-    std::string long_arg(32000 - 5, 'b');
-    EXPECT_TRUE(
-        llvm::sys::commandLineFitsWithinSystemLimits("cl", long_arg.data()));
-    long_arg += 'b';
-    EXPECT_FALSE(
-        llvm::sys::commandLineFitsWithinSystemLimits("cl", long_arg.data()));
-  }
 }
 
 TEST(CommandLineTest, ResponseFileWindows) {
@@ -765,13 +774,20 @@ TEST(CommandLineTest, ResponseFileWindows) {
   StackOption<bool> TopLevelOpt("top-level", cl::init(false));
 
   // Create response file.
-  TempFile ResponseFile("resp-", ".txt",
-                        "-top-level\npath\\dir\\file1\npath/dir/file2",
-                        /*Unique*/ true);
+  int FileDescriptor;
+  SmallString<64> TempPath;
+  std::error_code EC =
+      llvm::sys::fs::createTemporaryFile("resp-", ".txt", FileDescriptor, TempPath);
+  EXPECT_TRUE(!EC);
+
+  std::ofstream RspFile(TempPath.c_str());
+  EXPECT_TRUE(RspFile.is_open());
+  RspFile << "-top-level\npath\\dir\\file1\npath/dir/file2";
+  RspFile.close();
 
   llvm::SmallString<128> RspOpt;
   RspOpt.append(1, '@');
-  RspOpt.append(ResponseFile.path());
+  RspOpt.append(TempPath.c_str());
   const char *args[] = {"prog", RspOpt.c_str()};
   EXPECT_FALSE(TopLevelOpt);
   EXPECT_TRUE(
@@ -779,6 +795,8 @@ TEST(CommandLineTest, ResponseFileWindows) {
   EXPECT_TRUE(TopLevelOpt);
   EXPECT_TRUE(InputFilenames[0] == "path\\dir\\file1");
   EXPECT_TRUE(InputFilenames[1] == "path/dir/file2");
+
+  llvm::sys::fs::remove(TempPath.c_str());
 }
 
 TEST(CommandLineTest, ResponseFiles) {
@@ -970,34 +988,6 @@ TEST(CommandLineTest, ResponseFileRelativePath) {
               testing::Pointwise(StringEquality(), {"test/test", "-flag"}));
 }
 
-TEST(CommandLineTest, ResponseFileEOLs) {
-  vfs::InMemoryFileSystem FS;
-#ifdef _WIN32
-  const char *TestRoot = "C:\\";
-#else
-  const char *TestRoot = "//net";
-#endif
-  FS.setCurrentWorkingDirectory(TestRoot);
-  FS.addFile("eols.rsp", 0,
-             MemoryBuffer::getMemBuffer("-Xclang -Wno-whatever\n input.cpp"));
-  SmallVector<const char *, 2> Argv = {"clang", "@eols.rsp"};
-  BumpPtrAllocator A;
-  StringSaver Saver(A);
-  ASSERT_TRUE(cl::ExpandResponseFiles(Saver, cl::TokenizeWindowsCommandLine,
-                                      Argv, true, true, FS,
-                                      /*CurrentDir=*/StringRef(TestRoot)));
-  const char *Expected[] = {"clang", "-Xclang", "-Wno-whatever", nullptr,
-                            "input.cpp"};
-  ASSERT_EQ(array_lengthof(Expected), Argv.size());
-  for (size_t I = 0, E = array_lengthof(Expected); I < E; ++I) {
-    if (Expected[I] == nullptr) {
-      ASSERT_EQ(Argv[I], nullptr);
-    } else {
-      ASSERT_STREQ(Expected[I], Argv[I]);
-    }
-  }
-}
-
 TEST(CommandLineTest, SetDefautValue) {
   cl::ResetCommandLineParser();
 
@@ -1037,38 +1027,44 @@ TEST(CommandLineTest, SetDefautValue) {
 TEST(CommandLineTest, ReadConfigFile) {
   llvm::SmallVector<const char *, 1> Argv;
 
-  TempDir TestDir("unittest", /*Unique*/ true);
+  llvm::SmallString<128> TestDir;
+  std::error_code EC =
+      llvm::sys::fs::createUniqueDirectory("unittest", TestDir);
+  EXPECT_TRUE(!EC);
 
   llvm::SmallString<128> TestCfg;
-  llvm::sys::path::append(TestCfg, TestDir.path(), "foo");
-
-  TempFile ConfigFile(TestCfg, "",
-                      "# Comment\n"
-                      "-option_1\n"
-                      "@subconfig\n"
-                      "-option_3=abcd\n"
-                      "-option_4=\\\n"
-                      "cdef\n");
+  llvm::sys::path::append(TestCfg, TestDir, "foo");
+  std::ofstream ConfigFile(TestCfg.c_str());
+  EXPECT_TRUE(ConfigFile.is_open());
+  ConfigFile << "# Comment\n"
+                "-option_1\n"
+                "@subconfig\n"
+                "-option_3=abcd\n"
+                "-option_4=\\\n"
+                "cdef\n";
+  ConfigFile.close();
 
   llvm::SmallString<128> TestCfg2;
-  llvm::sys::path::append(TestCfg2, TestDir.path(), "subconfig");
-  TempFile ConfigFile2(TestCfg2, "",
-                       "-option_2\n"
-                       "\n"
-                       "   # comment\n");
+  llvm::sys::path::append(TestCfg2, TestDir, "subconfig");
+  std::ofstream ConfigFile2(TestCfg2.c_str());
+  EXPECT_TRUE(ConfigFile2.is_open());
+  ConfigFile2 << "-option_2\n"
+                 "\n"
+                 "   # comment\n";
+  ConfigFile2.close();
 
   // Make sure the current directory is not the directory where config files
   // resides. In this case the code that expands response files will not find
   // 'subconfig' unless it resolves nested inclusions relative to the including
   // file.
   llvm::SmallString<128> CurrDir;
-  std::error_code EC = llvm::sys::fs::current_path(CurrDir);
+  EC = llvm::sys::fs::current_path(CurrDir);
   EXPECT_TRUE(!EC);
-  EXPECT_TRUE(StringRef(CurrDir) != TestDir.path());
+  EXPECT_TRUE(StringRef(CurrDir) != StringRef(TestDir));
 
   llvm::BumpPtrAllocator A;
   llvm::StringSaver Saver(A);
-  bool Result = llvm::cl::readConfigFile(ConfigFile.path(), Saver, Argv);
+  bool Result = llvm::cl::readConfigFile(TestCfg, Saver, Argv);
 
   EXPECT_TRUE(Result);
   EXPECT_EQ(Argv.size(), 4U);
@@ -1076,6 +1072,10 @@ TEST(CommandLineTest, ReadConfigFile) {
   EXPECT_STREQ(Argv[1], "-option_2");
   EXPECT_STREQ(Argv[2], "-option_3=abcd");
   EXPECT_STREQ(Argv[3], "-option_4=cdef");
+
+  llvm::sys::fs::remove(TestCfg2);
+  llvm::sys::fs::remove(TestCfg);
+  llvm::sys::fs::remove(TestDir);
 }
 
 TEST(CommandLineTest, PositionalEatArgsError) {
@@ -1260,28 +1260,6 @@ TEST_F(PrintOptionInfoTest, PrintOptionInfoEmptyValueDescription) {
   EXPECT_EQ(Output,
             ("  --" + Opt + "=<value> - " + HelpText + "\n"
              "    =v1\n").str());
-  // clang-format on
-}
-
-TEST_F(PrintOptionInfoTest, PrintOptionInfoMultilineValueDescription) {
-  std::string Output =
-      runTest(cl::ValueRequired,
-              cl::values(clEnumValN(OptionValue::Val, "v1",
-                                    "This is the first enum value\n"
-                                    "which has a really long description\n"
-                                    "thus it is multi-line."),
-                         clEnumValN(OptionValue::Val, "",
-                                    "This is an unnamed enum value option\n"
-                                    "Should be indented as well")));
-
-  // clang-format off
-  EXPECT_EQ(Output,
-            ("  --" + Opt + "=<value> - " + HelpText + "\n"
-             "    =v1                 -   This is the first enum value\n"
-             "                            which has a really long description\n"
-             "                            thus it is multi-line.\n"
-             "    =<empty>            -   This is an unnamed enum value option\n"
-             "                            Should be indented as well\n").str());
   // clang-format on
 }
 

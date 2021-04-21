@@ -15,7 +15,7 @@
 #define LLVM_LIB_TARGET_AMDGPU_MCTARGETDESC_AMDGPUMCCODEEMITTER_H
 
 #include "llvm/MC/MCCodeEmitter.h"
-#include <cstdint>
+#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 

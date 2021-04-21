@@ -1,5 +1,3 @@
-add_llvm_component_group(ARM HAS_JIT)
-
 set(LLVM_TARGET_DEFINITIONS ARM.td)
 
 tablegen(LLVM ARMGenAsmMatcher.inc -gen-asm-matcher)
@@ -41,7 +39,6 @@ add_llvm_target(ARMCodeGen
   ARMParallelDSP.cpp
   ARMLoadStoreOptimizer.cpp
   ARMLowOverheadLoops.cpp
-  ARMBlockPlacement.cpp
   ARMMCInstLower.cpp
   ARMMachineFunctionInfo.cpp
   ARMMacroFusion.cpp
@@ -49,7 +46,6 @@ add_llvm_target(ARMCodeGen
   ARMOptimizeBarriersPass.cpp
   ARMRegisterBankInfo.cpp
   ARMSelectionDAGInfo.cpp
-  ARMSLSHardening.cpp
   ARMSubtarget.cpp
   ARMTargetMachine.cpp
   ARMTargetObjectFile.cpp
@@ -65,26 +61,6 @@ add_llvm_target(ARMCodeGen
   Thumb2ITBlockPass.cpp
   Thumb2InstrInfo.cpp
   Thumb2SizeReduction.cpp
-
-  LINK_COMPONENTS
-  ARMDesc
-  ARMInfo
-  Analysis
-  AsmPrinter
-  CodeGen
-  Core
-  MC
-  Scalar
-  SelectionDAG
-  Support
-  Target
-  GlobalISel
-  ARMUtils
-  TransformUtils
-  CFGuard
-
-  ADD_TO_COMPONENT
-  ARM
   )
 
 add_subdirectory(AsmParser)

@@ -132,10 +132,12 @@ const PfmCountersInfo &ExegesisTarget::getPfmCounters(StringRef CpuName) const {
          "CpuPfmCounters table is not sorted");
 
   // Find entry
-  auto Found = llvm::lower_bound(CpuPfmCounters, CpuName);
+  auto Found =
+      std::lower_bound(CpuPfmCounters.begin(), CpuPfmCounters.end(), CpuName);
   if (Found == CpuPfmCounters.end() || StringRef(Found->CpuName) != CpuName) {
     // Use the default.
-    if (!CpuPfmCounters.empty() && CpuPfmCounters.begin()->CpuName[0] == '\0') {
+    if (CpuPfmCounters.begin() != CpuPfmCounters.end() &&
+        CpuPfmCounters.begin()->CpuName[0] == '\0') {
       Found = CpuPfmCounters.begin(); // The target specifies a default.
     } else {
       return PfmCountersInfo::Default; // No default for the target.
@@ -144,8 +146,6 @@ const PfmCountersInfo &ExegesisTarget::getPfmCounters(StringRef CpuName) const {
   assert(Found->PCI && "Missing counters");
   return *Found->PCI;
 }
-
-ExegesisTarget::SavedState::~SavedState() {} // anchor.
 
 namespace {
 

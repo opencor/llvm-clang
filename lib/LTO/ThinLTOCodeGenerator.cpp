@@ -37,7 +37,6 @@
 #include "llvm/LTO/SummaryBasedOptimizations.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Object/IRObjectFile.h"
-#include "llvm/Remarks/HotnessThresholdParser.h"
 #include "llvm/Support/CachePruning.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
@@ -76,8 +75,6 @@ extern cl::opt<bool> LTODiscardValueNames;
 extern cl::opt<std::string> RemarksFilename;
 extern cl::opt<std::string> RemarksPasses;
 extern cl::opt<bool> RemarksWithHotness;
-extern cl::opt<Optional<uint64_t>, false, remarks::HotnessThresholdParser>
-    RemarksHotnessThreshold;
 extern cl::opt<std::string> RemarksFormat;
 }
 
@@ -272,26 +269,16 @@ addUsedSymbolToPreservedGUID(const lto::InputFile &File,
 }
 
 // Convert the PreservedSymbols map from "Name" based to "GUID" based.
-static void computeGUIDPreservedSymbols(const lto::InputFile &File,
-                                        const StringSet<> &PreservedSymbols,
-                                        const Triple &TheTriple,
-                                        DenseSet<GlobalValue::GUID> &GUIDs) {
-  // Iterate the symbols in the input file and if the input has preserved symbol
-  // compute the GUID for the symbol.
-  for (const auto &Sym : File.symbols()) {
-    if (PreservedSymbols.count(Sym.getName()) && !Sym.getIRName().empty())
-      GUIDs.insert(GlobalValue::getGUID(GlobalValue::getGlobalIdentifier(
-          Sym.getIRName(), GlobalValue::ExternalLinkage, "")));
-  }
-}
-
 static DenseSet<GlobalValue::GUID>
-computeGUIDPreservedSymbols(const lto::InputFile &File,
-                            const StringSet<> &PreservedSymbols,
+computeGUIDPreservedSymbols(const StringSet<> &PreservedSymbols,
                             const Triple &TheTriple) {
   DenseSet<GlobalValue::GUID> GUIDPreservedSymbols(PreservedSymbols.size());
-  computeGUIDPreservedSymbols(File, PreservedSymbols, TheTriple,
-                              GUIDPreservedSymbols);
+  for (auto &Entry : PreservedSymbols) {
+    StringRef Name = Entry.first();
+    if (TheTriple.isOSBinFormatMachO() && Name.size() > 0 && Name[0] == '_')
+      Name = Name.drop_front();
+    GUIDPreservedSymbols.insert(GlobalValue::getGUID(Name));
+  }
   return GUIDPreservedSymbols;
 }
 
@@ -578,12 +565,9 @@ std::unique_ptr<TargetMachine> TargetMachineBuilder::create() const {
   Features.getDefaultSubtargetFeatures(TheTriple);
   std::string FeatureStr = Features.getString();
 
-  std::unique_ptr<TargetMachine> TM(
+  return std::unique_ptr<TargetMachine>(
       TheTarget->createTargetMachine(TheTriple.str(), MCpu, FeatureStr, Options,
                                      RelocModel, None, CGOptLevel));
-  assert(TM && "Cannot create target machine");
-
-  return TM;
 }
 
 /**
@@ -668,7 +652,7 @@ void ThinLTOCodeGenerator::promote(Module &TheModule, ModuleSummaryIndex &Index,
 
   // Convert the preserved symbols set from string to GUID
   auto GUIDPreservedSymbols = computeGUIDPreservedSymbols(
-      File, PreservedSymbols, Triple(TheModule.getTargetTriple()));
+      PreservedSymbols, Triple(TheModule.getTargetTriple()));
 
   // Add used symbol to the preserved symbols.
   addUsedSymbolToPreservedGUID(File, GUIDPreservedSymbols);
@@ -718,7 +702,7 @@ void ThinLTOCodeGenerator::crossModuleImport(Module &TheModule,
 
   // Convert the preserved symbols set from string to GUID
   auto GUIDPreservedSymbols = computeGUIDPreservedSymbols(
-      File, PreservedSymbols, Triple(TheModule.getTargetTriple()));
+      PreservedSymbols, Triple(TheModule.getTargetTriple()));
 
   addUsedSymbolToPreservedGUID(File, GUIDPreservedSymbols);
 
@@ -753,7 +737,7 @@ void ThinLTOCodeGenerator::gatherImportedSummariesForModule(
 
   // Convert the preserved symbols set from string to GUID
   auto GUIDPreservedSymbols = computeGUIDPreservedSymbols(
-      File, PreservedSymbols, Triple(TheModule.getTargetTriple()));
+      PreservedSymbols, Triple(TheModule.getTargetTriple()));
 
   addUsedSymbolToPreservedGUID(File, GUIDPreservedSymbols);
 
@@ -786,7 +770,7 @@ void ThinLTOCodeGenerator::emitImports(Module &TheModule, StringRef OutputName,
 
   // Convert the preserved symbols set from string to GUID
   auto GUIDPreservedSymbols = computeGUIDPreservedSymbols(
-      File, PreservedSymbols, Triple(TheModule.getTargetTriple()));
+      PreservedSymbols, Triple(TheModule.getTargetTriple()));
 
   addUsedSymbolToPreservedGUID(File, GUIDPreservedSymbols);
 
@@ -824,7 +808,7 @@ void ThinLTOCodeGenerator::internalize(Module &TheModule,
 
   // Convert the preserved symbols set from string to GUID
   auto GUIDPreservedSymbols =
-      computeGUIDPreservedSymbols(File, PreservedSymbols, TMBuilder.TheTriple);
+      computeGUIDPreservedSymbols(PreservedSymbols, TMBuilder.TheTriple);
 
   addUsedSymbolToPreservedGUID(File, GUIDPreservedSymbols);
 
@@ -988,10 +972,8 @@ void ThinLTOCodeGenerator::run() {
 
   // Convert the preserved symbols set from string to GUID, this is needed for
   // computing the caching hash and the internalization.
-  DenseSet<GlobalValue::GUID> GUIDPreservedSymbols;
-  for (const auto &M : Modules)
-    computeGUIDPreservedSymbols(*M, PreservedSymbols, TMBuilder.TheTriple,
-                                GUIDPreservedSymbols);
+  auto GUIDPreservedSymbols =
+      computeGUIDPreservedSymbols(PreservedSymbols, TMBuilder.TheTriple);
 
   // Add used symbol from inputs to the preserved symbols.
   for (const auto &M : Modules)
@@ -1060,11 +1042,19 @@ void ThinLTOCodeGenerator::run() {
     ModuleToDefinedGVSummaries[ModuleIdentifier];
   }
 
-  std::vector<BitcodeModule *> ModulesVec;
-  ModulesVec.reserve(Modules.size());
-  for (auto &Mod : Modules)
-    ModulesVec.push_back(&Mod->getSingleBitcodeModule());
-  std::vector<int> ModulesOrdering = lto::generateModulesOrdering(ModulesVec);
+  // Compute the ordering we will process the inputs: the rough heuristic here
+  // is to sort them per size so that the largest module get schedule as soon as
+  // possible. This is purely a compile-time optimization.
+  std::vector<int> ModulesOrdering;
+  ModulesOrdering.resize(Modules.size());
+  std::iota(ModulesOrdering.begin(), ModulesOrdering.end(), 0);
+  llvm::sort(ModulesOrdering, [&](int LeftIndex, int RightIndex) {
+    auto LSize =
+        Modules[LeftIndex]->getSingleBitcodeModule().getBuffer().size();
+    auto RSize =
+        Modules[RightIndex]->getSingleBitcodeModule().getBuffer().size();
+    return LSize > RSize;
+  });
 
   // Parallel optimizer + codegen
   {
@@ -1107,7 +1097,7 @@ void ThinLTOCodeGenerator::run() {
         Context.enableDebugTypeODRUniquing();
         auto DiagFileOrErr = lto::setupLLVMOptimizationRemarks(
             Context, RemarksFilename, RemarksPasses, RemarksFormat,
-            RemarksWithHotness, RemarksHotnessThreshold, count);
+            RemarksWithHotness, count);
         if (!DiagFileOrErr) {
           errs() << "Error: " << toString(DiagFileOrErr.takeError()) << "\n";
           report_fatal_error("ThinLTO: Can't get an output file for the "

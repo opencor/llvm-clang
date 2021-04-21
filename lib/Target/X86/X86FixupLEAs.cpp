@@ -376,8 +376,7 @@ bool FixupLEAPass::optTwoAddrLEA(MachineBasicBlock::iterator &I,
   const MachineOperand &Segment = MI.getOperand(1 + X86::AddrSegmentReg);
 
   if (Segment.getReg() != 0 || !Disp.isImm() || Scale.getImm() > 1 ||
-      MBB.computeRegisterLiveness(TRI, X86::EFLAGS, I) !=
-          MachineBasicBlock::LQR_Dead)
+      !TII->isSafeToClobberEFLAGS(MBB, I))
     return false;
 
   Register DestReg = MI.getOperand(0).getReg();
@@ -450,7 +449,6 @@ bool FixupLEAPass::optTwoAddrLEA(MachineBasicBlock::iterator &I,
   } else
     return false;
 
-  MBB.getParent()->substituteDebugValuesForInst(*I, *NewMI, 1);
   MBB.erase(I);
   I = NewMI;
   return true;
@@ -486,7 +484,6 @@ void FixupLEAPass::seekLEAFixup(MachineOperand &p,
       LLVM_DEBUG(dbgs() << "FixLEA: Candidate to replace:"; MBI->dump(););
       // now to replace with an equivalent LEA...
       LLVM_DEBUG(dbgs() << "FixLEA: Replaced by: "; NewMI->dump(););
-      MBB.getParent()->substituteDebugValuesForInst(*MBI, *NewMI, 1);
       MBB.erase(MBI);
       MachineBasicBlock::iterator J =
           static_cast<MachineBasicBlock::iterator>(NewMI);
@@ -508,8 +505,7 @@ void FixupLEAPass::processInstructionForSlowLEA(MachineBasicBlock::iterator &I,
   const MachineOperand &Segment = MI.getOperand(1 + X86::AddrSegmentReg);
 
   if (Segment.getReg() != 0 || !Offset.isImm() ||
-      MBB.computeRegisterLiveness(TRI, X86::EFLAGS, I, 4) !=
-          MachineBasicBlock::LQR_Dead)
+      !TII->isSafeToClobberEFLAGS(MBB, I))
     return;
   const Register DstR = Dst.getReg();
   const Register SrcR1 = Base.getReg();
@@ -540,7 +536,6 @@ void FixupLEAPass::processInstructionForSlowLEA(MachineBasicBlock::iterator &I,
     LLVM_DEBUG(NewMI->dump(););
   }
   if (NewMI) {
-    MBB.getParent()->substituteDebugValuesForInst(*I, *NewMI, 1);
     MBB.erase(I);
     I = NewMI;
   }
@@ -560,8 +555,7 @@ void FixupLEAPass::processInstrForSlow3OpLEA(MachineBasicBlock::iterator &I,
   const MachineOperand &Segment = MI.getOperand(1 + X86::AddrSegmentReg);
 
   if (!(TII->isThreeOperandsLEA(MI) || hasInefficientLEABaseReg(Base, Index)) ||
-      MBB.computeRegisterLiveness(TRI, X86::EFLAGS, I, 4) !=
-          MachineBasicBlock::LQR_Dead ||
+      !TII->isSafeToClobberEFLAGS(MBB, MI) ||
       Segment.getReg() != X86::NoRegister)
     return;
 
@@ -647,7 +641,6 @@ void FixupLEAPass::processInstrForSlow3OpLEA(MachineBasicBlock::iterator &I,
       }
     }
 
-    MBB.getParent()->substituteDebugValuesForInst(*I, *NewMI, 1);
     MBB.erase(I);
     I = NewMI;
     return;
@@ -673,7 +666,6 @@ void FixupLEAPass::processInstrForSlow3OpLEA(MachineBasicBlock::iterator &I,
                 .add(Index);
     LLVM_DEBUG(NewMI->dump(););
 
-    MBB.getParent()->substituteDebugValuesForInst(*I, *NewMI, 1);
     MBB.erase(I);
     I = NewMI;
     return;
@@ -696,7 +688,6 @@ void FixupLEAPass::processInstrForSlow3OpLEA(MachineBasicBlock::iterator &I,
               .add(Base);
   LLVM_DEBUG(NewMI->dump(););
 
-  MBB.getParent()->substituteDebugValuesForInst(*I, *NewMI, 1);
   MBB.erase(I);
   I = NewMI;
 }

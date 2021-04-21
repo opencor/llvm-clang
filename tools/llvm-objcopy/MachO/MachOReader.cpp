@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "MachOReader.h"
+#include "../llvm-objcopy.h"
 #include "Object.h"
 #include "llvm/BinaryFormat/MachO.h"
 #include "llvm/Object/MachO.h"
-#include "llvm/Support/Errc.h"
 #include <memory>
 
 namespace llvm {
@@ -35,7 +35,7 @@ Section constructSectionCommon(SectionType Sec, uint32_t Index) {
   S.Index = Index;
   S.Addr = Sec.addr;
   S.Size = Sec.size;
-  S.OriginalOffset = Sec.offset;
+  S.Offset = Sec.offset;
   S.Align = Sec.align;
   S.RelOff = Sec.reloff;
   S.NReloc = Sec.nreloc;
@@ -59,8 +59,9 @@ template <> Section constructSection(MachO::section_64 Sec, uint32_t Index) {
   return S;
 }
 
+// TODO: get rid of reportError and make MachOReader return Expected<> instead.
 template <typename SectionType, typename SegmentType>
-Expected<std::vector<std::unique_ptr<Section>>>
+std::vector<std::unique_ptr<Section>>
 extractSections(const object::MachOObjectFile::LoadCommandInfo &LoadCmd,
                 const object::MachOObjectFile &MachOObj,
                 uint32_t &NextSectionIndex) {
@@ -85,15 +86,14 @@ extractSections(const object::MachOObjectFile::LoadCommandInfo &LoadCmd,
     Expected<object::SectionRef> SecRef =
         MachOObj.getSection(NextSectionIndex++);
     if (!SecRef)
-      return SecRef.takeError();
+      reportError(MachOObj.getFileName(), SecRef.takeError());
 
-    Expected<ArrayRef<uint8_t>> Data =
-        MachOObj.getSectionContents(SecRef->getRawDataRefImpl());
-    if (!Data)
-      return Data.takeError();
-
-    S.Content =
-        StringRef(reinterpret_cast<const char *>(Data->data()), Data->size());
+    if (Expected<ArrayRef<uint8_t>> E =
+            MachOObj.getSectionContents(SecRef->getRawDataRefImpl()))
+      S.Content =
+          StringRef(reinterpret_cast<const char *>(E->data()), E->size());
+    else
+      reportError(MachOObj.getFileName(), E.takeError());
 
     S.Relocations.reserve(S.NReloc);
     for (auto RI = MachOObj.section_rel_begin(SecRef->getRawDataRefImpl()),
@@ -110,10 +110,10 @@ extractSections(const object::MachOObjectFile::LoadCommandInfo &LoadCmd,
     assert(S.NReloc == S.Relocations.size() &&
            "Incorrect number of relocations");
   }
-  return std::move(Sections);
+  return Sections;
 }
 
-Error MachOReader::readLoadCommands(Object &O) const {
+void MachOReader::readLoadCommands(Object &O) const {
   // For MachO sections indices start from 1.
   uint32_t NextSectionIndex = 1;
   for (auto LoadCmd : MachOObj.load_commands()) {
@@ -123,20 +123,13 @@ Error MachOReader::readLoadCommands(Object &O) const {
       O.CodeSignatureCommandIndex = O.LoadCommands.size();
       break;
     case MachO::LC_SEGMENT:
-      if (Expected<std::vector<std::unique_ptr<Section>>> Sections =
-              extractSections<MachO::section, MachO::segment_command>(
-                  LoadCmd, MachOObj, NextSectionIndex))
-        LC.Sections = std::move(*Sections);
-      else
-        return Sections.takeError();
+      LC.Sections = extractSections<MachO::section, MachO::segment_command>(
+          LoadCmd, MachOObj, NextSectionIndex);
       break;
     case MachO::LC_SEGMENT_64:
-      if (Expected<std::vector<std::unique_ptr<Section>>> Sections =
-              extractSections<MachO::section_64, MachO::segment_command_64>(
-                  LoadCmd, MachOObj, NextSectionIndex))
-        LC.Sections = std::move(*Sections);
-      else
-        return Sections.takeError();
+      LC.Sections =
+          extractSections<MachO::section_64, MachO::segment_command_64>(
+              LoadCmd, MachOObj, NextSectionIndex);
       break;
     case MachO::LC_SYMTAB:
       O.SymTabCommandIndex = O.LoadCommands.size();
@@ -184,7 +177,6 @@ Error MachOReader::readLoadCommands(Object &O) const {
     }
     O.LoadCommands.push_back(std::move(LC));
   }
-  return Error::success();
 }
 
 template <typename nlist_t>
@@ -316,11 +308,10 @@ void MachOReader::readSwiftVersion(Object &O) const {
       }
 }
 
-Expected<std::unique_ptr<Object>> MachOReader::create() const {
+std::unique_ptr<Object> MachOReader::create() const {
   auto Obj = std::make_unique<Object>();
   readHeader(*Obj);
-  if (Error E = readLoadCommands(*Obj))
-    return std::move(E);
+  readLoadCommands(*Obj);
   readSymbolTable(*Obj);
   setSymbolInRelocationInfo(*Obj);
   readRebaseInfo(*Obj);
@@ -333,7 +324,7 @@ Expected<std::unique_ptr<Object>> MachOReader::create() const {
   readFunctionStartsData(*Obj);
   readIndirectSymbolTable(*Obj);
   readSwiftVersion(*Obj);
-  return std::move(Obj);
+  return Obj;
 }
 
 } // end namespace macho

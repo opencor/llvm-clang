@@ -10,8 +10,6 @@
 // Only inference is supported.
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/Config/config.h"
-#if defined(LLVM_HAVE_TF_AOT)
 
 #include "llvm/Analysis/InlineModelFeatureMaps.h"
 #include "llvm/Analysis/MLInlineAdvisor.h"
@@ -25,8 +23,8 @@
 using namespace llvm;
 namespace {
 
-const char FeedPrefix[] = "feed_";
-const char FetchPrefix[] = "fetch_";
+static const char *const FeedPrefix = "feed_";
+static const char *const FetchPrefix = "fetch_";
 
 /// MLModelRunner - production mode implementation. It uses a AOT-compiled
 /// SavedModel for efficient execution.
@@ -87,4 +85,3 @@ llvm::getReleaseModeAdvisor(Module &M, ModuleAnalysisManager &MAM) {
   auto AOTRunner = std::make_unique<ReleaseModeModelRunner>(M.getContext());
   return std::make_unique<MLInlineAdvisor>(M, MAM, std::move(AOTRunner));
 }
-#endif // defined(LLVM_HAVE_TF_AOT)

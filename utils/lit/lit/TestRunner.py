@@ -1081,7 +1081,9 @@ def getDefaultSubstitutions(test, tmpDir, tmpBase, normalize_slashes=False):
         tmpDir = tmpDir.replace('\\', '/')
         tmpBase = tmpBase.replace('\\', '/')
 
+    # We use #_MARKER_# to hide %% while we do the other substitutions.
     substitutions = []
+    substitutions.extend([('%%', '#_MARKER_#')])
     substitutions.extend(test.config.substitutions)
     tmpName = tmpBase + '.tmp'
     baseName = os.path.basename(tmpBase)
@@ -1091,7 +1093,8 @@ def getDefaultSubstitutions(test, tmpDir, tmpBase, normalize_slashes=False):
                           ('%{pathsep}', os.pathsep),
                           ('%t', tmpName),
                           ('%basename_t', baseName),
-                          ('%T', tmpDir)])
+                          ('%T', tmpDir),
+                          ('#_MARKER_#', '%')])
 
     # "%/[STpst]" should be normalized.
     substitutions.extend([
@@ -1105,8 +1108,8 @@ def getDefaultSubstitutions(test, tmpDir, tmpBase, normalize_slashes=False):
     # "%{/[STpst]:regex_replacement}" should be normalized like "%/[STpst]" but we're
     # also in a regex replacement context of a s@@@ regex.
     def regex_escape(s):
-        s = s.replace('@', r'\@')
-        s = s.replace('&', r'\&')
+        s = s.replace('@', '\@')
+        s = s.replace('&', '\&')
         return s
     substitutions.extend([
             ('%{/s:regex_replacement}',
@@ -1156,14 +1159,6 @@ def applySubstitutions(script, substitutions, recursion_limit=None):
     `recursion_limit` times, it is an error. If the `recursion_limit` is
     `None` (the default), no recursive substitution is performed at all.
     """
-
-    # We use #_MARKER_# to hide %% while we do the other substitutions.
-    def escape(ln):
-        return _caching_re_compile('%%').sub('#_MARKER_#', ln)
-
-    def unescape(ln):
-        return _caching_re_compile('#_MARKER_#').sub('%', ln)
-
     def processLine(ln):
         # Apply substitutions
         for a,b in substitutions:
@@ -1176,7 +1171,7 @@ def applySubstitutions(script, substitutions, recursion_limit=None):
             # short-lived, since the set of substitutions is fairly small, and
             # since thrashing has such bad consequences, not bounding the cache
             # seems reasonable.
-            ln = _caching_re_compile(a).sub(str(b), escape(ln))
+            ln = _caching_re_compile(a).sub(b, ln)
 
         # Strip the trailing newline and any extra whitespace.
         return ln.strip()
@@ -1198,9 +1193,10 @@ def applySubstitutions(script, substitutions, recursion_limit=None):
 
         return processed
 
+    # Note Python 3 map() gives an iterator rather than a list so explicitly
+    # convert to list before returning.
     process = processLine if recursion_limit is None else processLineToFixedPoint
-    
-    return [unescape(process(ln)) for ln in script]
+    return list(map(process, script))
 
 
 class ParserKind(object):

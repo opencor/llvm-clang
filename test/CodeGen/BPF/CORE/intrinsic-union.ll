@@ -1,6 +1,5 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck %s
+; RUN: llc -march=bpfel -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -march=bpfel -mattr=+alu32 -filetype=asm -o - %s | FileCheck %s
 ;
 ; Source code:
 ;   union u { int a; int b; };
@@ -8,9 +7,7 @@
 ;   int get_value(const void *addr);
 ;   int test(union u *arg) { return get_value(_(&arg->b)); }
 ; Compiler flag to generate IR:
-;   clang -target bpf -S -O2 -g -emit-llvm -Xclang -disable-llvm-passes test.c
-
-target triple = "bpf"
+;   clang -target bpf -S -O2 -g -emit-llvm test.c
 
 %union.u = type { i32 }
 

@@ -20,19 +20,7 @@ using namespace llvm;
 
 WebAssemblyDebugValueManager::WebAssemblyDebugValueManager(
     MachineInstr *Instr) {
-  // This code differs from MachineInstr::collectDebugValues in that it scans
-  // the whole BB, not just contiguous DBG_VALUEs.
-  if (!Instr->getOperand(0).isReg())
-    return;
-
-  MachineBasicBlock::iterator DI = *Instr;
-  ++DI;
-  for (MachineBasicBlock::iterator DE = Instr->getParent()->end(); DI != DE;
-       ++DI) {
-    if (DI->isDebugValue() &&
-        DI->getDebugOperandForReg(Instr->getOperand(0).getReg()))
-      DbgValues.push_back(&*DI);
-  }
+  Instr->collectDebugValues(DbgValues);
 }
 
 void WebAssemblyDebugValueManager::move(MachineInstr *Insert) {

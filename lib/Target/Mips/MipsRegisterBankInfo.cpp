@@ -716,10 +716,10 @@ void MipsRegisterBankInfo::setRegBank(MachineInstr &MI,
 
 static void
 combineAwayG_UNMERGE_VALUES(LegalizationArtifactCombiner &ArtCombiner,
-                            MachineInstr &MI, GISelChangeObserver &Observer) {
+                            MachineInstr &MI, GISelObserverWrapper &Observer) {
   SmallVector<Register, 4> UpdatedDefs;
   SmallVector<MachineInstr *, 2> DeadInstrs;
-  ArtCombiner.tryCombineUnmergeValues(MI, DeadInstrs, UpdatedDefs, Observer);
+  ArtCombiner.tryCombineMerges(MI, DeadInstrs, UpdatedDefs, Observer);
   for (MachineInstr *DeadMI : DeadInstrs)
     DeadMI->eraseFromParent();
 }
@@ -728,13 +728,14 @@ void MipsRegisterBankInfo::applyMappingImpl(
     const OperandsMapper &OpdMapper) const {
   MachineInstr &MI = OpdMapper.getMI();
   InstListTy NewInstrs;
+  MachineIRBuilder B(MI);
   MachineFunction *MF = MI.getMF();
   MachineRegisterInfo &MRI = OpdMapper.getMRI();
   const LegalizerInfo &LegInfo = *MF->getSubtarget().getLegalizerInfo();
 
   InstManager NewInstrObserver(NewInstrs);
-  MachineIRBuilder B(MI, NewInstrObserver);
-  LegalizerHelper Helper(*MF, NewInstrObserver, B);
+  GISelObserverWrapper WrapperObserver(&NewInstrObserver);
+  LegalizerHelper Helper(*MF, WrapperObserver, B);
   LegalizationArtifactCombiner ArtCombiner(B, MF->getRegInfo(), LegInfo);
 
   switch (MI.getOpcode()) {
@@ -751,7 +752,7 @@ void MipsRegisterBankInfo::applyMappingImpl(
       // not be considered for regbank selection. RegBankSelect for mips
       // visits/makes corresponding G_MERGE first. Combine them here.
       if (NewMI->getOpcode() == TargetOpcode::G_UNMERGE_VALUES)
-        combineAwayG_UNMERGE_VALUES(ArtCombiner, *NewMI, NewInstrObserver);
+        combineAwayG_UNMERGE_VALUES(ArtCombiner, *NewMI, WrapperObserver);
       // This G_MERGE will be combined away when its corresponding G_UNMERGE
       // gets regBankSelected.
       else if (NewMI->getOpcode() == TargetOpcode::G_MERGE_VALUES)
@@ -763,7 +764,7 @@ void MipsRegisterBankInfo::applyMappingImpl(
     return;
   }
   case TargetOpcode::G_UNMERGE_VALUES:
-    combineAwayG_UNMERGE_VALUES(ArtCombiner, MI, NewInstrObserver);
+    combineAwayG_UNMERGE_VALUES(ArtCombiner, MI, WrapperObserver);
     return;
   default:
     break;

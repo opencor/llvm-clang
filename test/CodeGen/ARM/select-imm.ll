@@ -85,8 +85,7 @@ entry:
 define i32 @t4(i32 %a, i32 %b, i32 %x) nounwind {
 entry:
 ; ARM-LABEL: t4:
-; ARM: mvn [[R0:r[0-9]+]], #170
-; ARM: sub [[R0:r[0-9]+]], [[R0:r[0-9]+]], #11141120
+; ARM: ldr
 ; ARM: mov{{lt|ge}}
 
 ; ARMT2-LABEL: t4:

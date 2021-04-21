@@ -26,6 +26,7 @@
 #include <map>
 #include <set>
 #include <utility>
+#include <vector>
 
 namespace llvm {
 

@@ -55,10 +55,10 @@
 ; RUN: --check-prefix=CHECK-SAVED-ALL-GISEL
 
 ; Used to exhaust the supply of GPRs.
-@var = dso_local global [30 x i64] zeroinitializer
+@var = global [30 x i64] zeroinitializer
 
 ; Check that callee preserves additional CSRs.
-define dso_local void @callee() {
+define void @callee() {
 ; CHECK-LABEL: callee
 
 ; CHECK-SAVED-X8: str x8, [sp
@@ -100,7 +100,7 @@ define dso_local void @callee() {
 }
 
 ; Check that caller doesn't shy away from allocating additional CSRs.
-define dso_local void @caller() {
+define void @caller() {
 ; CHECK-LABEL: caller
 
   %val = load volatile [30 x i64], [30 x i64]* @var

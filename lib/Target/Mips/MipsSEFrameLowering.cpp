@@ -774,9 +774,9 @@ void MipsSEFrameLowering::emitInterruptEpilogueStub(
       .addImm(0);
 }
 
-StackOffset
-MipsSEFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
-                                            Register &FrameReg) const {
+int MipsSEFrameLowering::getFrameIndexReference(const MachineFunction &MF,
+                                                int FI,
+                                                Register &FrameReg) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   MipsABIInfo ABI = STI.getABI();
 
@@ -785,9 +785,8 @@ MipsSEFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   else
     FrameReg = hasBP(MF) ? ABI.GetBasePtr() : ABI.GetStackPtr();
 
-  return StackOffset::getFixed(MFI.getObjectOffset(FI) + MFI.getStackSize() -
-                               getOffsetOfLocalArea() +
-                               MFI.getOffsetAdjustment());
+  return MFI.getObjectOffset(FI) + MFI.getStackSize() -
+         getOffsetOfLocalArea() + MFI.getOffsetAdjustment();
 }
 
 bool MipsSEFrameLowering::spillCalleeSavedRegisters(

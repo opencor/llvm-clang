@@ -6,5 +6,8 @@ executable("llvm-opt-report") {
     "//llvm/lib/Remarks",
     "//llvm/lib/Support",
   ]
-  sources = [ "OptReport.cpp" ]
+  sources = [
+    # Make `gn format` not collapse this, for sync_source_lists_from_cmake.py.
+    "OptReport.cpp",
+  ]
 }

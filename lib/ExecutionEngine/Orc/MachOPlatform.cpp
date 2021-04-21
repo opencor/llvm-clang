@@ -159,9 +159,7 @@ Error MachOPlatform::setupJITDylib(JITDylib &JD) {
   return ObjLinkingLayer.add(JD, std::move(ObjBuffer));
 }
 
-Error MachOPlatform::notifyAdding(ResourceTracker &RT,
-                                  const MaterializationUnit &MU) {
-  auto &JD = RT.getJITDylib();
+Error MachOPlatform::notifyAdding(JITDylib &JD, const MaterializationUnit &MU) {
   const auto &InitSym = MU.getInitializerSymbol();
   if (!InitSym)
     return Error::success();
@@ -175,7 +173,7 @@ Error MachOPlatform::notifyAdding(ResourceTracker &RT,
   return Error::success();
 }
 
-Error MachOPlatform::notifyRemoving(ResourceTracker &RT) {
+Error MachOPlatform::notifyRemoving(JITDylib &JD, VModuleKey K) {
   llvm_unreachable("Not supported yet");
 }
 
@@ -187,19 +185,19 @@ MachOPlatform::getInitializerSequence(JITDylib &JD) {
            << JD.getName() << "\n";
   });
 
-  std::vector<JITDylibSP> DFSLinkOrder;
+  std::vector<JITDylib *> DFSLinkOrder;
 
   while (true) {
 
     DenseMap<JITDylib *, SymbolLookupSet> NewInitSymbols;
 
     ES.runSessionLocked([&]() {
-      DFSLinkOrder = JD.getDFSLinkOrder();
+      DFSLinkOrder = getDFSLinkOrder(JD);
 
-      for (auto &InitJD : DFSLinkOrder) {
-        auto RISItr = RegisteredInitSymbols.find(InitJD.get());
+      for (auto *InitJD : DFSLinkOrder) {
+        auto RISItr = RegisteredInitSymbols.find(InitJD);
         if (RISItr != RegisteredInitSymbols.end()) {
-          NewInitSymbols[InitJD.get()] = std::move(RISItr->second);
+          NewInitSymbols[InitJD] = std::move(RISItr->second);
           RegisteredInitSymbols.erase(RISItr);
         }
       }
@@ -231,14 +229,14 @@ MachOPlatform::getInitializerSequence(JITDylib &JD) {
   InitializerSequence FullInitSeq;
   {
     std::lock_guard<std::mutex> Lock(InitSeqsMutex);
-    for (auto &InitJD : reverse(DFSLinkOrder)) {
+    for (auto *InitJD : reverse(DFSLinkOrder)) {
       LLVM_DEBUG({
         dbgs() << "MachOPlatform: Appending inits for \"" << InitJD->getName()
                << "\" to sequence\n";
       });
-      auto ISItr = InitSeqs.find(InitJD.get());
+      auto ISItr = InitSeqs.find(InitJD);
       if (ISItr != InitSeqs.end()) {
-        FullInitSeq.emplace_back(InitJD.get(), std::move(ISItr->second));
+        FullInitSeq.emplace_back(InitJD, std::move(ISItr->second));
         InitSeqs.erase(ISItr);
       }
     }
@@ -249,17 +247,37 @@ MachOPlatform::getInitializerSequence(JITDylib &JD) {
 
 Expected<MachOPlatform::DeinitializerSequence>
 MachOPlatform::getDeinitializerSequence(JITDylib &JD) {
-  std::vector<JITDylibSP> DFSLinkOrder = JD.getDFSLinkOrder();
+  std::vector<JITDylib *> DFSLinkOrder = getDFSLinkOrder(JD);
 
   DeinitializerSequence FullDeinitSeq;
   {
     std::lock_guard<std::mutex> Lock(InitSeqsMutex);
-    for (auto &DeinitJD : DFSLinkOrder) {
-      FullDeinitSeq.emplace_back(DeinitJD.get(), MachOJITDylibDeinitializers());
+    for (auto *DeinitJD : DFSLinkOrder) {
+      FullDeinitSeq.emplace_back(DeinitJD, MachOJITDylibDeinitializers());
     }
   }
 
   return FullDeinitSeq;
+}
+
+std::vector<JITDylib *> MachOPlatform::getDFSLinkOrder(JITDylib &JD) {
+  std::vector<JITDylib *> Result, WorkStack({&JD});
+  DenseSet<JITDylib *> Visited;
+
+  while (!WorkStack.empty()) {
+    auto *NextJD = WorkStack.back();
+    WorkStack.pop_back();
+    if (Visited.count(NextJD))
+      continue;
+    Visited.insert(NextJD);
+    Result.push_back(NextJD);
+    NextJD->withLinkOrderDo([&](const JITDylibSearchOrder &LO) {
+      for (auto &KV : LO)
+        WorkStack.push_back(KV.first);
+    });
+  }
+
+  return Result;
 }
 
 void MachOPlatform::registerInitInfo(
@@ -301,16 +319,13 @@ void MachOPlatform::InitScraperPlugin::modifyPassConfig(
     MaterializationResponsibility &MR, const Triple &TT,
     jitlink::PassConfiguration &Config) {
 
-  if (!MR.getInitializerSymbol())
-    return;
-
   Config.PrePrunePasses.push_back([this, &MR](jitlink::LinkGraph &G) -> Error {
     JITLinkSymbolVector InitSectionSymbols;
     preserveInitSectionIfPresent(InitSectionSymbols, G, "__mod_init_func");
     preserveInitSectionIfPresent(InitSectionSymbols, G, "__objc_selrefs");
     preserveInitSectionIfPresent(InitSectionSymbols, G, "__objc_classlist");
 
-    if (!InitSectionSymbols.empty()) {
+    if (!InitSymbolDeps.empty()) {
       std::lock_guard<std::mutex> Lock(InitScraperMutex);
       InitSymbolDeps[&MR] = std::move(InitSectionSymbols);
     }
@@ -328,8 +343,10 @@ void MachOPlatform::InitScraperPlugin::modifyPassConfig(
 
     JITTargetAddress ObjCImageInfoAddr = 0;
     if (auto *ObjCImageInfoSec = G.findSectionByName("__objc_image_info")) {
-      if (auto Addr = jitlink::SectionRange(*ObjCImageInfoSec).getStart())
+      if (auto Addr = jitlink::SectionRange(*ObjCImageInfoSec).getStart()) {
         ObjCImageInfoAddr = Addr;
+        dbgs() << "Recorded __objc_imageinfo @ " << formatv("{0:x16}", Addr);
+      }
     }
 
     // Record __mod_init_func.

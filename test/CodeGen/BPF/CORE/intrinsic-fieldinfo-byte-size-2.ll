@@ -1,6 +1,7 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK,CHECK-ALU64 %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck -check-prefixes=CHECK,CHECK-ALU32 %s
+; RUN: llc -march=bpfel -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-ALU64 %s
+; RUN: llc -march=bpfeb -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-ALU64 %s
+; RUN: llc -march=bpfel -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-ALU32 %s
+; RUN: llc -march=bpfeb -mattr=+alu32 -filetype=asm -o - %s | FileCheck -check-prefixes=CHECK,CHECK-ALU32 %s
 ; Source code:
 ;   typedef struct s1 { int a1; char a2; } __s1;
 ;   union u1 { int b1; __s1 b2; };
@@ -13,9 +14,7 @@
 ;     return r1 + r2 + r3;
 ;   }
 ; Compilation flag:
-;   clang -target bpf -O2 -g -S -emit-llvm -Xclang -disable-llvm-passes test.c
-
-target triple = "bpf"
+;   clang -target bpf -O2 -g -S -emit-llvm test.c
 
 %union.u1 = type { %struct.s1 }
 %struct.s1 = type { i32, i8 }

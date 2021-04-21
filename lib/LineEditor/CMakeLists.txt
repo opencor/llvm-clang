@@ -10,7 +10,4 @@ add_llvm_component_library(LLVMLineEditor
 
   LINK_LIBS
   ${link_libs}
-
-  LINK_COMPONENTS
-  Support
   )

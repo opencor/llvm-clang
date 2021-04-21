@@ -14,15 +14,11 @@
 #ifndef LLVM_CODEGEN_MIRFORMATTER_H
 #define LLVM_CODEGEN_MIRFORMATTER_H
 
-#include "llvm/ADT/Optional.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cstdint>
 
 namespace llvm {
 
-class MachineFunction;
-class MachineInstr;
 struct PerFunctionMIParsingState;
 struct SlotMapping;
 

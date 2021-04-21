@@ -125,7 +125,7 @@ MODIFIERS:
   [V] - display the version and exit
 )";
 
-static void printHelpMessage() {
+void printHelpMessage() {
   if (Stem.contains_lower("ranlib"))
     outs() << RanlibHelp;
   else if (Stem.contains_lower("ar"))

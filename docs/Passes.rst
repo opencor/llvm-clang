@@ -460,6 +460,27 @@ shared.  This is useful because some passes (i.e., TraceValues) insert a lot of
 string constants into the program, regardless of whether or not an existing
 string is available.
 
+``-constprop``: Simple constant propagation
+-------------------------------------------
+
+This pass implements constant propagation and merging.  It looks for
+instructions involving only constant operands and replaces them with a constant
+value instead of an instruction.  For example:
+
+.. code-block:: llvm
+
+  add i32 1, 2
+
+becomes
+
+.. code-block:: llvm
+
+  i32 3
+
+NOTE: this pass has a habit of making definitions be dead.  It is a good idea
+to run a :ref:`Dead Instruction Elimination <passes-die>` pass sometime after
+running this pass.
+
 .. _passes-dce:
 
 ``-dce``: Dead Code Elimination
@@ -501,10 +522,10 @@ instructions that are obviously dead.
 A trivial dead store elimination that only considers basic-block local
 redundant stores.
 
-.. _passes-function-attrs:
+.. _passes-functionattrs:
 
-``-function-attrs``: Deduce function attributes
------------------------------------------------
+``-functionattrs``: Deduce function attributes
+----------------------------------------------
 
 A simple interprocedural pass which walks the call-graph, looking for functions
 which do not access or only read non-local memory, and marking them
@@ -630,7 +651,7 @@ This pass can also simplify calls to specific well-known function calls (e.g.
 runtime library functions).  For example, a call ``exit(3)`` that occurs within
 the ``main()`` function can be transformed into simply ``return 3``. Whether or
 not library calls are simplified is controlled by the
-:ref:`-function-attrs <passes-function-attrs>` pass and LLVM's knowledge of
+:ref:`-functionattrs <passes-functionattrs>` pass and LLVM's knowledge of
 library calls on different targets.
 
 .. _passes-aggressive-instcombine:
@@ -654,6 +675,15 @@ instcombine pass.
 This pass loops over all of the functions in the input module, looking for a
 main function.  If a main function is found, all other functions and all global
 variables with initializers are marked as internal.
+
+``-ipconstprop``: Interprocedural constant propagation
+------------------------------------------------------
+
+This pass implements an *extremely* simple interprocedural constant propagation
+pass.  It could certainly be improved in many different ways, like using a
+worklist.  This pass makes arguments dead, but does not remove them.  The
+existing dead argument elimination pass should be run after this to clean up
+the mess.
 
 ``-ipsccp``: Interprocedural Sparse Conditional Constant Propagation
 --------------------------------------------------------------------
@@ -719,12 +749,6 @@ code from the body of a loop as possible.  It does this by either hoisting code
 into the preheader block, or by sinking code to the exit blocks if it is safe.
 This pass also promotes must-aliased memory locations in the loop to live in
 registers, thus hoisting and sinking "invariant" loads and stores.
-
-Hoisting operations out of loops is a canonicalization transform. It enables
-and simplifies subsequent optimizations in the middle-end. Rematerialization
-of hoisted instructions to reduce register pressure is the responsibility of
-the back-end, which has more accurate information about register pressure and
-also handles other optimizations than LICM that increase live-ranges.
 
 This pass uses alias analysis for two purposes:
 

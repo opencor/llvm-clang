@@ -86,7 +86,7 @@ HexagonEvaluator::HexagonEvaluator(const HexagonRegisterInfo &tri,
   }
 }
 
-BT::BitMask HexagonEvaluator::mask(Register Reg, unsigned Sub) const {
+BT::BitMask HexagonEvaluator::mask(unsigned Reg, unsigned Sub) const {
   if (Sub == 0)
     return MachineEvaluator::mask(Reg, 0);
   const TargetRegisterClass &RC = *MRI.getRegClass(Reg);
@@ -110,7 +110,9 @@ BT::BitMask HexagonEvaluator::mask(Register Reg, unsigned Sub) const {
   llvm_unreachable("Unexpected register/subregister");
 }
 
-uint16_t HexagonEvaluator::getPhysRegBitWidth(MCRegister Reg) const {
+uint16_t HexagonEvaluator::getPhysRegBitWidth(unsigned Reg) const {
+  assert(Register::isPhysicalRegister(Reg));
+
   using namespace Hexagon;
   const auto &HST = MF.getSubtarget<HexagonSubtarget>();
   if (HST.useHVXOps()) {
@@ -1041,7 +1043,7 @@ unsigned HexagonEvaluator::getUniqueDefVReg(const MachineInstr &MI) const {
     if (!Op.isReg() || !Op.isDef())
       continue;
     Register R = Op.getReg();
-    if (!R.isVirtual())
+    if (!Register::isVirtualRegister(R))
       continue;
     if (DefReg != 0)
       return 0;

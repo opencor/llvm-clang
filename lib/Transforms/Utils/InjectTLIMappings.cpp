@@ -16,7 +16,6 @@
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -78,8 +77,7 @@ static void addMappingsFromTLI(const TargetLibraryInfo &TLI, CallInst &CI) {
   if (CI.isNoBuiltin() || !CI.getCalledFunction())
     return;
 
-  StringRef ScalarName = CI.getCalledFunction()->getName();
-
+  const std::string ScalarName = std::string(CI.getCalledFunction()->getName());
   // Nothing to be done if the TLI thinks the function is not
   // vectorizable.
   if (!TLI.isFunctionVectorizable(ScalarName))

@@ -40,7 +40,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/SMLoc.h"
-#include "llvm/Support/SourceMgr.h"
 #include <cassert>
 #include <cstddef>
 #include <iterator>
@@ -52,6 +51,7 @@
 namespace llvm {
 
 class MemoryBufferRef;
+class SourceMgr;
 class raw_ostream;
 class Twine;
 
@@ -78,9 +78,6 @@ bool scanTokens(StringRef Input);
 /// escaped, but emitted verbatim.
 std::string escape(StringRef Input, bool EscapePrintable = true);
 
-/// Parse \p S as a bool according to https://yaml.org/type/bool.html.
-llvm::Optional<bool> parseBool(StringRef S);
-
 /// This class represents a YAML stream potentially containing multiple
 ///        documents.
 class Stream {
@@ -103,10 +100,7 @@ public:
     return !failed();
   }
 
-  void printError(Node *N, const Twine &Msg,
-                  SourceMgr::DiagKind Kind = SourceMgr::DK_Error);
-  void printError(const SMRange &Range, const Twine &Msg,
-                  SourceMgr::DiagKind Kind = SourceMgr::DK_Error);
+  void printError(Node *N, const Twine &Msg);
 
 private:
   friend class Document;
@@ -228,7 +222,7 @@ public:
 
   /// Gets the value of this node as a StringRef.
   ///
-  /// \param Storage is used to store the content of the returned StringRef if
+  /// \param Storage is used to store the content of the returned StringRef iff
   ///        it requires any modification from how it appeared in the source.
   ///        This happens with escaped characters and multi-line literals.
   StringRef getValue(SmallVectorImpl<char> &Storage) const;
@@ -515,6 +509,7 @@ public:
       : Node(NK_Alias, D, StringRef(), StringRef()), Name(Val) {}
 
   StringRef getName() const { return Name; }
+  Node *getTarget();
 
   static bool classof(const Node *N) { return N->getType() == NK_Alias; }
 

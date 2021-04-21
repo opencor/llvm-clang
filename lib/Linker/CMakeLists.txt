@@ -7,10 +7,4 @@ add_llvm_component_library(LLVMLinker
 
   DEPENDS
   intrinsics_gen
-
-  LINK_COMPONENTS
-  Core
-  Object
-  Support
-  TransformUtils
   )

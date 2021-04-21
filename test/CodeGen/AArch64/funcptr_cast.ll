@@ -12,4 +12,4 @@ entry:
   ret i8 %0
 }
 
-declare dso_local void @foo(...)
+declare void @foo(...)

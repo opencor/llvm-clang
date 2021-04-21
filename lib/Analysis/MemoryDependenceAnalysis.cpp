@@ -148,7 +148,7 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
 
   if (const CallInst *CI = isFreeCall(Inst, &TLI)) {
     // calls to free() deallocate the entire structure
-    Loc = MemoryLocation::getAfter(CI->getArgOperand(0));
+    Loc = MemoryLocation(CI->getArgOperand(0));
     return ModRefInfo::Mod;
   }
 
@@ -165,12 +165,6 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
       Loc = MemoryLocation::getForArgument(II, 2, TLI);
       // These intrinsics don't really modify the memory, but returning Mod
       // will allow them to be handled conservatively.
-      return ModRefInfo::Mod;
-    case Intrinsic::masked_load:
-      Loc = MemoryLocation::getForArgument(II, 0, TLI);
-      return ModRefInfo::Ref;
-    case Intrinsic::masked_store:
-      Loc = MemoryLocation::getForArgument(II, 1, TLI);
       return ModRefInfo::Mod;
     default:
       break;
@@ -368,8 +362,6 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
 MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     const MemoryLocation &MemLoc, bool isLoad, BasicBlock::iterator ScanIt,
     BasicBlock *BB, Instruction *QueryInst, unsigned *Limit) {
-  // We can batch AA queries, because IR does not change during a MemDep query.
-  BatchAAResults BatchAA(AA);
   bool isInvariantLoad = false;
 
   unsigned DefaultLimit = getDefaultBlockScanLimit();
@@ -414,6 +406,8 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       isInvariantLoad = true;
   }
 
+  const DataLayout &DL = BB->getModule()->getDataLayout();
+
   // Return "true" if and only if the instruction I is either a non-simple
   // load or a non-simple store.
   auto isNonSimpleLoadOrStore = [](Instruction *I) -> bool {
@@ -448,31 +442,14 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(Inst)) {
       // If we reach a lifetime begin or end marker, then the query ends here
       // because the value is undefined.
-      Intrinsic::ID ID = II->getIntrinsicID();
-      switch (ID) {
-      case Intrinsic::lifetime_start: {
+      if (II->getIntrinsicID() == Intrinsic::lifetime_start) {
         // FIXME: This only considers queries directly on the invariant-tagged
         // pointer, not on query pointers that are indexed off of them.  It'd
         // be nice to handle that at some point (the right approach is to use
         // GetPointerBaseWithConstantOffset).
-        MemoryLocation ArgLoc = MemoryLocation::getAfter(II->getArgOperand(1));
-        if (BatchAA.isMustAlias(ArgLoc, MemLoc))
+        if (AA.isMustAlias(MemoryLocation(II->getArgOperand(1)), MemLoc))
           return MemDepResult::getDef(II);
         continue;
-      }
-      case Intrinsic::masked_load:
-      case Intrinsic::masked_store: {
-        MemoryLocation Loc;
-        /*ModRefInfo MR =*/ GetLocation(II, Loc, TLI);
-        AliasResult R = BatchAA.alias(Loc, MemLoc);
-        if (R == NoAlias)
-          continue;
-        if (R == MustAlias)
-          return MemDepResult::getDef(II);
-        if (ID == Intrinsic::masked_load)
-          continue;
-        return MemDepResult::getClobber(II);
-      }
       }
     }
 
@@ -510,7 +487,7 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       MemoryLocation LoadLoc = MemoryLocation::get(LI);
 
       // If we found a pointer, check if it could be the same as our pointer.
-      AliasResult R = BatchAA.alias(LoadLoc, MemLoc);
+      AliasResult R = AA.alias(LoadLoc, MemLoc);
 
       if (isLoad) {
         if (R == NoAlias)
@@ -541,7 +518,7 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
         continue;
 
       // Stores don't alias loads from read-only memory.
-      if (BatchAA.pointsToConstantMemory(LoadLoc))
+      if (AA.pointsToConstantMemory(LoadLoc))
         continue;
 
       // Stores depend on may/must aliased loads.
@@ -572,7 +549,7 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       // If alias analysis can tell that this store is guaranteed to not modify
       // the query pointer, ignore it.  Use getModRefInfo to handle cases where
       // the query pointer points to constant memory etc.
-      if (!isModOrRefSet(BatchAA.getModRefInfo(SI, MemLoc)))
+      if (!isModOrRefSet(AA.getModRefInfo(SI, MemLoc)))
         continue;
 
       // Ok, this store might clobber the query pointer.  Check to see if it is
@@ -581,7 +558,7 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       MemoryLocation StoreLoc = MemoryLocation::get(SI);
 
       // If we found a pointer, check if it could be the same as our pointer.
-      AliasResult R = BatchAA.alias(StoreLoc, MemLoc);
+      AliasResult R = AA.alias(StoreLoc, MemLoc);
 
       if (R == NoAlias)
         continue;
@@ -599,8 +576,8 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     // looking for a clobber in many cases; that's an alias property and is
     // handled by BasicAA.
     if (isa<AllocaInst>(Inst) || isNoAliasFn(Inst, &TLI)) {
-      const Value *AccessPtr = getUnderlyingObject(MemLoc.Ptr);
-      if (AccessPtr == Inst || BatchAA.isMustAlias(Inst, AccessPtr))
+      const Value *AccessPtr = GetUnderlyingObject(MemLoc.Ptr, DL);
+      if (AccessPtr == Inst || AA.isMustAlias(Inst, AccessPtr))
         return MemDepResult::getDef(Inst);
     }
 
@@ -617,10 +594,9 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
         continue;
 
     // See if this instruction (e.g. a call or vaarg) mod/ref's the pointer.
-    ModRefInfo MR = BatchAA.getModRefInfo(Inst, MemLoc);
+    ModRefInfo MR = AA.getModRefInfo(Inst, MemLoc);
     // If necessary, perform additional analysis.
     if (isModAndRefSet(MR))
-      // TODO: Support callCapturesBefore() on BatchAAResults.
       MR = AA.callCapturesBefore(Inst, MemLoc, &DT);
     switch (clearMust(MR)) {
     case ModRefInfo::NoModRef:
@@ -752,7 +728,8 @@ MemoryDependenceResults::getNonLocalCallDependency(CallBase *QueryCall) {
   } else {
     // Seed DirtyBlocks with each of the preds of QueryInst's block.
     BasicBlock *QueryBB = QueryCall->getParent();
-    append_range(DirtyBlocks, PredCache.get(QueryBB));
+    for (BasicBlock *Pred : PredCache.get(QueryBB))
+      DirtyBlocks.push_back(Pred);
     ++NumUncacheNonLocal;
   }
 
@@ -766,7 +743,8 @@ MemoryDependenceResults::getNonLocalCallDependency(CallBase *QueryCall) {
 
   // Iterate while we still have blocks to update.
   while (!DirtyBlocks.empty()) {
-    BasicBlock *DirtyBB = DirtyBlocks.pop_back_val();
+    BasicBlock *DirtyBB = DirtyBlocks.back();
+    DirtyBlocks.pop_back();
 
     // Already processed this block?
     if (!Visited.insert(DirtyBB).second)
@@ -836,7 +814,8 @@ MemoryDependenceResults::getNonLocalCallDependency(CallBase *QueryCall) {
 
       // If the block *is* completely transparent to the load, we need to check
       // the predecessors of this block.  Add them to our worklist.
-      append_range(DirtyBlocks, PredCache.get(DirtyBB));
+      for (BasicBlock *Pred : PredCache.get(DirtyBB))
+        DirtyBlocks.push_back(Pred);
     }
   }
 
@@ -1013,7 +992,7 @@ SortNonLocalDepInfoCache(MemoryDependenceResults::NonLocalDepInfo &Cache,
       NonLocalDepEntry Val = Cache.back();
       Cache.pop_back();
       MemoryDependenceResults::NonLocalDepInfo::iterator Entry =
-          llvm::upper_bound(Cache, Val);
+          std::upper_bound(Cache.begin(), Cache.end(), Val);
       Cache.insert(Entry, Val);
     }
     break;

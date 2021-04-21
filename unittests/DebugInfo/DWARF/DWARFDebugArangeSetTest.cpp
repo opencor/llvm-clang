@@ -14,16 +14,6 @@ using namespace llvm;
 
 namespace {
 
-struct WarningHandler {
-  ~WarningHandler() { EXPECT_THAT_ERROR(std::move(Err), Succeeded()); }
-
-  void operator()(Error E) { Err = joinErrors(std::move(Err), std::move(E)); }
-
-  Error getWarning() { return std::move(Err); }
-
-  Error Err = Error::success();
-};
-
 template <size_t SecSize>
 void ExpectExtractError(const char (&SecDataRaw)[SecSize],
                         const char *ErrorMessage) {
@@ -32,8 +22,7 @@ void ExpectExtractError(const char (&SecDataRaw)[SecSize],
                                /* AddressSize = */ 4);
   DWARFDebugArangeSet Set;
   uint64_t Offset = 0;
-  WarningHandler Warnings;
-  Error E = Set.extract(Extractor, &Offset, Warnings);
+  Error E = Set.extract(Extractor, &Offset);
   ASSERT_TRUE(E.operator bool());
   EXPECT_STREQ(ErrorMessage, toString(std::move(E)).c_str());
 }
@@ -196,11 +185,11 @@ TEST(DWARFDebugArangeSet, ZeroAddressEntry) {
       /*AddressSize=*/4);
   DWARFDebugArangeSet Set;
   uint64_t Offset = 0;
-  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, WarningHandler()),
+  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset),
                     Succeeded());
   auto Range = Set.descriptors();
   auto Iter = Range.begin();
-  ASSERT_EQ(std::distance(Iter, Range.end()), 1);
+  ASSERT_EQ(std::distance(Iter, Range.end()), 1u);
   EXPECT_EQ(Iter->Address, 0u);
   EXPECT_EQ(Iter->Length, 1u);
 }
@@ -223,11 +212,11 @@ TEST(DWARFDebugArangeSet, ZeroLengthEntry) {
       /*AddressSize=*/4);
   DWARFDebugArangeSet Set;
   uint64_t Offset = 0;
-  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, WarningHandler()),
+  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset),
                     Succeeded());
   auto Range = Set.descriptors();
   auto Iter = Range.begin();
-  ASSERT_EQ(std::distance(Iter, Range.end()), 1);
+  ASSERT_EQ(std::distance(Iter, Range.end()), 1u);
   EXPECT_EQ(Iter->Address, 1u);
   EXPECT_EQ(Iter->Length, 0u);
 }
@@ -246,26 +235,10 @@ TEST(DWARFDebugArangesSet, PrematureTerminator) {
       "\x01\x00\x00\x00" //         Length
       "\x00\x00\x00\x00" // Termination tuple
       "\x00\x00\x00\x00";
-  DWARFDataExtractor Extractor(
-      StringRef(DebugArangesSecRaw, sizeof(DebugArangesSecRaw) - 1),
-      /*IsLittleEndian=*/true,
-      /*AddressSize=*/4);
-  DWARFDebugArangeSet Set;
-  uint64_t Offset = 0;
-  WarningHandler Warnings;
-  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, Warnings), Succeeded());
-  auto Range = Set.descriptors();
-  auto Iter = Range.begin();
-  ASSERT_EQ(std::distance(Iter, Range.end()), 2);
-  EXPECT_EQ(Iter->Address, 0u);
-  EXPECT_EQ(Iter->Length, 0u);
-  ++Iter;
-  EXPECT_EQ(Iter->Address, 1u);
-  EXPECT_EQ(Iter->Length, 1u);
-  EXPECT_THAT_ERROR(
-      Warnings.getWarning(),
-      FailedWithMessage("address range table at offset 0x0 has a premature "
-                        "terminator entry at offset 0x10"));
+  ExpectExtractError(
+      DebugArangesSecRaw,
+      "address range table at offset 0x0 has a premature "
+      "terminator entry at offset 0x10");
 }
 
 } // end anonymous namespace

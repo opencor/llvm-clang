@@ -54,8 +54,6 @@ public:
   }
 
   bool isJIT() const { return IsJIT; }
-
-  bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
 };
 
 } // end namespace llvm

@@ -64,6 +64,9 @@ public:
         MachineFunctionProperties::Property::NoPHIs);
   }
 
+  bool combineExtracts(MachineInstr &MI, MachineRegisterInfo &MRI,
+                       const TargetInstrInfo &TII);
+
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   static MFResult

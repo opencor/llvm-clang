@@ -74,8 +74,7 @@ public:
   int getIntImmCost(int64_t Val);
   int getIntImmCost(const APInt &Imm, Type *Ty, TTI::TargetCostKind CostKind);
   int getIntImmCostInst(unsigned Opcode, unsigned Idx, const APInt &Imm,
-                        Type *Ty, TTI::TargetCostKind CostKind,
-                        Instruction *Inst = nullptr);
+                        Type *Ty, TTI::TargetCostKind CostKind);
   int getIntImmCostIntrin(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
                           Type *Ty, TTI::TargetCostKind CostKind);
   TTI::PopcntSupportKind getPopcntSupport(unsigned TyWidth);
@@ -97,9 +96,6 @@ public:
     return 31;
   }
 
-  unsigned getIntrinsicInstrCost(const IntrinsicCostAttributes &ICA,
-                                 TTI::TargetCostKind CostKind);
-
   unsigned getRegisterBitWidth(bool Vector) const {
     if (Vector) {
       if (ST->hasSVE())
@@ -115,21 +111,10 @@ public:
     return ST->getMinVectorRegisterBitWidth();
   }
 
-  Optional<unsigned> getMaxVScale() const {
-    if (ST->hasSVE())
-      return AArch64::SVEMaxBitsPerVector / AArch64::SVEBitsPerBlock;
-    return BaseT::getMaxVScale();
-  }
-
   unsigned getMaxInterleaveFactor(unsigned VF);
 
-  unsigned getGatherScatterOpCost(unsigned Opcode, Type *DataTy,
-                                  const Value *Ptr, bool VariableMask,
-                                  Align Alignment, TTI::TargetCostKind CostKind,
-                                  const Instruction *I = nullptr);
-
   int getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
-                       TTI::CastContextHint CCH, TTI::TargetCostKind CostKind,
+                       TTI::TargetCostKind CostKind,
                        const Instruction *I = nullptr);
 
   int getExtractWithExtendCost(unsigned Opcode, Type *Dst, VectorType *VecTy,
@@ -138,14 +123,6 @@ public:
   unsigned getCFInstrCost(unsigned Opcode, TTI::TargetCostKind CostKind);
 
   int getVectorInstrCost(unsigned Opcode, Type *Val, unsigned Index);
-
-  int getMinMaxReductionCost(VectorType *Ty, VectorType *CondTy,
-                             bool IsPairwise, bool IsUnsigned,
-                             TTI::TargetCostKind CostKind);
-
-  int getArithmeticReductionCostSVE(unsigned Opcode, VectorType *ValTy,
-                                    bool IsPairwiseForm,
-                                    TTI::TargetCostKind CostKind);
 
   int getArithmeticInstrCost(
       unsigned Opcode, Type *Ty,
@@ -160,13 +137,11 @@ public:
   int getAddressComputationCost(Type *Ty, ScalarEvolution *SE, const SCEV *Ptr);
 
   int getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
-                         CmpInst::Predicate VecPred,
                          TTI::TargetCostKind CostKind,
                          const Instruction *I = nullptr);
 
   TTI::MemCmpExpansionOptions enableMemCmpExpansion(bool OptSize,
                                                     bool IsZeroCmp) const;
-  bool useNeonVector(const Type *Ty) const;
 
   int getMemoryOpCost(unsigned Opcode, Type *Src, MaybeAlign Alignment,
                       unsigned AddressSpace,
@@ -191,9 +166,6 @@ public:
       return false;
 
     Type *Ty = cast<ScalableVectorType>(DataType)->getElementType();
-    if (Ty->isPointerTy())
-      return true;
-
     if (Ty->isBFloatTy() || Ty->isHalfTy() ||
         Ty->isFloatTy() || Ty->isDoubleTy())
       return true;
@@ -241,13 +213,27 @@ public:
   shouldConsiderAddressTypePromotion(const Instruction &I,
                                      bool &AllowPromotionWithoutCommonHeader);
 
-  bool shouldExpandReduction(const IntrinsicInst *II) const { return false; }
+  bool shouldExpandReduction(const IntrinsicInst *II) const {
+    switch (II->getIntrinsicID()) {
+    case Intrinsic::experimental_vector_reduce_v2_fadd:
+    case Intrinsic::experimental_vector_reduce_v2_fmul:
+      // We don't have legalization support for ordered FP reductions.
+      return !II->getFastMathFlags().allowReassoc();
+
+    case Intrinsic::experimental_vector_reduce_fmax:
+    case Intrinsic::experimental_vector_reduce_fmin:
+      // Lowering asserts that there are no NaNs.
+      return !II->getFastMathFlags().noNaNs();
+
+    default:
+      // Don't expand anything else, let legalization deal with it.
+      return false;
+    }
+  }
 
   unsigned getGISelRematGlobalCost() const {
     return 2;
   }
-
-  bool supportsScalableVectors() const { return ST->hasSVE(); }
 
   bool useReductionIntrinsic(unsigned Opcode, Type *Ty,
                              TTI::ReductionFlags Flags) const;

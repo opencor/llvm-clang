@@ -38,7 +38,6 @@ class Module;
 class SectionKind;
 class StringRef;
 class TargetMachine;
-class DSOLocalEquivalent;
 
 class TargetLoweringObjectFile : public MCObjectFileInfo {
   /// Name-mangler for global names.
@@ -48,7 +47,6 @@ protected:
   bool SupportIndirectSymViaGOTPCRel = false;
   bool SupportGOTPCRelWithOffset = true;
   bool SupportDebugThreadLocalLocation = true;
-  bool SupportDSOLocalEquivalentLowering = false;
 
   /// PersonalityEncoding, LSDAEncoding, TTypeEncoding - Some encoding values
   /// for EH.
@@ -62,8 +60,6 @@ protected:
 
   /// This section contains the static destructor pointer list.
   MCSection *StaticDtorSection = nullptr;
-
-  const TargetMachine *TM = nullptr;
 
 public:
   TargetLoweringObjectFile() = default;
@@ -84,9 +80,6 @@ public:
 
   /// Emit the module-level metadata that the platform cares about.
   virtual void emitModuleMetadata(MCStreamer &Streamer, Module &M) const {}
-
-  /// Emit Call Graph Profile metadata.
-  void emitCGProfileMetadata(MCStreamer &Streamer, Module &M) const;
 
   /// Get the module-level metadata that the platform cares about.
   virtual void getModuleMetadata(Module &M) {}
@@ -125,10 +118,6 @@ public:
 
   virtual MCSection *getSectionForJumpTable(const Function &F,
                                             const TargetMachine &TM) const;
-  virtual MCSection *getSectionForLSDA(const Function &F,
-                                       const TargetMachine &TM) const {
-    return LSDASection;
-  }
 
   virtual bool shouldPutJumpTableInFunctionSection(bool UsesLabelDifference,
                                                    const Function &F) const;
@@ -162,7 +151,7 @@ public:
   unsigned getPersonalityEncoding() const { return PersonalityEncoding; }
   unsigned getLSDAEncoding() const { return LSDAEncoding; }
   unsigned getTTypeEncoding() const { return TTypeEncoding; }
-  unsigned getCallSiteEncoding() const;
+  unsigned getCallSiteEncoding() const { return CallSiteEncoding; }
 
   const MCExpr *getTTypeReference(const MCSymbolRefExpr *Sym, unsigned Encoding,
                                   MCStreamer &Streamer) const;
@@ -184,17 +173,6 @@ public:
   virtual const MCExpr *lowerRelativeReference(const GlobalValue *LHS,
                                                const GlobalValue *RHS,
                                                const TargetMachine &TM) const {
-    return nullptr;
-  }
-
-  /// Target supports a native lowering of a dso_local_equivalent constant
-  /// without needing to replace it with equivalent IR.
-  bool supportDSOLocalEquivalentLowering() const {
-    return SupportDSOLocalEquivalentLowering;
-  }
-
-  virtual const MCExpr *lowerDSOLocalEquivalent(const DSOLocalEquivalent *Equiv,
-                                                const TargetMachine &TM) const {
     return nullptr;
   }
 
@@ -225,6 +203,12 @@ public:
     return nullptr;
   }
 
+  virtual void emitLinkerFlagsForGlobal(raw_ostream &OS,
+                                        const GlobalValue *GV) const {}
+
+  virtual void emitLinkerFlagsForUsed(raw_ostream &OS,
+                                      const GlobalValue *GV) const {}
+
   /// If supported, return the section to use for the llvm.commandline
   /// metadata. Otherwise, return nullptr.
   virtual MCSection *getSectionForCommandLines() const {
@@ -242,8 +226,7 @@ public:
   /// On targets that support TOC entries, return a section for the entry given
   /// the symbol it refers to.
   /// TODO: Implement this interface for existing ELF targets.
-  virtual MCSection *getSectionForTOCEntry(const MCSymbol *S,
-                                           const TargetMachine &TM) const {
+  virtual MCSection *getSectionForTOCEntry(const MCSymbol *S) const {
     return nullptr;
   }
 
@@ -264,8 +247,7 @@ public:
 
   /// If supported, return the function entry point symbol.
   /// Otherwise, returns nulltpr.
-  /// Func must be a function or an alias which has a function as base object.
-  virtual MCSymbol *getFunctionEntryPointSymbol(const GlobalValue *Func,
+  virtual MCSymbol *getFunctionEntryPointSymbol(const Function *F,
                                                 const TargetMachine &TM) const {
     return nullptr;
   }

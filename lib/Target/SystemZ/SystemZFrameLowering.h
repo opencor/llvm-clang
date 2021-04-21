@@ -9,10 +9,8 @@
 #ifndef LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZFRAMELOWERING_H
 #define LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZFRAMELOWERING_H
 
-#include "MCTargetDesc/SystemZMCTargetDesc.h"
 #include "llvm/ADT/IndexedMap.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/Support/TypeSize.h"
 
 namespace llvm {
 class SystemZTargetMachine;
@@ -49,8 +47,8 @@ public:
                         MachineBasicBlock &PrologMBB) const override;
   bool hasFP(const MachineFunction &MF) const override;
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
-  StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
-                                     Register &FrameReg) const override;
+  int getFrameIndexReference(const MachineFunction &MF, int FI,
+                             Register &FrameReg) const override;
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MI) const override;
@@ -64,12 +62,6 @@ public:
   int getOrCreateFramePointerSaveIndex(MachineFunction &MF) const;
 
   bool usePackedStack(MachineFunction &MF) const;
-
-  // Return the offset of the backchain.
-  unsigned getBackchainOffset(MachineFunction &MF) const {
-    // The back chain is stored topmost with packed-stack.
-    return usePackedStack(MF) ? SystemZMC::CallFrameSize - 8 : 0;
-  }
 };
 } // end namespace llvm
 

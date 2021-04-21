@@ -39,7 +39,9 @@ public:
   HandleSet() : Process(nullptr) {}
   ~HandleSet();
 
-  HandleList::iterator Find(void *Handle) { return find(Handles, Handle); }
+  HandleList::iterator Find(void *Handle) {
+    return std::find(Handles.begin(), Handles.end(), Handle);
+  }
 
   bool Contains(void *Handle) {
     return Handle == Process || Find(Handle) != Handles.end();

@@ -12,6 +12,7 @@
 
 #include "llvm/CodeGen/LiveRangeEdit.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -187,7 +188,7 @@ bool LiveRangeEdit::foldAsLoad(LiveInterval *LI,
   MachineInstr *DefMI = nullptr, *UseMI = nullptr;
 
   // Check that there is a single def and a single use.
-  for (MachineOperand &MO : MRI.reg_nodbg_operands(LI->reg())) {
+  for (MachineOperand &MO : MRI.reg_nodbg_operands(LI->reg)) {
     MachineInstr *MI = MO.getParent();
     if (MO.isDef()) {
       if (DefMI && DefMI != MI)
@@ -223,7 +224,7 @@ bool LiveRangeEdit::foldAsLoad(LiveInterval *LI,
                     << "       into single use: " << *UseMI);
 
   SmallVector<unsigned, 8> Ops;
-  if (UseMI->readsWritesVirtualRegister(LI->reg(), &Ops).second)
+  if (UseMI->readsWritesVirtualRegister(LI->reg, &Ops).second)
     return false;
 
   MachineInstr *FoldMI = TII.foldMemoryOperand(*UseMI, Ops, *DefMI, &LIS);
@@ -235,7 +236,7 @@ bool LiveRangeEdit::foldAsLoad(LiveInterval *LI,
   if (UseMI->shouldUpdateCallSiteInfo())
     UseMI->getMF()->moveCallSiteInfo(UseMI, FoldMI);
   UseMI->eraseFromParent();
-  DefMI->addRegisterDead(LI->reg(), nullptr);
+  DefMI->addRegisterDead(LI->reg, nullptr);
   Dead.push_back(DefMI);
   ++NumDCEFoldedLoads;
   return true;
@@ -315,7 +316,7 @@ void LiveRangeEdit::eliminateDeadDef(MachineInstr *MI, ToShrinkSet &ToShrink,
       if (Reg && MOI->readsReg() && !MRI.isReserved(Reg))
         ReadsPhysRegs = true;
       else if (MOI->isDef())
-        LIS.removePhysRegDefAt(Reg.asMCReg(), Idx);
+        LIS.removePhysRegDefAt(Reg, Idx);
       continue;
     }
     LiveInterval &LI = LIS.getInterval(Reg);
@@ -331,7 +332,7 @@ void LiveRangeEdit::eliminateDeadDef(MachineInstr *MI, ToShrinkSet &ToShrink,
     // Remove defined value.
     if (MOI->isDef()) {
       if (TheDelegate && LI.getVNInfoAt(Idx) != nullptr)
-        TheDelegate->LRE_WillShrinkVirtReg(LI.reg());
+        TheDelegate->LRE_WillShrinkVirtReg(LI.reg);
       LIS.removeVRegDefAt(LI, Idx);
       if (LI.empty())
         RegsToErase.push_back(Reg);
@@ -368,7 +369,7 @@ void LiveRangeEdit::eliminateDeadDef(MachineInstr *MI, ToShrinkSet &ToShrink,
       pop_back();
       DeadRemats->insert(MI);
       const TargetRegisterInfo &TRI = *MRI.getTargetRegisterInfo();
-      MI->substituteRegister(Dest, NewLI.reg(), 0, TRI);
+      MI->substituteRegister(Dest, NewLI.reg, 0, TRI);
       MI->getOperand(0).setIsDead(true);
     } else {
       if (TheDelegate)
@@ -408,7 +409,7 @@ void LiveRangeEdit::eliminateDeadDefs(SmallVectorImpl<MachineInstr *> &Dead,
     ToShrink.pop_back();
     if (foldAsLoad(LI, Dead))
       continue;
-    unsigned VReg = LI->reg();
+    unsigned VReg = LI->reg;
     if (TheDelegate)
       TheDelegate->LRE_WillShrinkVirtReg(VReg);
     if (!LIS.shrinkToUses(LI, &Dead))
@@ -435,15 +436,15 @@ void LiveRangeEdit::eliminateDeadDefs(SmallVectorImpl<MachineInstr *> &Dead,
     if (!SplitLIs.empty())
       ++NumFracRanges;
 
-    Register Original = VRM ? VRM->getOriginal(VReg) : Register();
+    unsigned Original = VRM ? VRM->getOriginal(VReg) : 0;
     for (const LiveInterval *SplitLI : SplitLIs) {
       // If LI is an original interval that hasn't been split yet, make the new
       // intervals their own originals instead of referring to LI. The original
       // interval must contain all the split products, and LI doesn't.
       if (Original != VReg && Original != 0)
-        VRM->setIsSplitFromReg(SplitLI->reg(), Original);
+        VRM->setIsSplitFromReg(SplitLI->reg, Original);
       if (TheDelegate)
-        TheDelegate->LRE_DidCloneVirtReg(SplitLI->reg(), VReg);
+        TheDelegate->LRE_DidCloneVirtReg(SplitLI->reg, VReg);
     }
   }
 }
@@ -462,14 +463,14 @@ void
 LiveRangeEdit::calculateRegClassAndHint(MachineFunction &MF,
                                         const MachineLoopInfo &Loops,
                                         const MachineBlockFrequencyInfo &MBFI) {
-  VirtRegAuxInfo VRAI(MF, LIS, *VRM, Loops, MBFI);
+  VirtRegAuxInfo VRAI(MF, LIS, VRM, Loops, MBFI);
   for (unsigned I = 0, Size = size(); I < Size; ++I) {
     LiveInterval &LI = LIS.getInterval(get(I));
-    if (MRI.recomputeRegClass(LI.reg()))
+    if (MRI.recomputeRegClass(LI.reg))
       LLVM_DEBUG({
         const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
-        dbgs() << "Inflated " << printReg(LI.reg()) << " to "
-               << TRI->getRegClassName(MRI.getRegClass(LI.reg())) << '\n';
+        dbgs() << "Inflated " << printReg(LI.reg) << " to "
+               << TRI->getRegClassName(MRI.getRegClass(LI.reg)) << '\n';
       });
     VRAI.calculateSpillWeightAndHint(LI);
   }

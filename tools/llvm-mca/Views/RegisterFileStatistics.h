@@ -73,9 +73,6 @@ public:
   void onCycleEnd() override;
   void onEvent(const HWInstructionEvent &Event) override;
   void printView(llvm::raw_ostream &OS) const override;
-  StringRef getNameAsString() const override {
-    return "RegisterFileStatistics";
-  }
 };
 } // namespace mca
 } // namespace llvm

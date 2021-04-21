@@ -189,10 +189,9 @@ void AVRMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
 }
 
 const char *AVRMCExpr::getName() const {
-  const auto &Modifier =
-      llvm::find_if(ModifierNames, [this](ModifierEntry const &Mod) {
-        return Mod.VariantKind == Kind;
-      });
+  const auto &Modifier = std::find_if(
+      std::begin(ModifierNames), std::end(ModifierNames),
+      [this](ModifierEntry const &Mod) { return Mod.VariantKind == Kind; });
 
   if (Modifier != std::end(ModifierNames)) {
     return Modifier->Spelling;
@@ -201,10 +200,9 @@ const char *AVRMCExpr::getName() const {
 }
 
 AVRMCExpr::VariantKind AVRMCExpr::getKindByName(StringRef Name) {
-  const auto &Modifier =
-      llvm::find_if(ModifierNames, [&Name](ModifierEntry const &Mod) {
-        return Mod.Spelling == Name;
-      });
+  const auto &Modifier = std::find_if(
+      std::begin(ModifierNames), std::end(ModifierNames),
+      [&Name](ModifierEntry const &Mod) { return Mod.Spelling == Name; });
 
   if (Modifier != std::end(ModifierNames)) {
     return Modifier->VariantKind;

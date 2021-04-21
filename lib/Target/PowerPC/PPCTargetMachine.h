@@ -58,11 +58,6 @@ public:
     const Triple &TT = getTargetTriple();
     return (TT.getArch() == Triple::ppc64 || TT.getArch() == Triple::ppc64le);
   };
-
-  bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override {
-    // Addrspacecasts are always noops.
-    return true;
-  }
 };
 } // end namespace llvm
 

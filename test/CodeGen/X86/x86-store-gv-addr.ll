@@ -15,9 +15,7 @@ define void @t() nounwind optsize {
 ;
 ; x86_64-linux-LABEL: t:
 ; x86_64-linux:       # %bb.0:
-; x86_64-linux-NEXT:    movq v@{{.*}}(%rip), %rax
-; x86_64-linux-NEXT:    movq v_addr@{{.*}}(%rip), %rcx
-; x86_64-linux-NEXT:    movq %rax, (%rcx)
+; x86_64-linux-NEXT:    movq $v, {{.*}}(%rip)
 	store i32* @v, i32** @v_addr, align 8
 	unreachable
 }

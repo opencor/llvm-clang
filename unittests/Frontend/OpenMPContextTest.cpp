@@ -38,13 +38,11 @@ TEST_F(OpenMPContextTest, RoundTripAndAssociation) {
 #define OMP_TRAIT_PROPERTY(Enum, TraitSetEnum, TraitSelectorEnum, Str)         \
   EXPECT_EQ(TraitProperty::Enum,                                               \
             getOpenMPContextTraitPropertyKind(                                 \
-                TraitSet::TraitSetEnum, TraitSelector::TraitSelectorEnum,      \
-                getOpenMPContextTraitPropertyName(TraitProperty::Enum, Str))); \
+                TraitSet::TraitSetEnum,                                        \
+                getOpenMPContextTraitPropertyName(TraitProperty::Enum)));      \
   EXPECT_EQ(Str, getOpenMPContextTraitPropertyName(                            \
-                     getOpenMPContextTraitPropertyKind(                        \
-                         TraitSet::TraitSetEnum,                               \
-                         TraitSelector::TraitSelectorEnum, Str),               \
-                     Str));                                                    \
+                     getOpenMPContextTraitPropertyKind(TraitSet::TraitSetEnum, \
+                                                       Str)));                 \
   EXPECT_EQ(TraitSet::TraitSetEnum,                                            \
             getOpenMPContextTraitSetForProperty(TraitProperty::Enum));         \
   EXPECT_EQ(TraitSelector::TraitSelectorEnum,                                  \
@@ -79,31 +77,31 @@ TEST_F(OpenMPContextTest, ApplicabilityNonConstruct) {
   EXPECT_TRUE(isVariantApplicableInContext(Empty, DeviceNVPTX));
 
   VariantMatchInfo UserCondFalse;
-  UserCondFalse.addTrait(TraitProperty::user_condition_false, "");
+  UserCondFalse.addTrait(TraitProperty::user_condition_false);
   EXPECT_FALSE(isVariantApplicableInContext(UserCondFalse, HostLinux));
   EXPECT_FALSE(isVariantApplicableInContext(UserCondFalse, DeviceLinux));
   EXPECT_FALSE(isVariantApplicableInContext(UserCondFalse, HostNVPTX));
   EXPECT_FALSE(isVariantApplicableInContext(UserCondFalse, DeviceNVPTX));
 
   VariantMatchInfo DeviceArchArm;
-  DeviceArchArm.addTrait(TraitProperty::device_arch_arm, "");
+  DeviceArchArm.addTrait(TraitProperty::device_arch_arm);
   EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArm, HostLinux));
   EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArm, DeviceLinux));
   EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArm, HostNVPTX));
   EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArm, DeviceNVPTX));
 
   VariantMatchInfo LLVMHostUserCondTrue;
-  LLVMHostUserCondTrue.addTrait(TraitProperty::implementation_vendor_llvm, "");
-  LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_host, "");
-  LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_any, "");
-  LLVMHostUserCondTrue.addTrait(TraitProperty::user_condition_true, "");
+  LLVMHostUserCondTrue.addTrait(TraitProperty::implementation_vendor_llvm);
+  LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_host);
+  LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_any);
+  LLVMHostUserCondTrue.addTrait(TraitProperty::user_condition_true);
   EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrue, HostLinux));
   EXPECT_FALSE(isVariantApplicableInContext(LLVMHostUserCondTrue, DeviceLinux));
   EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrue, HostNVPTX));
   EXPECT_FALSE(isVariantApplicableInContext(LLVMHostUserCondTrue, DeviceNVPTX));
 
   VariantMatchInfo LLVMHostUserCondTrueCPU = LLVMHostUserCondTrue;
-  LLVMHostUserCondTrueCPU.addTrait(TraitProperty::device_kind_cpu, "");
+  LLVMHostUserCondTrueCPU.addTrait(TraitProperty::device_kind_cpu);
   EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrueCPU, HostLinux));
   EXPECT_FALSE(
       isVariantApplicableInContext(LLVMHostUserCondTrueCPU, DeviceLinux));
@@ -113,14 +111,14 @@ TEST_F(OpenMPContextTest, ApplicabilityNonConstruct) {
       isVariantApplicableInContext(LLVMHostUserCondTrueCPU, DeviceNVPTX));
 
   VariantMatchInfo GPU;
-  GPU.addTrait(TraitProperty::device_kind_gpu, "");
+  GPU.addTrait(TraitProperty::device_kind_gpu);
   EXPECT_FALSE(isVariantApplicableInContext(GPU, HostLinux));
   EXPECT_FALSE(isVariantApplicableInContext(GPU, DeviceLinux));
   EXPECT_TRUE(isVariantApplicableInContext(GPU, HostNVPTX));
   EXPECT_TRUE(isVariantApplicableInContext(GPU, DeviceNVPTX));
 
   VariantMatchInfo NoHost;
-  NoHost.addTrait(TraitProperty::device_kind_nohost, "");
+  NoHost.addTrait(TraitProperty::device_kind_nohost);
   EXPECT_FALSE(isVariantApplicableInContext(NoHost, HostLinux));
   EXPECT_TRUE(isVariantApplicableInContext(NoHost, DeviceLinux));
   EXPECT_FALSE(isVariantApplicableInContext(NoHost, HostNVPTX));
@@ -156,7 +154,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
         isVariantApplicableInContext(Empty, DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo UserCondFalse;
-    UserCondFalse.addTrait(TraitProperty::user_condition_false, "");
+    UserCondFalse.addTrait(TraitProperty::user_condition_false);
     EXPECT_FALSE(
         isVariantApplicableInContext(UserCondFalse, HostLinuxParallelParallel));
     EXPECT_FALSE(
@@ -166,7 +164,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
                                               DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo DeviceArchArm;
-    DeviceArchArm.addTrait(TraitProperty::device_arch_arm, "");
+    DeviceArchArm.addTrait(TraitProperty::device_arch_arm);
     EXPECT_FALSE(
         isVariantApplicableInContext(DeviceArchArm, HostLinuxParallelParallel));
     EXPECT_FALSE(
@@ -177,12 +175,10 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
 
     APInt Score(32, 1000);
     VariantMatchInfo LLVMHostUserCondTrue;
-    LLVMHostUserCondTrue.addTrait(TraitProperty::implementation_vendor_llvm,
-                                  "");
-    LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_host, "");
-    LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_any, "");
-    LLVMHostUserCondTrue.addTrait(TraitProperty::user_condition_true, "",
-                                  &Score);
+    LLVMHostUserCondTrue.addTrait(TraitProperty::implementation_vendor_llvm);
+    LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_host);
+    LLVMHostUserCondTrue.addTrait(TraitProperty::device_kind_any);
+    LLVMHostUserCondTrue.addTrait(TraitProperty::user_condition_true, &Score);
     EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrue,
                                              HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(LLVMHostUserCondTrue,
@@ -193,7 +189,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
                                               DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo LLVMHostUserCondTrueCPU = LLVMHostUserCondTrue;
-    LLVMHostUserCondTrueCPU.addTrait(TraitProperty::device_kind_cpu, "");
+    LLVMHostUserCondTrueCPU.addTrait(TraitProperty::device_kind_cpu);
     EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrueCPU,
                                              HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(LLVMHostUserCondTrueCPU,
@@ -204,7 +200,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
                                               DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo GPU;
-    GPU.addTrait(TraitProperty::device_kind_gpu, "");
+    GPU.addTrait(TraitProperty::device_kind_gpu);
     EXPECT_FALSE(isVariantApplicableInContext(GPU, HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(GPU, DeviceLinuxTargetParallel));
     EXPECT_TRUE(isVariantApplicableInContext(GPU, HostNVPTXFor));
@@ -212,7 +208,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
         isVariantApplicableInContext(GPU, DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo NoHost;
-    NoHost.addTrait(TraitProperty::device_kind_nohost, "");
+    NoHost.addTrait(TraitProperty::device_kind_nohost);
     EXPECT_FALSE(
         isVariantApplicableInContext(NoHost, HostLinuxParallelParallel));
     EXPECT_TRUE(
@@ -223,9 +219,8 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
   }
   { // variants with all sets
     VariantMatchInfo DeviceArchArmParallel;
-    DeviceArchArmParallel.addTrait(TraitProperty::construct_parallel_parallel,
-                                   "");
-    DeviceArchArmParallel.addTrait(TraitProperty::device_arch_arm, "");
+    DeviceArchArmParallel.addTrait(TraitProperty::construct_parallel_parallel);
+    DeviceArchArmParallel.addTrait(TraitProperty::device_arch_arm);
     EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArmParallel,
                                               HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(DeviceArchArmParallel,
@@ -237,13 +232,12 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
 
     VariantMatchInfo LLVMHostUserCondTrueParallel;
     LLVMHostUserCondTrueParallel.addTrait(
-        TraitProperty::implementation_vendor_llvm, "");
-    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::device_kind_host, "");
-    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::device_kind_any, "");
-    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::user_condition_true,
-                                          "");
+        TraitProperty::implementation_vendor_llvm);
+    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::device_kind_host);
+    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::device_kind_any);
+    LLVMHostUserCondTrueParallel.addTrait(TraitProperty::user_condition_true);
     LLVMHostUserCondTrueParallel.addTrait(
-        TraitProperty::construct_parallel_parallel, "");
+        TraitProperty::construct_parallel_parallel);
     EXPECT_TRUE(isVariantApplicableInContext(LLVMHostUserCondTrueParallel,
                                              HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(LLVMHostUserCondTrueParallel,
@@ -256,7 +250,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
     VariantMatchInfo LLVMHostUserCondTrueParallelParallel =
         LLVMHostUserCondTrueParallel;
     LLVMHostUserCondTrueParallelParallel.addTrait(
-        TraitProperty::construct_parallel_parallel, "");
+        TraitProperty::construct_parallel_parallel);
     EXPECT_TRUE(isVariantApplicableInContext(
         LLVMHostUserCondTrueParallelParallel, HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(
@@ -269,7 +263,7 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
     VariantMatchInfo LLVMHostUserCondTrueParallelParallelParallel =
         LLVMHostUserCondTrueParallelParallel;
     LLVMHostUserCondTrueParallelParallelParallel.addTrait(
-        TraitProperty::construct_parallel_parallel, "");
+        TraitProperty::construct_parallel_parallel);
     EXPECT_FALSE(isVariantApplicableInContext(
         LLVMHostUserCondTrueParallelParallelParallel,
         HostLinuxParallelParallel));
@@ -283,9 +277,9 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
         DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo GPUTargetTeams;
-    GPUTargetTeams.addTrait(TraitProperty::construct_target_target, "");
-    GPUTargetTeams.addTrait(TraitProperty::construct_teams_teams, "");
-    GPUTargetTeams.addTrait(TraitProperty::device_kind_gpu, "");
+    GPUTargetTeams.addTrait(TraitProperty::construct_target_target);
+    GPUTargetTeams.addTrait(TraitProperty::construct_teams_teams);
+    GPUTargetTeams.addTrait(TraitProperty::device_kind_gpu);
     EXPECT_FALSE(isVariantApplicableInContext(GPUTargetTeams,
                                               HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(GPUTargetTeams,
@@ -295,9 +289,9 @@ TEST_F(OpenMPContextTest, ApplicabilityAllTraits) {
                                              DeviceNVPTXTargetTeamsParallel));
 
     VariantMatchInfo GPUTargetParallel;
-    GPUTargetParallel.addTrait(TraitProperty::construct_target_target, "");
-    GPUTargetParallel.addTrait(TraitProperty::construct_parallel_parallel, "");
-    GPUTargetParallel.addTrait(TraitProperty::device_kind_gpu, "");
+    GPUTargetParallel.addTrait(TraitProperty::construct_target_target);
+    GPUTargetParallel.addTrait(TraitProperty::construct_parallel_parallel);
+    GPUTargetParallel.addTrait(TraitProperty::device_kind_gpu);
     EXPECT_FALSE(isVariantApplicableInContext(GPUTargetParallel,
                                               HostLinuxParallelParallel));
     EXPECT_FALSE(isVariantApplicableInContext(GPUTargetParallel,

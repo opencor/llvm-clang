@@ -843,7 +843,8 @@ define <8 x i8> @vselect_cmp_ne(<8 x i8> %a, <8 x i8> %b, <8 x i8> %c) {
 ; CHECK-LABEL: vselect_cmp_ne:
 ; CHECK:       // %bb.0:
 ; CHECK-NEXT:    cmeq v0.8b, v0.8b, v1.8b
-; CHECK-NEXT:    bsl v0.8b, v2.8b, v1.8b
+; CHECK-NEXT:    mvn v0.8b, v0.8b
+; CHECK-NEXT:    bsl v0.8b, v1.8b, v2.8b
 ; CHECK-NEXT:    ret
   %cmp = icmp ne <8 x i8> %a, %b
   %d = select <8 x i1> %cmp, <8 x i8> %b, <8 x i8> %c
@@ -865,7 +866,8 @@ define <8 x i8> @vselect_cmpz_ne(<8 x i8> %a, <8 x i8> %b, <8 x i8> %c) {
 ; CHECK-LABEL: vselect_cmpz_ne:
 ; CHECK:       // %bb.0:
 ; CHECK-NEXT:    cmeq v0.8b, v0.8b, #0
-; CHECK-NEXT:    bsl v0.8b, v2.8b, v1.8b
+; CHECK-NEXT:    mvn v0.8b, v0.8b
+; CHECK-NEXT:    bsl v0.8b, v1.8b, v2.8b
 ; CHECK-NEXT:    ret
   %cmp = icmp ne <8 x i8> %a, zeroinitializer
   %d = select <8 x i1> %cmp, <8 x i8> %b, <8 x i8> %c
@@ -886,24 +888,12 @@ define <8 x i8> @vselect_cmpz_eq(<8 x i8> %a, <8 x i8> %b, <8 x i8> %c) {
 define <8 x i8> @vselect_tst(<8 x i8> %a, <8 x i8> %b, <8 x i8> %c) {
 ; CHECK-LABEL: vselect_tst:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    and v0.8b, v0.8b, v1.8b
-; CHECK-NEXT:    cmeq v0.8b, v0.8b, #0
-; CHECK-NEXT:    bsl v0.8b, v2.8b, v1.8b
-; CHECK-NEXT:    ret
-  %tmp3 = and <8 x i8> %a, %b
-  %tmp4 = icmp eq <8 x i8> %tmp3, zeroinitializer
-  %d = select <8 x i1> %tmp4, <8 x i8> %c, <8 x i8> %b
-  ret <8 x i8> %d
-}
-
-define <8 x i8> @sext_tst(<8 x i8> %a, <8 x i8> %b, <8 x i8> %c) {
-; CHECK-LABEL: sext_tst:
-; CHECK:       // %bb.0:
 ; CHECK-NEXT:    cmtst v0.8b, v0.8b, v1.8b
+; CHECK-NEXT:    bsl v0.8b, v1.8b, v2.8b
 ; CHECK-NEXT:    ret
-  %tmp3 = and <8 x i8> %a, %b
-  %tmp4 = icmp ne <8 x i8> %tmp3, zeroinitializer
-  %d = sext <8 x i1> %tmp4 to <8 x i8>
+	%tmp3 = and <8 x i8> %a, %b
+	%tmp4 = icmp ne <8 x i8> %tmp3, zeroinitializer
+  %d = select <8 x i1> %tmp4, <8 x i8> %b, <8 x i8> %c
   ret <8 x i8> %d
 }
 

@@ -85,6 +85,8 @@ protected:
 /// The pass manager to schedule RegionPasses.
 class RGPassManager : public FunctionPass, public PMDataManager {
   std::deque<Region*> RQ;
+  bool skipThisRegion;
+  bool redoThisRegion;
   RegionInfo *RI;
   Region *CurrentRegion;
 

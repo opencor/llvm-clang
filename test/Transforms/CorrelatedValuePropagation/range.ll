@@ -240,7 +240,8 @@ sw.default:
 
 define i1 @test8(i64* %p) {
 ; CHECK-LABEL: @test8(
-; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, [[RNG0:!range !.*]]
+; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, !range !0
+; CHECK-NEXT:    [[RES:%.*]] = icmp eq i64 [[A]], 0
 ; CHECK-NEXT:    ret i1 false
 ;
   %a = load i64, i64* %p, !range !{i64 4, i64 255}
@@ -250,7 +251,8 @@ define i1 @test8(i64* %p) {
 
 define i1 @test9(i64* %p) {
 ; CHECK-LABEL: @test9(
-; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, [[RNG1:!range !.*]]
+; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, !range !1
+; CHECK-NEXT:    [[RES:%.*]] = icmp eq i64 [[A]], 0
 ; CHECK-NEXT:    ret i1 true
 ;
   %a = load i64, i64* %p, !range !{i64 0, i64 1}
@@ -260,7 +262,8 @@ define i1 @test9(i64* %p) {
 
 define i1 @test10(i64* %p) {
 ; CHECK-LABEL: @test10(
-; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, [[RNG2:!range !.*]]
+; CHECK-NEXT:    [[A:%.*]] = load i64, i64* [[P:%.*]], align 4, !range !2
+; CHECK-NEXT:    [[RES:%.*]] = icmp eq i64 [[A]], 0
 ; CHECK-NEXT:    ret i1 false
 ;
   %a = load i64, i64* %p, !range !{i64 4, i64 8, i64 15, i64 20}
@@ -272,8 +275,9 @@ define i1 @test10(i64* %p) {
 
 define i1 @test11() {
 ; CHECK-LABEL: @test11(
-; CHECK-NEXT:    [[POSITIVE:%.*]] = load i32, i32* @g, align 4, [[RNG3:!range !.*]]
+; CHECK-NEXT:    [[POSITIVE:%.*]] = load i32, i32* @g, align 4, !range !3
 ; CHECK-NEXT:    [[ADD:%.*]] = add nuw nsw i32 [[POSITIVE]], 1
+; CHECK-NEXT:    [[TEST:%.*]] = icmp sgt i32 [[ADD]], 0
 ; CHECK-NEXT:    br label [[NEXT:%.*]]
 ; CHECK:       next:
 ; CHECK-NEXT:    ret i1 true
@@ -653,7 +657,7 @@ else:
 @limit = external global i32
 define i1 @test15(i32 %a) {
 ; CHECK-LABEL: @test15(
-; CHECK-NEXT:    [[LIMIT:%.*]] = load i32, i32* @limit, align 4, [[RNG4:!range !.*]]
+; CHECK-NEXT:    [[LIMIT:%.*]] = load i32, i32* @limit, align 4, !range !4
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp ult i32 [[A:%.*]], [[LIMIT]]
 ; CHECK-NEXT:    br i1 [[CMP]], label [[THEN:%.*]], label [[ELSE:%.*]]
 ; CHECK:       then:

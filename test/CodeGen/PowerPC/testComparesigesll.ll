@@ -5,9 +5,9 @@
 ; RUN: llc -verify-machineinstrs -mtriple=powerpc64le-unknown-linux-gnu -O2 \
 ; RUN:   -ppc-gpr-icmps=all -ppc-asm-full-reg-names -mcpu=pwr8 < %s | FileCheck %s --check-prefix=CHECK-LE \
 ; RUN:  --implicit-check-not cmpw --implicit-check-not cmpd --implicit-check-not cmpl
-@glob = dso_local local_unnamed_addr global i64 0, align 8
+@glob = local_unnamed_addr global i64 0, align 8
 
-define dso_local signext i32 @test_igesll(i64 %a, i64 %b) {
+define signext i32 @test_igesll(i64 %a, i64 %b) {
 ; CHECK-LABEL: test_igesll:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sradi r5, r3, 63
@@ -36,7 +36,7 @@ entry:
   ret i32 %conv
 }
 
-define dso_local signext i32 @test_igesll_sext(i64 %a, i64 %b) {
+define signext i32 @test_igesll_sext(i64 %a, i64 %b) {
 ; CHECK-LABEL: test_igesll_sext:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sradi r5, r3, 63
@@ -68,7 +68,7 @@ entry:
   ret i32 %sub
 }
 
-define dso_local signext i32 @test_igesll_z(i64 %a) {
+define signext i32 @test_igesll_z(i64 %a) {
 ; CHECK-LABEL: test_igesll_z:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    not r3, r3
@@ -91,7 +91,7 @@ entry:
   ret i32 %conv
 }
 
-define dso_local signext i32 @test_igesll_sext_z(i64 %a) {
+define signext i32 @test_igesll_sext_z(i64 %a) {
 ; CHECK-LABEL: test_igesll_sext_z:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sradi r3, r3, 63
@@ -114,7 +114,7 @@ entry:
   ret i32 %sub
 }
 
-define dso_local void @test_igesll_store(i64 %a, i64 %b) {
+define void @test_igesll_store(i64 %a, i64 %b) {
 ; CHECK-LABEL: test_igesll_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sradi r6, r3, 63
@@ -126,12 +126,13 @@ define dso_local void @test_igesll_store(i64 %a, i64 %b) {
 ; CHECK-NEXT:    blr
 ; CHECK-BE-LABEL: test_igesll_store:
 ; CHECK-BE:       # %bb.0: # %entry
+; CHECK-BE-NEXT:    addis r5, r2, .LC0@toc@ha
 ; CHECK-BE-NEXT:    sradi r6, r3, 63
-; CHECK-BE-NEXT:    addis r5, r2, glob@toc@ha
+; CHECK-BE-NEXT:    ld r5, .LC0@toc@l(r5)
 ; CHECK-BE-NEXT:    subc r3, r3, r4
 ; CHECK-BE-NEXT:    rldicl r3, r4, 1, 63
 ; CHECK-BE-NEXT:    adde r3, r6, r3
-; CHECK-BE-NEXT:    std r3, glob@toc@l(r5)
+; CHECK-BE-NEXT:    std r3, 0(r5)
 ; CHECK-BE-NEXT:    blr
 ;
 ; CHECK-LE-LABEL: test_igesll_store:
@@ -150,7 +151,7 @@ entry:
   ret void
 }
 
-define dso_local void @test_igesll_sext_store(i64 %a, i64 %b) {
+define void @test_igesll_sext_store(i64 %a, i64 %b) {
 ; CHECK-LABEL: test_igesll_sext_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sradi r6, r3, 63
@@ -164,12 +165,13 @@ define dso_local void @test_igesll_sext_store(i64 %a, i64 %b) {
 ; CHECK-BE-LABEL: test_igesll_sext_store:
 ; CHECK-BE:       # %bb.0: # %entry
 ; CHECK-BE-NEXT:    sradi r6, r3, 63
-; CHECK-BE-NEXT:    addis r5, r2, glob@toc@ha
+; CHECK-BE-NEXT:    addis r5, r2, .LC0@toc@ha
 ; CHECK-BE-NEXT:    subc r3, r3, r4
 ; CHECK-BE-NEXT:    rldicl r3, r4, 1, 63
+; CHECK-BE-NEXT:    ld r4, .LC0@toc@l(r5)
 ; CHECK-BE-NEXT:    adde r3, r6, r3
 ; CHECK-BE-NEXT:    neg r3, r3
-; CHECK-BE-NEXT:    std r3, glob@toc@l(r5)
+; CHECK-BE-NEXT:    std r3, 0(r4)
 ; CHECK-BE-NEXT:    blr
 ;
 ; CHECK-LE-LABEL: test_igesll_sext_store:
@@ -189,7 +191,7 @@ entry:
   ret void
 }
 
-define dso_local void @test_igesll_z_store(i64 %a) {
+define void @test_igesll_z_store(i64 %a) {
 ; CHECK-LABEL: test_igesll_z_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    not r3, r3
@@ -199,10 +201,11 @@ define dso_local void @test_igesll_z_store(i64 %a) {
 ; CHECK-NEXT:    blr
 ; CHECK-BE-LABEL: test_igesll_z_store:
 ; CHECK-BE:       # %bb.0: # %entry
+; CHECK-BE-NEXT:    addis r4, r2, .LC0@toc@ha
 ; CHECK-BE-NEXT:    not r3, r3
-; CHECK-BE-NEXT:    addis r4, r2, glob@toc@ha
+; CHECK-BE-NEXT:    ld r4, .LC0@toc@l(r4)
 ; CHECK-BE-NEXT:    rldicl r3, r3, 1, 63
-; CHECK-BE-NEXT:    std r3, glob@toc@l(r4)
+; CHECK-BE-NEXT:    std r3, 0(r4)
 ; CHECK-BE-NEXT:    blr
 ;
 ; CHECK-LE-LABEL: test_igesll_z_store:
@@ -219,7 +222,7 @@ entry:
   ret void
 }
 
-define dso_local void @test_igesll_sext_z_store(i64 %a) {
+define void @test_igesll_sext_z_store(i64 %a) {
 ; CHECK-LABEL: test_igesll_sext_z_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    not r3, r3
@@ -229,10 +232,11 @@ define dso_local void @test_igesll_sext_z_store(i64 %a) {
 ; CHECK-NEXT:    blr
 ; CHECK-BE-LABEL: test_igesll_sext_z_store:
 ; CHECK-BE:       # %bb.0: # %entry
+; CHECK-BE-NEXT:    addis r4, r2, .LC0@toc@ha
 ; CHECK-BE-NEXT:    not r3, r3
-; CHECK-BE-NEXT:    addis r4, r2, glob@toc@ha
+; CHECK-BE-NEXT:    ld r4, .LC0@toc@l(r4)
 ; CHECK-BE-NEXT:    sradi r3, r3, 63
-; CHECK-BE-NEXT:    std r3, glob@toc@l(r4)
+; CHECK-BE-NEXT:    std r3, 0(r4)
 ; CHECK-BE-NEXT:    blr
 ;
 ; CHECK-LE-LABEL: test_igesll_sext_z_store:

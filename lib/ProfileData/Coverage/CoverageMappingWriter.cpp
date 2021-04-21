@@ -80,14 +80,10 @@ public:
                               ArrayRef<CounterMappingRegion> MappingRegions)
       : Expressions(Expressions) {
     AdjustedExpressionIDs.resize(Expressions.size(), 0);
-    for (const auto &I : MappingRegions) {
+    for (const auto &I : MappingRegions)
       mark(I.Count);
-      mark(I.FalseCount);
-    }
-    for (const auto &I : MappingRegions) {
+    for (const auto &I : MappingRegions)
       gatherUsed(I.Count);
-      gatherUsed(I.FalseCount);
-    }
   }
 
   void mark(Counter C) {
@@ -205,7 +201,6 @@ void CoverageMappingWriter::write(raw_ostream &OS) {
       PrevLineStart = 0;
     }
     Counter Count = Minimizer.adjust(I->Count);
-    Counter FalseCount = Minimizer.adjust(I->FalseCount);
     switch (I->Kind) {
     case CounterMappingRegion::CodeRegion:
     case CounterMappingRegion::GapRegion:
@@ -230,13 +225,6 @@ void CoverageMappingWriter::write(raw_ostream &OS) {
       encodeULEB128(unsigned(I->Kind)
                         << Counter::EncodingCounterTagAndExpansionRegionTagBits,
                     OS);
-      break;
-    case CounterMappingRegion::BranchRegion:
-      encodeULEB128(unsigned(I->Kind)
-                        << Counter::EncodingCounterTagAndExpansionRegionTagBits,
-                    OS);
-      writeCounter(MinExpressions, Count, OS);
-      writeCounter(MinExpressions, FalseCount, OS);
       break;
     }
     assert(I->LineStart >= PrevLineStart);

@@ -54,7 +54,6 @@ intermediate LLVM representation.
    TableGenFundamentals
    Vectorizers
    WritingAnLLVMPass
-   WritingAnLLVMNewPMPass
    WritingAnLLVMBackend
    yaml2obj
 
@@ -107,10 +106,6 @@ Optimizations
 
 :doc:`WritingAnLLVMPass`
    Information on how to write LLVM transformations and analyses.
-
-:doc:`WritingAnLLVMNewPMPass`
-   Information on how to write LLVM transformations under the new pass
-   manager.
 
 :doc:`Passes`
    A list of optimizations and analyses implemented in LLVM.
@@ -203,6 +198,6 @@ Additional Topics
 :doc:`AMDGPUUsage`
    This document describes using the AMDGPU backend to compile GPU kernels.
 
-:doc:`AMDGPUDwarfExtensionsForHeterogeneousDebugging`
-   This document describes DWARF extensions to support heterogeneous debugging
+:doc:`AMDGPUDwarfProposalForHeterogeneousDebugging`
+   This document describes a DWARF proposal to support heterogeneous debugging
    for targets such as the AMDGPU backend.

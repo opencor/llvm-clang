@@ -15,7 +15,6 @@
 #define LLVM_LIB_TARGET_AARCH64_AARCH64MACHINELEGALIZER_H
 
 #include "llvm/CodeGen/GlobalISel/GISelChangeObserver.h"
-#include "llvm/CodeGen/GlobalISel/LegalizerHelper.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 
 namespace llvm {
@@ -46,7 +45,6 @@ private:
   bool legalizeSmallCMGlobalValue(MachineInstr &MI, MachineRegisterInfo &MRI,
                                   MachineIRBuilder &MIRBuilder,
                                   GISelChangeObserver &Observer) const;
-  bool legalizeVectorTrunc(MachineInstr &MI, LegalizerHelper &Helper) const;
   const AArch64Subtarget *ST;
 };
 } // End llvm namespace.

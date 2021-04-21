@@ -26,9 +26,10 @@
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -51,9 +52,10 @@ Symbols:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -71,9 +73,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -88,9 +91,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -110,27 +114,27 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
     Content: "1122334455"
 
-## Check we emit an empty section if neither "Content", "Size" nor "Symbols" were set.
+## Either "Content" or "Symbols" must be specifed for SHT_LLVM_ADDRSIG sections.
 
-# RUN: yaml2obj --docnum=6 %s -o %t6
-# RUN: llvm-readelf --sections %t6 | FileCheck %s --check-prefix=NO-TAGS
+# RUN: not yaml2obj --docnum=6 %s 2>&1 | FileCheck %s --check-prefix=NO-TAGS
 
-# NO-TAGS: [Nr] Name          Type         Address          Off    Size
-# NO-TAGS: [ 1] .llvm_addrsig LLVM_ADDRSIG 0000000000000000 000040 000000
+# NO-TAGS: error: one of "Content", "Size" or "Symbols" must be specified
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -143,9 +147,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -163,9 +168,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_DYN
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -187,9 +193,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -216,9 +223,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig_sizegr
     Type: SHT_LLVM_ADDRSIG
@@ -234,13 +242,14 @@ Sections:
 
 # RUN: not yaml2obj --docnum=11 %s 2>&1 | FileCheck %s --check-prefix=SIZE-CONTENT-ERR
 
-# SIZE-CONTENT-ERR: error: Section size must be greater than or equal to the content size
+# SIZE-CONTENT-ERR: error: "Size" must be greater than or equal to the content size
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG
@@ -253,9 +262,10 @@ Sections:
 
 --- !ELF
 FileHeader:
-  Class: ELFCLASS64
-  Data:  ELFDATA2LSB
-  Type:  ET_EXEC
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_EXEC
+  Machine: EM_X86_64
 Sections:
   - Name: .llvm_addrsig
     Type: SHT_LLVM_ADDRSIG

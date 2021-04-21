@@ -12,9 +12,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "R600RegisterInfo.h"
-#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "AMDGPUTargetMachine.h"
 #include "R600Defines.h"
-#include "R600Subtarget.h"
+#include "R600InstrInfo.h"
+#include "R600MachineFunctionInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 
 using namespace llvm;
 
@@ -92,8 +94,8 @@ const TargetRegisterClass * R600RegisterInfo::getCFGStructurizerRegClass(
   }
 }
 
-bool R600RegisterInfo::isPhysRegLiveAcrossClauses(Register Reg) const {
-  assert(!Reg.isVirtual());
+bool R600RegisterInfo::isPhysRegLiveAcrossClauses(unsigned Reg) const {
+  assert(!Register::isVirtualRegister(Reg));
 
   switch (Reg) {
   case R600::OQAP:

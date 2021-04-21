@@ -1,5 +1,3 @@
-add_llvm_component_group(Mips HAS_JIT)
-
 set(LLVM_TARGET_DEFINITIONS Mips.td)
 
 tablegen(LLVM MipsGenAsmMatcher.inc -gen-asm-matcher)
@@ -59,22 +57,6 @@ add_llvm_target(MipsCodeGen
   MipsTargetMachine.cpp
   MipsTargetObjectFile.cpp
   MicroMipsSizeReduction.cpp
-
-  LINK_COMPONENTS
-  Analysis
-  AsmPrinter
-  CodeGen
-  Core
-  MC
-  MipsDesc
-  MipsInfo
-  SelectionDAG
-  Support
-  Target
-  GlobalISel
-
-  ADD_TO_COMPONENT
-  Mips
   )
 
 add_subdirectory(AsmParser)

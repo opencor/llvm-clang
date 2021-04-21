@@ -2,7 +2,11 @@
 
 # GCN-LABEL: name: vmem_vcc_fallthrough
 # GCN:      bb.1:
-# GCN-NEXT: S_NOP 4
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_fallthrough
@@ -19,7 +23,10 @@ body:             |
 ...
 # GCN-LABEL: name: vmem_vcc_branch_to_next
 # GCN:      bb.1:
-# GCN-NEXT: S_NOP 3
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_branch_to_next
@@ -75,7 +82,10 @@ body:             |
 ...
 # GCN-LABEL: name: vmem_vcc_branch_around
 # GCN:      bb.2:
-# GCN-NEXT: S_NOP 3
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_branch_around
@@ -100,7 +110,10 @@ body:             |
     $vgpr1 = BUFFER_LOAD_DWORD_OFFEN $vgpr0, $sgpr0_sgpr1_sgpr2_sgpr3, $vcc_lo, 0, 0, 0, 0, 0, 0, implicit $exec
 ...
 # GCN-LABEL: name: vmem_vcc_branch_backedge
-# GCN:      S_NOP 3
+# GCN:      S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_branch_backedge
@@ -119,7 +132,11 @@ body:             |
 ...
 # GCN-LABEL: name: vmem_vcc_min_of_two
 # GCN:      bb.2:
-# GCN-NEXT: S_NOP 4
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_min_of_two
@@ -142,7 +159,10 @@ body:             |
     $vgpr1 = BUFFER_LOAD_DWORD_OFFEN $vgpr0, $sgpr0_sgpr1_sgpr2_sgpr3, $vcc_lo, 0, 0, 0, 0, 0, 0, implicit $exec
 ...
 # GCN-LABEL: name: vmem_vcc_self_loop
-# GCN:      S_NOP 3
+# GCN:      S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_self_loop
@@ -159,7 +179,10 @@ body:             |
 # GCN-LABEL: name: vmem_vcc_min_of_two_self_loop1
 # GCN:      bb.1:
 # GCN:      $sgpr0 = S_MOV_B32 0
-# GCN-NEXT: S_NOP 3
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_min_of_two_self_loop1
@@ -182,7 +205,9 @@ body:             |
 # GCN-LABEL: name: vmem_vcc_min_of_two_self_loop2
 # GCN:      bb.1:
 # GCN:      $sgpr0 = S_MOV_B32 0
-# GCN-NEXT: S_NOP 2
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
+# GCN-NEXT: S_NOP
 # GCN-NEXT: BUFFER_LOAD_DWORD_OFFEN
 ---
 name:            vmem_vcc_min_of_two_self_loop2

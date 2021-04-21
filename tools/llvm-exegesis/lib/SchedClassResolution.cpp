@@ -217,14 +217,12 @@ ResolvedSchedClass::ResolvedSchedClass(const MCSubtargetInfo &STI,
 }
 
 static unsigned ResolveVariantSchedClassId(const MCSubtargetInfo &STI,
-                                           const MCInstrInfo &InstrInfo,
                                            unsigned SchedClassId,
                                            const MCInst &MCI) {
   const auto &SM = STI.getSchedModel();
-  while (SchedClassId && SM.getSchedClassDesc(SchedClassId)->isVariant()) {
-    SchedClassId = STI.resolveVariantSchedClass(SchedClassId, &MCI, &InstrInfo,
-                                                SM.getProcessorID());
-  }
+  while (SchedClassId && SM.getSchedClassDesc(SchedClassId)->isVariant())
+    SchedClassId =
+        STI.resolveVariantSchedClass(SchedClassId, &MCI, SM.getProcessorID());
   return SchedClassId;
 }
 
@@ -236,8 +234,7 @@ ResolvedSchedClass::resolveSchedClassId(const MCSubtargetInfo &SubtargetInfo,
   const bool WasVariant = SchedClassId && SubtargetInfo.getSchedModel()
                                               .getSchedClassDesc(SchedClassId)
                                               ->isVariant();
-  SchedClassId =
-      ResolveVariantSchedClassId(SubtargetInfo, InstrInfo, SchedClassId, MCI);
+  SchedClassId = ResolveVariantSchedClassId(SubtargetInfo, SchedClassId, MCI);
   return std::make_pair(SchedClassId, WasVariant);
 }
 
@@ -286,11 +283,11 @@ std::vector<BenchmarkMeasure> ResolvedSchedClass::getAsPoint(
       uint16_t ProcResIdx = findProcResIdx(STI, Key);
       if (ProcResIdx > 0) {
         // Find the pressure on ProcResIdx `Key`.
-        const auto ProcResPressureIt =
-            llvm::find_if(IdealizedProcResPressure,
-                          [ProcResIdx](const std::pair<uint16_t, float> &WPR) {
-                            return WPR.first == ProcResIdx;
-                          });
+        const auto ProcResPressureIt = std::find_if(
+            IdealizedProcResPressure.begin(), IdealizedProcResPressure.end(),
+            [ProcResIdx](const std::pair<uint16_t, float> &WPR) {
+              return WPR.first == ProcResIdx;
+            });
         Measure.PerInstructionValue =
             ProcResPressureIt == IdealizedProcResPressure.end()
                 ? 0.0

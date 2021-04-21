@@ -12,7 +12,6 @@ LLVM welcomes contributions of all kinds. To get started, please review the foll
    Contributing
    DeveloperPolicy
    CodeReview
-   SupportPolicy
    SphinxQuickstartTemplate
    Phabricator
    HowToSubmitABug
@@ -28,9 +27,6 @@ LLVM welcomes contributions of all kinds. To get started, please review the foll
 
 :doc:`CodeReview`
    The LLVM project's code-review process.
-
-:doc:`SupportPolicy`
-   The LLVM support policy for core and non-core components.
 
 :doc:`SphinxQuickstartTemplate`
   A template + tutorial for writing new Sphinx documentation. It is meant
@@ -65,6 +61,7 @@ Information about LLVM's development process.
    :hidden:
 
    Projects
+   LLVMBuild
    HowToReleaseLLVM
    Packaging
    ReleaseProcess
@@ -76,6 +73,10 @@ Information about LLVM's development process.
   infrastructure.  The templates (directory organization, Makefiles, and test
   tree) allow the project code to be located outside (or inside) the ``llvm/``
   tree, while using LLVM header files and libraries.
+
+:doc:`LLVMBuild`
+  Describes the LLVMBuild organization and files used by LLVM to specify
+  component descriptions.
 
 :doc:`HowToReleaseLLVM`
   This is a guide to preparing LLVM releases. Most developers can ignore it.

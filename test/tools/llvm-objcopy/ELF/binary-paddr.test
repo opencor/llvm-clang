@@ -35,10 +35,11 @@ Sections:
     AddressAlign:    0x1000
     Content:         "3232"
 ProgramHeaders:
-  - Type:     PT_LOAD
-    Flags:    [ PF_R, PF_W ]
-    FirstSec: .text
-    LastSec:  .data
+  - Type: PT_LOAD
+    Flags: [ PF_R, PF_W ]
+    Sections:
+      - Section: .text
+      - Section: .data
 
 ## The computed LMA of a section not in a PT_LOAD equals its sh_addr.
 
@@ -77,13 +78,13 @@ Sections:
     AddressAlign:    0x1000
     Content:         "3232"
 ProgramHeaders:
-  - Type:     PT_LOAD
-    Flags:    [ PF_R, PF_W ]
-    VAddr:    0x2000
+  - Type: PT_LOAD
+    Flags: [ PF_R, PF_W ]
+    VAddr: 0x2000
     ## p_vaddr is increased from 0x2000 to 0x4000.
-    PAddr:    0x4000
-    FirstSec: .data
-    LastSec:  .data
+    PAddr: 0x4000
+    Sections:
+      - Section: .data
 
 ## Check that we use sh_offset instead of sh_addr to decide where to write section contents.
 
@@ -123,11 +124,11 @@ Sections:
     AddressAlign:    0x1000
     Content:         "3232"
 ProgramHeaders:
-  - Type:     PT_LOAD
-    Flags:    [ PF_R, PF_W ]
-    VAddr:    0x3000
-    FirstSec: .data
-    LastSec:  .data
+  - Type: PT_LOAD
+    Flags: [ PF_R, PF_W ]
+    VAddr: 0x3000
+    Sections:
+      - Section: .data
 
 ## The first section (.text) is empty. Test that we skip its LMA until the first
 ## non-empty section, otherwise we would leave a large number of leading zeroes.

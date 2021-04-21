@@ -86,7 +86,7 @@ struct CommonFixture {
 
     generate();
 
-    return DWARFDebugLine::SectionParser(LineData, *Context, Units);
+    return DWARFDebugLine::SectionParser(LineData, *Context, CUs, TUs);
   }
 
   void recordRecoverable(Error Err) {
@@ -114,7 +114,8 @@ struct CommonFixture {
   Error Unrecoverable;
   std::function<void(Error)> RecordUnrecoverable;
 
-  SmallVector<std::unique_ptr<DWARFUnit>, 2> Units;
+  SmallVector<std::unique_ptr<DWARFUnit>, 2> CUs;
+  SmallVector<std::unique_ptr<DWARFUnit>, 2> TUs;
 };
 
 // Fixtures must derive from "Test", but parameterised fixtures from
@@ -125,7 +126,7 @@ struct DebugLineBasicFixture : public Test, public CommonFixture {};
 struct DebugLineParameterisedFixture
     : public TestWithParam<std::pair<uint16_t, DwarfFormat>>,
       public CommonFixture {
-  void SetUp() override { std::tie(Version, Format) = GetParam(); }
+  void SetUp() { std::tie(Version, Format) = GetParam(); }
 
   uint16_t Version;
   DwarfFormat Format;
@@ -327,7 +328,7 @@ TEST_F(DebugLineBasicFixture, ErrorForReservedLength) {
 
 struct DebugLineUnsupportedVersionFixture : public TestWithParam<uint16_t>,
                                             public CommonFixture {
-  void SetUp() override { Version = GetParam(); }
+  void SetUp() { Version = GetParam(); }
 
   uint16_t Version;
 };
@@ -1086,7 +1087,7 @@ TEST_F(DebugLineBasicFixture, ParserAlwaysDoneForEmptySection) {
     return;
 
   generate();
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
 
   EXPECT_TRUE(Parser.done());
 }
@@ -1100,7 +1101,7 @@ TEST_F(DebugLineBasicFixture, ParserMarkedAsDoneForBadLengthWhenParsing) {
   Gen->addLineTable();
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.parseNext(RecordRecoverable, RecordUnrecoverable);
 
   EXPECT_EQ(Parser.getOffset(), 0u);
@@ -1123,7 +1124,7 @@ TEST_F(DebugLineBasicFixture, ParserMarkedAsDoneForBadLengthWhenSkipping) {
   Gen->addLineTable();
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.skip(RecordRecoverable, RecordUnrecoverable);
 
   EXPECT_EQ(Parser.getOffset(), 0u);
@@ -1147,7 +1148,7 @@ TEST_F(DebugLineBasicFixture, ParserReportsFirstErrorInEachTableWhenParsing) {
   LT2.setCustomPrologue({{2, LineTable::Long}, {1, LineTable::Half}});
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.parseNext(RecordRecoverable, RecordUnrecoverable);
   ASSERT_FALSE(Parser.done());
   Parser.parseNext(RecordRecoverable, RecordUnrecoverable);
@@ -1176,7 +1177,7 @@ TEST_F(DebugLineBasicFixture, ParserReportsNonPrologueProblemsWhenParsing) {
   LT2.addByte(0xbb);
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.parseNext(RecordRecoverable, RecordUnrecoverable);
   EXPECT_FALSE(Unrecoverable);
   ASSERT_FALSE(Parser.done());
@@ -1206,7 +1207,7 @@ TEST_F(DebugLineBasicFixture,
   LT2.setCustomPrologue({{2, LineTable::Long}, {1, LineTable::Half}});
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.skip(RecordRecoverable, RecordUnrecoverable);
   ASSERT_FALSE(Parser.done());
   Parser.skip(RecordRecoverable, RecordUnrecoverable);
@@ -1230,7 +1231,7 @@ TEST_F(DebugLineBasicFixture, ParserIgnoresNonPrologueErrorsWhenSkipping) {
   LT.addExtendedOpcode(42, DW_LNE_end_sequence, {});
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   Parser.skip(RecordRecoverable, RecordUnrecoverable);
 
   EXPECT_TRUE(Parser.done());
@@ -1289,7 +1290,7 @@ TEST_F(DebugLineBasicFixture, VerboseOutput) {
 
   generate();
 
-  DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+  DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
   std::string Output;
   raw_string_ostream OS(Output);
   Parser.parseNext(RecordRecoverable, RecordUnrecoverable, &OS,
@@ -1383,7 +1384,7 @@ struct TruncatedPrologueFixture
     : public TestWithParam<
           std::tuple<uint64_t, uint64_t, uint16_t, DwarfFormat, StringRef>>,
       public CommonFixture {
-  void SetUp() override {
+  void SetUp() {
     std::tie(Length, ExpectedOffset, Version, Format, ExpectedErr) = GetParam();
   }
 
@@ -1526,7 +1527,7 @@ struct TruncatedOpcodeFixtureBase : public CommonFixture {
 
   void runTest(uint8_t OpcodeValue) {
     generate();
-    DWARFDebugLine::SectionParser Parser(LineData, *Context, Units);
+    DWARFDebugLine::SectionParser Parser(LineData, *Context, CUs, TUs);
     std::string Output;
     raw_string_ostream OS(Output);
     Parser.parseNext(RecordRecoverable, RecordUnrecoverable, &OS,
@@ -1553,7 +1554,7 @@ struct TruncatedStandardOpcodeFixture
     : public TestWithParam<
           std::tuple<uint64_t, uint8_t, ValueAndLengths, StringRef, StringRef>>,
       public TruncatedOpcodeFixtureBase {
-  void SetUp() override {
+  void SetUp() {
     std::tie(BodyLength, Opcode, Operands, ExpectedOutput, ExpectedErr) =
         GetParam();
   }
@@ -1563,7 +1564,7 @@ struct TruncatedExtendedOpcodeFixture
     : public TestWithParam<std::tuple<uint64_t, uint64_t, uint8_t,
                                       ValueAndLengths, StringRef, StringRef>>,
       public TruncatedOpcodeFixtureBase {
-  void SetUp() override {
+  void SetUp() {
     std::tie(BodyLength, OpcodeLength, Opcode, Operands, ExpectedOutput,
              ExpectedErr) = GetParam();
   }

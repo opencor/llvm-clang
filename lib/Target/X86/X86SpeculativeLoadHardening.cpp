@@ -184,7 +184,7 @@ private:
                       MachineBasicBlock::iterator InsertPt, DebugLoc Loc);
   void restoreEFLAGS(MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator InsertPt, DebugLoc Loc,
-                     Register Reg);
+                     unsigned OFReg);
 
   void mergePredStateIntoSP(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator InsertPt, DebugLoc Loc,
@@ -200,8 +200,8 @@ private:
   MachineInstr *
   sinkPostLoadHardenedInst(MachineInstr &MI,
                            SmallPtrSetImpl<MachineInstr *> &HardenedInstrs);
-  bool canHardenRegister(Register Reg);
-  unsigned hardenValueInRegister(Register Reg, MachineBasicBlock &MBB,
+  bool canHardenRegister(unsigned Reg);
+  unsigned hardenValueInRegister(unsigned Reg, MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator InsertPt,
                                  DebugLoc Loc);
   unsigned hardenPostLoad(MachineInstr &MI);
@@ -1520,7 +1520,7 @@ unsigned X86SpeculativeLoadHardeningPass::saveEFLAGS(
 /// reliably lower.
 void X86SpeculativeLoadHardeningPass::restoreEFLAGS(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt, DebugLoc Loc,
-    Register Reg) {
+    unsigned Reg) {
   BuildMI(MBB, InsertPt, Loc, TII->get(X86::COPY), X86::EFLAGS).addReg(Reg);
   ++NumInstsInserted;
 }
@@ -1842,7 +1842,8 @@ MachineInstr *X86SpeculativeLoadHardeningPass::sinkPostLoadHardenedInst(
       // just bail. Also check that its register class is one of the ones we
       // can harden.
       Register UseDefReg = UseMI.getOperand(0).getReg();
-      if (!UseDefReg.isVirtual() || !canHardenRegister(UseDefReg))
+      if (!Register::isVirtualRegister(UseDefReg) ||
+          !canHardenRegister(UseDefReg))
         return {};
 
       SingleUseMI = &UseMI;
@@ -1864,7 +1865,7 @@ MachineInstr *X86SpeculativeLoadHardeningPass::sinkPostLoadHardenedInst(
   return MI;
 }
 
-bool X86SpeculativeLoadHardeningPass::canHardenRegister(Register Reg) {
+bool X86SpeculativeLoadHardeningPass::canHardenRegister(unsigned Reg) {
   auto *RC = MRI->getRegClass(Reg);
   int RegBytes = TRI->getRegSizeInBits(*RC) / 8;
   if (RegBytes > 8)
@@ -1908,10 +1909,10 @@ bool X86SpeculativeLoadHardeningPass::canHardenRegister(Register Reg) {
 /// The new, hardened virtual register is returned. It will have the same
 /// register class as `Reg`.
 unsigned X86SpeculativeLoadHardeningPass::hardenValueInRegister(
-    Register Reg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt,
+    unsigned Reg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt,
     DebugLoc Loc) {
   assert(canHardenRegister(Reg) && "Cannot harden this register!");
-  assert(Reg.isVirtual() && "Cannot harden a physical register!");
+  assert(Register::isVirtualRegister(Reg) && "Cannot harden a physical register!");
 
   auto *RC = MRI->getRegClass(Reg);
   int Bytes = TRI->getRegSizeInBits(*RC) / 8;

@@ -60,7 +60,7 @@ cl::opt<bool> Summarize("summarize", cl::desc("Print the summary only."),
 
 ExitOnError ExitOnErr;
 
-static void printBlameContext(const DILineInfo &LineInfo, unsigned Context) {
+void printBlameContext(const DILineInfo &LineInfo, unsigned Context) {
   auto FileOrErr = MemoryBuffer::getFile(LineInfo.FileName);
   if (!FileOrErr) {
     errs() << "Could not open file: " << LineInfo.FileName << "\n";
@@ -84,10 +84,10 @@ static void printBlameContext(const DILineInfo &LineInfo, unsigned Context) {
   }
 }
 
-static void printInstructionInformation(const FileAnalysis &Analysis,
-                                        const Instr &InstrMeta,
-                                        const GraphResult &Graph,
-                                        CFIProtectionStatus ProtectionStatus) {
+void printInstructionInformation(const FileAnalysis &Analysis,
+                                 const Instr &InstrMeta,
+                                 const GraphResult &Graph,
+                                 CFIProtectionStatus ProtectionStatus) {
   outs() << "Instruction: " << format_hex(InstrMeta.VMAddress, 2) << " ("
          << stringCFIProtectionStatus(ProtectionStatus) << "): ";
   Analysis.printInstruction(InstrMeta, outs());
@@ -97,8 +97,8 @@ static void printInstructionInformation(const FileAnalysis &Analysis,
     Graph.printToDOT(Analysis, outs());
 }
 
-static void printInstructionStatus(unsigned BlameLine, bool CFIProtected,
-                                   const DILineInfo &LineInfo) {
+void printInstructionStatus(unsigned BlameLine, bool CFIProtected,
+                            const DILineInfo &LineInfo) {
   if (BlameLine) {
     outs() << "Blacklist Match: " << BlacklistFilename << ":" << BlameLine
            << "\n";
@@ -122,9 +122,8 @@ static void printInstructionStatus(unsigned BlameLine, bool CFIProtected,
   }
 }
 
-static void
-printIndirectCFInstructions(FileAnalysis &Analysis,
-                            const SpecialCaseList *SpecialCaseList) {
+void printIndirectCFInstructions(FileAnalysis &Analysis,
+                                 const SpecialCaseList *SpecialCaseList) {
   uint64_t ExpectedProtected = 0;
   uint64_t UnexpectedProtected = 0;
   uint64_t ExpectedUnprotected = 0;

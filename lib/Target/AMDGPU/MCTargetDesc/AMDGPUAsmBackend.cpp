@@ -9,14 +9,17 @@
 
 #include "MCTargetDesc/AMDGPUFixupKinds.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
-#include "Utils/AMDGPUBaseInfo.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "Utils/AMDGPUBaseInfo.h"
 
 using namespace llvm;
 using namespace llvm::AMDGPU;
@@ -58,6 +61,7 @@ void AMDGPUAsmBackend::relaxInstruction(MCInst &Inst,
   Res.setOpcode(RelaxedOpcode);
   Res.addOperand(Inst.getOperand(0));
   Inst = std::move(Res);
+  return;
 }
 
 bool AMDGPUAsmBackend::fixupNeedsRelaxation(const MCFixup &Fixup,
@@ -233,6 +237,7 @@ MCAsmBackend *llvm::createAMDGPUAsmBackend(const Target &T,
                                            const MCSubtargetInfo &STI,
                                            const MCRegisterInfo &MRI,
                                            const MCTargetOptions &Options) {
+  // Use 64-bit ELF for amdgcn
   return new ELFAMDGPUAsmBackend(T, STI.getTargetTriple(),
-                                 getHsaAbiVersion(&STI).getValueOr(0));
+                                 IsaInfo::hasCodeObjectV3(&STI) ? 1 : 0);
 }

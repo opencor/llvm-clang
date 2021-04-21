@@ -491,8 +491,7 @@ public:
 
   std::string getPrototype(const DataLayout &DL, Type *, const ArgListTy &,
                            const SmallVectorImpl<ISD::OutputArg> &,
-                           MaybeAlign retAlignment, const CallBase &CB,
-                           unsigned UniqueCallSite) const;
+                           MaybeAlign retAlignment, const CallBase &CB) const;
 
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,

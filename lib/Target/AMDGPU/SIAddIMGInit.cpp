@@ -16,9 +16,15 @@
 //
 
 #include "AMDGPU.h"
-#include "GCNSubtarget.h"
+#include "AMDGPUSubtarget.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "SIInstrInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/IR/Function.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Target/TargetMachine.h"
 
 #define DEBUG_TYPE "si-img-init"
 
@@ -74,8 +80,9 @@ bool SIAddIMGInit::runOnMachineFunction(MachineFunction &MF) {
         MachineOperand *LWE = TII->getNamedOperand(MI, AMDGPU::OpName::lwe);
         MachineOperand *D16 = TII->getNamedOperand(MI, AMDGPU::OpName::d16);
 
-        if (!TFE && !LWE) // intersect_ray
-          continue;
+        // Check for instructions that don't have tfe or lwe fields
+        // There shouldn't be any at this point.
+        assert( (TFE && LWE) && "Expected tfe and lwe operands in instruction");
 
         unsigned TFEVal = TFE->getImm();
         unsigned LWEVal = LWE->getImm();

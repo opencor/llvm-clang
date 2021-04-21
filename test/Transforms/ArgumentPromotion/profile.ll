@@ -15,9 +15,9 @@ define void @caller() #0 {
   ret void
 }
 
-define internal void @promote_i32_ptr(i32* %xp) !prof !1 {
+define internal void @promote_i32_ptr(i32* %xp) {
 ; CHECK-LABEL: define {{[^@]+}}@promote_i32_ptr
-; CHECK-SAME: (i32 [[XP_VAL:%.*]]) !prof !1
+; CHECK-SAME: (i32 [[XP_VAL:%.*]])
 ; CHECK-NEXT:    call void @use_i32(i32 [[XP_VAL]])
 ; CHECK-NEXT:    ret void
 ;
@@ -29,4 +29,3 @@ define internal void @promote_i32_ptr(i32* %xp) !prof !1 {
 declare void @use_i32(i32)
 
 !0 = !{!"branch_weights", i32 30}
-!1 = !{!"function_entry_count", i64 100}

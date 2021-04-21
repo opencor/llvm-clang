@@ -6,12 +6,4 @@ add_llvm_component_library(LLVMWebAssemblyDesc
   WebAssemblyMCTargetDesc.cpp
   WebAssemblyTargetStreamer.cpp
   WebAssemblyWasmObjectWriter.cpp
-
-  LINK_COMPONENTS
-  MC
-  Support
-  WebAssemblyInfo
-
-  ADD_TO_COMPONENT
-  WebAssembly
 )

@@ -51,10 +51,11 @@ entry:
 define i8* @propagate_nonnull_to_int() {
 ; CHECK-LABEL: define i8* @propagate_nonnull_to_int(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    %[[A:.*]] = alloca i8*
-; CHECK-NEXT:    store i8* inttoptr (i64 42 to i8*), i8** %[[A]]
-; CHECK-NEXT:    %[[LOAD:.*]] = load volatile i8*, i8** %[[A]]
-; CHECK-NEXT:    ret i8* %[[LOAD]]
+; CHECK-NEXT:    %[[A:.*]] = alloca i64
+; CHECK-NEXT:    store i64 42, i64* %[[A]]
+; CHECK-NEXT:    %[[LOAD:.*]] = load volatile i64, i64* %[[A]]
+; CHECK-NEXT:    %[[CAST:.*]] = inttoptr i64 %[[LOAD]] to i8*
+; CHECK-NEXT:    ret i8* %[[CAST]]
 entry:
   %a = alloca [2 x i8*]
   %a.gep0 = getelementptr [2 x i8*], [2 x i8*]* %a, i32 0, i32 0
@@ -74,7 +75,8 @@ entry:
 define i8* @propagate_nonnull_to_int_and_promote() {
 ; CHECK-LABEL: define i8* @propagate_nonnull_to_int_and_promote(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    ret i8* inttoptr (i64 42 to i8*)
+; CHECK-NEXT:    %[[PROMOTED_VALUE:.*]] = inttoptr i64 42 to i8*
+; CHECK-NEXT:    ret i8* %[[PROMOTED_VALUE]]
 entry:
   %a = alloca [2 x i8*], align 8
   %a.gep0 = getelementptr [2 x i8*], [2 x i8*]* %a, i32 0, i32 0

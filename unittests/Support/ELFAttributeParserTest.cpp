@@ -17,7 +17,7 @@ static const TagNameMap emptyTagNameMap;
 
 // This class is used to test the common part of the ELF attribute section.
 class AttributeHeaderParser : public ELFAttributeParser {
-  Error handler(uint64_t tag, bool &handled) override {
+  Error handler(uint64_t tag, bool &handled) {
     // Treat all attributes as handled.
     handled = true;
     return Error::success();

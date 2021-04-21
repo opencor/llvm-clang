@@ -752,14 +752,11 @@ bool SystemZInstrInfo::PredicateInstruction(
     return true;
   }
   if (Opcode == SystemZ::CallBR) {
-    MachineOperand Target = MI.getOperand(0);
-    const uint32_t *RegMask = MI.getOperand(1).getRegMask();
-    MI.RemoveOperand(1);
+    const uint32_t *RegMask = MI.getOperand(0).getRegMask();
     MI.RemoveOperand(0);
     MI.setDesc(get(SystemZ::CallBCR));
     MachineInstrBuilder(*MI.getParent()->getParent(), MI)
       .addImm(CCValid).addImm(CCMask)
-      .add(Target)
       .addRegMask(RegMask)
       .addReg(SystemZ::CC, RegState::Implicit);
     return true;
@@ -1002,7 +999,7 @@ MachineInstr *SystemZInstrInfo::foldMemoryOperandImpl(
   unsigned Opcode = MI.getOpcode();
 
   // Check CC liveness if new instruction introduces a dead def of CC.
-  MCRegUnitIterator CCUnit(MCRegister::from(SystemZ::CC), TRI);
+  MCRegUnitIterator CCUnit(SystemZ::CC, TRI);
   SlotIndex MISlot = SlotIndex();
   LiveRange *CCLiveRange = nullptr;
   bool CCLiveAtMI = true;
@@ -1199,7 +1196,7 @@ MachineInstr *SystemZInstrInfo::foldMemoryOperandImpl(
     if (RC == &SystemZ::VR32BitRegClass || RC == &SystemZ::VR64BitRegClass) {
       Register Reg = MI.getOperand(I).getReg();
       Register PhysReg = Register::isVirtualRegister(Reg)
-                             ? (VRM ? Register(VRM->getPhys(Reg)) : Register())
+                             ? (VRM ? VRM->getPhys(Reg) : Register())
                              : Reg;
       if (!PhysReg ||
           !(SystemZ::FP32BitRegClass.contains(PhysReg) ||
@@ -1245,8 +1242,7 @@ MachineInstr *SystemZInstrInfo::foldMemoryOperandImpl(
     else {
       Register DstReg = MI.getOperand(0).getReg();
       Register DstPhys =
-          (Register::isVirtualRegister(DstReg) ? Register(VRM->getPhys(DstReg))
-                                               : DstReg);
+          (Register::isVirtualRegister(DstReg) ? VRM->getPhys(DstReg) : DstReg);
       Register SrcReg = (OpNum == 2 ? MI.getOperand(1).getReg()
                                     : ((OpNum == 1 && MI.isCommutable())
                                            ? MI.getOperand(2).getReg()

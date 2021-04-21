@@ -1,4 +1,5 @@
-; RUN: llc %s -o - -stop-after=finalize-isel -verify-machineinstrs | FileCheck %s
+; XFAIL: *
+; RUN: llc %s -o - -stop-after=finalize-isel -verify-machineinstr | FileCheck %s
 
 target datalayout = "e-m:o-p:32:32-Fi8-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32"
 target triple = "thumbv7-apple-ios7.0.0"
@@ -11,8 +12,8 @@ target triple = "thumbv7-apple-ios7.0.0"
 ; CHECK-NEXT:     %0:gpr = COPY $r0
 ; CHECK-NEXT:     $r0 = COPY %0
 ; CHECK-NEXT:     $r1 = COPY %1
-; CHECK-NEXT:     DBG_VALUE $noreg, $noreg, !13, !DIExpression(), debug-location !16
 ; CHECK-NEXT:     TCRETURNdi &__divsi3, implicit $sp, implicit $r0, implicit $r1
+; CHECK-NEXT:     DBG_VALUE $noreg, $noreg, !13, !DIExpression(), debug-location !16
 
 define i32 @test(i32 %a1, i32 %a2) !dbg !5 {
 entry:

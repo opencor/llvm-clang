@@ -57,10 +57,6 @@ def DirectivePwrFuture
 
 def Feature64Bit     : SubtargetFeature<"64bit","Has64BitSupport", "true",
                                         "Enable 64-bit instructions">;
-def AIXOS: SubtargetFeature<"aix", "IsAIX", "true", "AIX OS">;
-def FeatureModernAIXAs
-    : SubtargetFeature<"modern-aix-as", "HasModernAIXAs", "true",
-                       "AIX system assembler is modern enough to support new mnes">;
 def FeatureHardFloat : SubtargetFeature<"hard-float", "HasHardFloat", "true",
                               "Enable floating-point instructions">;
 def Feature64BitRegs : SubtargetFeature<"64bitregs","Use64BitRegs", "true",
@@ -76,9 +72,6 @@ def FeatureAltivec   : SubtargetFeature<"altivec","HasAltivec", "true",
 def FeatureSPE       : SubtargetFeature<"spe","HasSPE", "true",
                                         "Enable SPE instructions",
                                         [FeatureHardFloat]>;
-def FeatureEFPU2 : SubtargetFeature<"efpu2", "HasEFPU2", "true", 
-                                        "Enable Embedded Floating-Point APU 2 instructions",
-                                        [FeatureSPE]>;
 def FeatureMFOCRF    : SubtargetFeature<"mfocrf","HasMFOCRF", "true",
                                         "Enable the MFOCRF instruction">;
 def FeatureFSqrt     : SubtargetFeature<"fsqrt","HasFSQRT", "true",
@@ -139,6 +132,9 @@ def FeaturePPC4xx    : SubtargetFeature<"ppc4xx", "IsPPC4xx", "true",
                                         "Enable PPC 4xx instructions">;
 def FeaturePPC6xx    : SubtargetFeature<"ppc6xx", "IsPPC6xx", "true",
                                         "Enable PPC 6xx instructions">;
+def FeatureQPX       : SubtargetFeature<"qpx","HasQPX", "true",
+                                        "Enable QPX instructions",
+                                        [FeatureFPU]>;
 def FeatureVSX       : SubtargetFeature<"vsx","HasVSX", "true",
                                         "Enable VSX instructions",
                                         [FeatureAltivec]>;
@@ -181,9 +177,6 @@ def FeatureAddisLoadFusion : SubtargetFeature<"fuse-addis-load",
                                               "HasAddisLoadFusion", "true",
                                               "Power8 Addis-Load fusion",
                                               [FeatureFusion]>;
-def FeatureStoreFusion : SubtargetFeature<"fuse-store", "HasStoreFusion", "true",
-                                          "Target supports store clustering",
-                                          [FeatureFusion]>;
 def FeatureUnalignedFloats :
   SubtargetFeature<"allow-unaligned-fp-access", "AllowsUnalignedFPAccess",
                    "true", "CPU does not trap on unaligned FP access">;
@@ -200,7 +193,7 @@ def FeatureFloat128 :
 def FeaturePOPCNTD   : SubtargetFeature<"popcntd","HasPOPCNTD",
                                         "POPCNTD_Fast",
                                         "Enable the popcnt[dw] instructions">;
-// Note that for the a2 processor models we should not use popcnt[dw] by
+// Note that for the a2/a2q processor models we should not use popcnt[dw] by
 // default. These processors do support the instructions, but they're
 // microcoded, and the software emulation is about twice as fast.
 def FeatureSlowPOPCNTD : SubtargetFeature<"slow-popcntd","HasPOPCNTD",
@@ -243,15 +236,7 @@ def FeaturePrefixInstrs : SubtargetFeature<"prefix-instrs", "HasPrefixInstrs",
 def FeaturePCRelativeMemops :
   SubtargetFeature<"pcrelative-memops", "HasPCRelativeMemops", "true",
                    "Enable PC relative Memory Ops",
-                   [FeatureISA3_0, FeaturePrefixInstrs]>;
-def FeaturePairedVectorMemops:
-  SubtargetFeature<"paired-vector-memops", "PairedVectorMemops", "true",
-                   "32Byte load and store instructions",
                    [FeatureISA3_0]>;
-def FeatureMMA : SubtargetFeature<"mma", "HasMMA", "true",
-                                  "Enable MMA instructions",
-                                  [FeatureP8Vector, FeatureP9Altivec,
-                                   FeaturePairedVectorMemops]>;
 
 def FeaturePredictableSelectIsExpensive :
   SubtargetFeature<"predictable-select-expensive",
@@ -335,8 +320,6 @@ def ProcessorFeatures {
     [DirectivePwr9,
      FeatureP9Altivec,
      FeatureP9Vector,
-     FeaturePPCPreRASched,
-     FeaturePPCPostRASched,
      FeatureISA3_0,
      FeaturePredictableSelectIsExpensive
     ];
@@ -346,7 +329,9 @@ def ProcessorFeatures {
   // dispatch for vector operations than scalar ones. For the time being,
   // this list also includes scheduling-related features since we do not have
   // enough info to create custom scheduling strategies for future CPUs.
-  list<SubtargetFeature> P9SpecificFeatures = [FeatureVectorsUseTwoUnits];
+  list<SubtargetFeature> P9SpecificFeatures = [FeatureVectorsUseTwoUnits,
+                                               FeaturePPCPreRASched,
+                                               FeaturePPCPostRASched];
   list<SubtargetFeature> P9InheritableFeatures =
     !listconcat(P8InheritableFeatures, P9AdditionalFeatures);
   list<SubtargetFeature> P9Features =
@@ -355,12 +340,9 @@ def ProcessorFeatures {
   // Power10
   // For P10 CPU we assume that all of the existing features from Power9
   // still exist with the exception of those we know are Power9 specific.
-  list<SubtargetFeature> FusionFeatures = [FeatureStoreFusion];
   list<SubtargetFeature> P10AdditionalFeatures =
-    !listconcat(FusionFeatures, [
-       DirectivePwr10, FeatureISA3_1, FeaturePrefixInstrs,
-       FeaturePCRelativeMemops, FeatureP10Vector, FeatureMMA,
-       FeaturePairedVectorMemops]);
+    [DirectivePwr10, FeatureISA3_1, FeaturePrefixInstrs,
+     FeaturePCRelativeMemops, FeatureP10Vector];
   list<SubtargetFeature> P10SpecificFeatures = [];
   list<SubtargetFeature> P10InheritableFeatures =
     !listconcat(P9InheritableFeatures, P10AdditionalFeatures);
@@ -445,7 +427,6 @@ def getAltVSXFMAOpcode : InstrMapping {
 
 include "PPCRegisterInfo.td"
 include "PPCSchedule.td"
-include "GISel/PPCRegisterBanks.td"
 
 //===----------------------------------------------------------------------===//
 // PowerPC processors supported.
@@ -533,6 +514,15 @@ def : ProcessorModel<"a2", PPCA2Model,
                    FeatureFPRND, FeatureFPCVT, FeatureISEL,
                    FeatureSlowPOPCNTD, FeatureCMPB, FeatureLDBRX,
                    Feature64Bit /*, Feature64BitRegs */, FeatureMFTB]>;
+def : ProcessorModel<"a2q", PPCA2Model,
+                  [DirectiveA2, FeatureICBT, FeatureBookE, FeatureMFOCRF,
+                   FeatureFCPSGN, FeatureFSqrt, FeatureFRE, FeatureFRES,
+                   FeatureFRSQRTE, FeatureFRSQRTES, FeatureRecipPrec,
+                   FeatureSTFIWX, FeatureLFIWAX,
+                   FeatureFPRND, FeatureFPCVT, FeatureISEL,
+                   FeatureSlowPOPCNTD, FeatureCMPB, FeatureLDBRX,
+                   Feature64Bit /*, Feature64BitRegs */, FeatureQPX,
+                   FeatureMFTB]>;
 def : ProcessorModel<"pwr3", G5Model,
                   [DirectivePwr3, FeatureAltivec,
                    FeatureFRES, FeatureFRSQRTE, FeatureMFOCRF,
@@ -571,7 +561,7 @@ def : ProcessorModel<"pwr7", P7Model, ProcessorFeatures.P7Features>;
 def : ProcessorModel<"pwr8", P8Model, ProcessorFeatures.P8Features>;
 def : ProcessorModel<"pwr9", P9Model, ProcessorFeatures.P9Features>;
 // No scheduler model yet.
-def : ProcessorModel<"pwr10", P9Model, ProcessorFeatures.P10Features>;
+def : ProcessorModel<"pwr10", NoSchedModel, ProcessorFeatures.P10Features>;
 // No scheduler model for future CPU.
 def : ProcessorModel<"future", NoSchedModel,
                   ProcessorFeatures.FutureFeatures>;
@@ -602,13 +592,6 @@ def PPCInstrInfo : InstrInfo {
   let noNamedPositionallyEncodedOperands = 1;
 }
 
-def PPCAsmWriter : AsmWriter {
-  string AsmWriterClassName  = "InstPrinter";
-  int PassSubtarget = 1;
-  int Variant = 0;
-  bit isMCAsmWriter = 1;
-}
-
 def PPCAsmParser : AsmParser {
   let ShouldEmitMatchRegisterName = 0;
 }
@@ -627,7 +610,6 @@ def PPC : Target {
   // Information about the instructions.
   let InstructionSet = PPCInstrInfo;
 
-  let AssemblyWriters = [PPCAsmWriter];
   let AssemblyParsers = [PPCAsmParser];
   let AssemblyParserVariants = [PPCAsmParserVariant];
   let AllowRegisterRenaming = 1;

@@ -198,7 +198,7 @@ void GlobalLayoutBuilder::addFragment(const std::set<uint64_t> &F) {
       // indices from the old fragment in this fragment do not insert any more
       // indices.
       std::vector<uint64_t> &OldFragment = Fragments[OldFragmentIndex];
-      llvm::append_range(Fragment, OldFragment);
+      Fragment.insert(Fragment.end(), OldFragment.begin(), OldFragment.end());
       OldFragment.clear();
     }
   }
@@ -1205,7 +1205,6 @@ void LowerTypeTestsModule::verifyTypeMDNode(GlobalObject *GO, MDNode *Type) {
 
 static const unsigned kX86JumpTableEntrySize = 8;
 static const unsigned kARMJumpTableEntrySize = 4;
-static const unsigned kARMBTIJumpTableEntrySize = 8;
 
 unsigned LowerTypeTestsModule::getJumpTableEntrySize() {
   switch (Arch) {
@@ -1214,12 +1213,7 @@ unsigned LowerTypeTestsModule::getJumpTableEntrySize() {
       return kX86JumpTableEntrySize;
     case Triple::arm:
     case Triple::thumb:
-      return kARMJumpTableEntrySize;
     case Triple::aarch64:
-      if (const auto *BTE = mdconst::extract_or_null<ConstantInt>(
-            M.getModuleFlag("branch-target-enforcement")))
-        if (BTE->getZExtValue())
-          return kARMBTIJumpTableEntrySize;
       return kARMJumpTableEntrySize;
     default:
       report_fatal_error("Unsupported architecture for jump tables");
@@ -1238,13 +1232,7 @@ void LowerTypeTestsModule::createJumpTableEntry(
   if (JumpTableArch == Triple::x86 || JumpTableArch == Triple::x86_64) {
     AsmOS << "jmp ${" << ArgIndex << ":c}@plt\n";
     AsmOS << "int3\nint3\nint3\n";
-  } else if (JumpTableArch == Triple::arm) {
-    AsmOS << "b $" << ArgIndex << "\n";
-  } else if (JumpTableArch == Triple::aarch64) {
-    if (const auto *BTE = mdconst::extract_or_null<ConstantInt>(
-          Dest->getParent()->getModuleFlag("branch-target-enforcement")))
-      if (BTE->getZExtValue())
-        AsmOS << "bti c\n";
+  } else if (JumpTableArch == Triple::arm || JumpTableArch == Triple::aarch64) {
     AsmOS << "b $" << ArgIndex << "\n";
   } else if (JumpTableArch == Triple::thumb) {
     AsmOS << "b.w $" << ArgIndex << "\n";
@@ -1338,7 +1326,7 @@ void LowerTypeTestsModule::replaceWeakDeclarationWithJumpTablePtr(
 
 static bool isThumbFunction(Function *F, Triple::ArchType ModuleArch) {
   Attribute TFAttr = F->getFnAttribute("target-features");
-  if (TFAttr.isValid()) {
+  if (!TFAttr.hasAttribute(Attribute::None)) {
     SmallVector<StringRef, 6> Features;
     TFAttr.getValueAsString().split(Features, ',');
     for (StringRef Feature : Features) {
@@ -1405,10 +1393,6 @@ void LowerTypeTestsModule::createJumpTable(
     // Thumb jump table assembly needs Thumb2. The following attribute is added
     // by Clang for -march=armv7.
     F->addFnAttr("target-cpu", "cortex-a8");
-  }
-  if (JumpTableArch == Triple::aarch64) {
-    F->addFnAttr("branch-target-enforcement", "false");
-    F->addFnAttr("sign-return-address", "none");
   }
   // Make sure we don't emit .eh_frame for this function.
   F->addFnAttr(Attribute::NoUnwind);
@@ -2255,13 +2239,9 @@ bool LowerTypeTestsModule::lower() {
 
 PreservedAnalyses LowerTypeTestsPass::run(Module &M,
                                           ModuleAnalysisManager &AM) {
-  bool Changed;
-  if (UseCommandLine)
-    Changed = LowerTypeTestsModule::runForTesting(M);
-  else
-    Changed =
-        LowerTypeTestsModule(M, ExportSummary, ImportSummary, DropTypeTests)
-            .lower();
+  bool Changed =
+      LowerTypeTestsModule(M, ExportSummary, ImportSummary, DropTypeTests)
+          .lower();
   if (!Changed)
     return PreservedAnalyses::all();
   return PreservedAnalyses::none();

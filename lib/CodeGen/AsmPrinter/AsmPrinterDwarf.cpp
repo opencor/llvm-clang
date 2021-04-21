@@ -27,7 +27,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
-#include <cstdint>
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
@@ -98,12 +97,6 @@ static const char *DecodeDWARFEncoding(unsigned Encoding) {
   case dwarf::DW_EH_PE_indirect | dwarf::DW_EH_PE_pcrel | dwarf::DW_EH_PE_sdata8
       :
     return "indirect pcrel sdata8";
-  case dwarf::DW_EH_PE_indirect | dwarf::DW_EH_PE_datarel |
-      dwarf::DW_EH_PE_sdata4:
-    return "indirect datarel sdata4";
-  case dwarf::DW_EH_PE_indirect | dwarf::DW_EH_PE_datarel |
-      dwarf::DW_EH_PE_sdata8:
-    return "indirect datarel sdata8";
   }
 
   return "<unknown encoding>";
@@ -144,7 +137,8 @@ unsigned AsmPrinter::GetSizeOfEncodedValue(unsigned Encoding) const {
   }
 }
 
-void AsmPrinter::emitTTypeReference(const GlobalValue *GV, unsigned Encoding) {
+void AsmPrinter::emitTTypeReference(const GlobalValue *GV,
+                                    unsigned Encoding) const {
   if (GV) {
     const TargetLoweringObjectFile &TLOF = getObjFileLowering();
 
@@ -160,22 +154,19 @@ void AsmPrinter::emitDwarfSymbolReference(const MCSymbol *Label,
   if (!ForceOffset) {
     // On COFF targets, we have to emit the special .secrel32 directive.
     if (MAI->needsDwarfSectionOffsetDirective()) {
-      assert(!isDwarf64() &&
-             "emitting DWARF64 is not implemented for COFF targets");
       OutStreamer->EmitCOFFSecRel32(Label, /*Offset=*/0);
       return;
     }
 
     // If the format uses relocations with dwarf, refer to the symbol directly.
     if (MAI->doesDwarfUseRelocationsAcrossSections()) {
-      OutStreamer->emitSymbolValue(Label, getDwarfOffsetByteSize());
+      OutStreamer->emitSymbolValue(Label, 4);
       return;
     }
   }
 
   // Otherwise, emit it as a label difference from the start of the section.
-  emitLabelDifference(Label, Label->getSection().getBeginSymbol(),
-                      getDwarfOffsetByteSize());
+  emitLabelDifference(Label, Label->getSection().getBeginSymbol(), 4);
 }
 
 void AsmPrinter::emitDwarfStringOffset(DwarfStringPoolEntry S) const {
@@ -186,38 +177,12 @@ void AsmPrinter::emitDwarfStringOffset(DwarfStringPoolEntry S) const {
   }
 
   // Just emit the offset directly; no need for symbol math.
-  OutStreamer->emitIntValue(S.Offset, getDwarfOffsetByteSize());
+  emitInt32(S.Offset);
 }
 
 void AsmPrinter::emitDwarfOffset(const MCSymbol *Label, uint64_t Offset) const {
-  emitLabelPlusOffset(Label, Offset, getDwarfOffsetByteSize());
-}
-
-void AsmPrinter::emitDwarfLengthOrOffset(uint64_t Value) const {
-  assert(isDwarf64() || Value <= UINT32_MAX);
-  OutStreamer->emitIntValue(Value, getDwarfOffsetByteSize());
-}
-
-void AsmPrinter::maybeEmitDwarf64Mark() const {
-  if (!isDwarf64())
-    return;
-  OutStreamer->AddComment("DWARF64 Mark");
-  OutStreamer->emitInt32(dwarf::DW_LENGTH_DWARF64);
-}
-
-void AsmPrinter::emitDwarfUnitLength(uint64_t Length,
-                                     const Twine &Comment) const {
-  assert(isDwarf64() || Length <= dwarf::DW_LENGTH_lo_reserved);
-  maybeEmitDwarf64Mark();
-  OutStreamer->AddComment(Comment);
-  OutStreamer->emitIntValue(Length, getDwarfOffsetByteSize());
-}
-
-void AsmPrinter::emitDwarfUnitLength(const MCSymbol *Hi, const MCSymbol *Lo,
-                                     const Twine &Comment) const {
-  maybeEmitDwarf64Mark();
-  OutStreamer->AddComment(Comment);
-  OutStreamer->emitAbsoluteSymbolDiff(Hi, Lo, getDwarfOffsetByteSize());
+  // TODO: Support DWARF64
+  emitLabelPlusOffset(Label, Offset, 4);
 }
 
 void AsmPrinter::emitCallSiteOffset(const MCSymbol *Hi, const MCSymbol *Lo,

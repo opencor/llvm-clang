@@ -55,9 +55,7 @@
 using namespace llvm;
 
 ARMBaseRegisterInfo::ARMBaseRegisterInfo()
-    : ARMGenRegisterInfo(ARM::LR, 0, 0, ARM::PC) {
-  ARM_MC::initLLVMToCVRegMapping(this);
-}
+    : ARMGenRegisterInfo(ARM::LR, 0, 0, ARM::PC) {}
 
 static unsigned getFramePointerReg(const ARMSubtarget &STI) {
   return STI.useR7AsFramePointer() ? ARM::R7 : ARM::R11;
@@ -330,13 +328,9 @@ bool ARMBaseRegisterInfo::getRegAllocationHints(
   case ARMRI::RegPairOdd:
     Odd = 1;
     break;
-  case ARMRI::RegLR:
-    TargetRegisterInfo::getRegAllocationHints(VirtReg, Order, Hints, MF, VRM);
-    if (MRI.getRegClass(VirtReg)->contains(ARM::LR))
-      Hints.push_back(ARM::LR);
-    return false;
   default:
-    return TargetRegisterInfo::getRegAllocationHints(VirtReg, Order, Hints, MF, VRM);
+    TargetRegisterInfo::getRegAllocationHints(VirtReg, Order, Hints, MF, VRM);
+    return false;
   }
 
   // This register should preferably be even (Odd == 0) or odd (Odd == 1).
@@ -640,10 +634,10 @@ needsFrameBaseReg(MachineInstr *MI, int64_t Offset) const {
 
 /// materializeFrameBaseRegister - Insert defining instruction(s) for BaseReg to
 /// be a pointer to FrameIdx at the beginning of the basic block.
-Register
-ARMBaseRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
-                                                  int FrameIdx,
-                                                  int64_t Offset) const {
+void ARMBaseRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
+                                                       Register BaseReg,
+                                                       int FrameIdx,
+                                                       int64_t Offset) const {
   ARMFunctionInfo *AFI = MBB->getParent()->getInfo<ARMFunctionInfo>();
   unsigned ADDriOpc = !AFI->isThumbFunction() ? ARM::ADDri :
     (AFI->isThumb1OnlyFunction() ? ARM::tADDframe : ARM::t2ADDri);
@@ -657,7 +651,6 @@ ARMBaseRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
   MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   const MCInstrDesc &MCID = TII.get(ADDriOpc);
-  Register BaseReg = MRI.createVirtualRegister(&ARM::GPRRegClass);
   MRI.constrainRegClass(BaseReg, TII.getRegClass(MCID, 0, this, MF));
 
   MachineInstrBuilder MIB = BuildMI(*MBB, Ins, DL, MCID, BaseReg)
@@ -665,8 +658,6 @@ ARMBaseRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
 
   if (!AFI->isThumb1OnlyFunction())
     MIB.add(predOps(ARMCC::AL)).add(condCodeOp());
-
-  return BaseReg;
 }
 
 void ARMBaseRegisterInfo::resolveFrameIndex(MachineInstr &MI, Register BaseReg,

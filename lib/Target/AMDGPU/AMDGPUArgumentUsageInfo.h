@@ -9,13 +9,14 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPUARGUMENTUSAGEINFO_H
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUARGUMENTUSAGEINFO_H
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/Register.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/LowLevelTypeImpl.h"
 
 namespace llvm {
 
 class Function;
-class LLT;
 class raw_ostream;
 class TargetRegisterClass;
 class TargetRegisterInfo;
@@ -26,7 +27,7 @@ private:
   friend class AMDGPUArgumentUsageInfo;
 
   union {
-    MCRegister Reg;
+    Register Reg;
     unsigned StackOffset;
   };
 
@@ -68,7 +69,7 @@ public:
     return !IsStack;
   }
 
-  MCRegister getRegister() const {
+  Register getRegister() const {
     assert(!IsStack);
     return Reg;
   }

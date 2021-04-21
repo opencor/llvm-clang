@@ -12,6 +12,7 @@
 #include "TargetInfo/MSP430TargetInfo.h"
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"

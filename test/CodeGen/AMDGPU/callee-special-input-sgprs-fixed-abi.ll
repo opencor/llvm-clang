@@ -161,8 +161,7 @@ define hidden void @func_indirect_use_workgroup_id_z() #1 {
 }
 
 ; GCN-LABEL: {{^}}other_arg_use_workgroup_id_x:
-; CIVI: flat_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
-; GFX9: global_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0, off
+; GCN: {{flat|global}}_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
 ; GCN: ; use s12
 define hidden void @other_arg_use_workgroup_id_x(i32 %arg0) #1 {
   %val = call i32 @llvm.amdgcn.workgroup.id.x()
@@ -172,8 +171,7 @@ define hidden void @other_arg_use_workgroup_id_x(i32 %arg0) #1 {
 }
 
 ; GCN-LABEL: {{^}}other_arg_use_workgroup_id_y:
-; CIVI: flat_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
-; GFX9: global_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0, off
+; GCN: {{flat|global}}_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
 ; GCN: ; use s13
 define hidden void @other_arg_use_workgroup_id_y(i32 %arg0) #1 {
   %val = call i32 @llvm.amdgcn.workgroup.id.y()
@@ -183,8 +181,7 @@ define hidden void @other_arg_use_workgroup_id_y(i32 %arg0) #1 {
 }
 
 ; GCN-LABEL: {{^}}other_arg_use_workgroup_id_z:
-; CIVI: flat_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
-; GFX9: global_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0, off
+; GCN: {{flat|global}}_store_dword v{{\[[0-9]+:[0-9]+\]}}, v0
 ; GCN: ; use s14
 define hidden void @other_arg_use_workgroup_id_z(i32 %arg0) #1 {
   %val = call i32 @llvm.amdgcn.workgroup.id.z()

@@ -19,15 +19,12 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Testing/Support/SupportHelpers.h"
 #include "gtest/gtest.h"
 #include <string>
 #include <vector>
 
 using namespace llvm;
 using namespace sampleprof;
-
-using llvm::unittest::TempFile;
 
 static ::testing::AssertionResult NoError(std::error_code EC) {
   if (!EC)
@@ -63,14 +60,21 @@ struct SampleProfTest : ::testing::Test {
     Reader->collectFuncsFrom(M);
   }
 
-  TempFile createRemapFile() {
-    return TempFile("remapfile", "", R"(
+  void createRemapFile(SmallVectorImpl<char> &RemapPath, StringRef &RemapFile) {
+    std::error_code EC =
+        llvm::sys::fs::createTemporaryFile("remapfile", "", RemapPath);
+    ASSERT_TRUE(NoError(EC));
+    RemapFile = StringRef(RemapPath.data(), RemapPath.size());
+
+    std::unique_ptr<raw_fd_ostream> OS(
+        new raw_fd_ostream(RemapFile, EC, sys::fs::OF_None));
+    *OS << R"(
       # Types 'int' and 'long' are equivalent
       type i l
       # Function names 'foo' and 'faux' are equivalent
       name 3foo 4faux
-    )",
-                    /*Unique*/ true);
+    )";
+    OS->close();
   }
 
   // Verify profile summary is consistent in the roundtrip to and from
@@ -85,8 +89,8 @@ struct SampleProfTest : ::testing::Test {
     auto VerifySummary = [IsPartialProfile, PartialProfileRatio](
                              ProfileSummary &Summary) mutable {
       ASSERT_EQ(ProfileSummary::PSK_Sample, Summary.getKind());
-      ASSERT_EQ(138211u, Summary.getTotalCount());
-      ASSERT_EQ(10u, Summary.getNumCounts());
+      ASSERT_EQ(137392u, Summary.getTotalCount());
+      ASSERT_EQ(8u, Summary.getNumCounts());
       ASSERT_EQ(4u, Summary.getNumFunctions());
       ASSERT_EQ(1437u, Summary.getMaxFunctionCount());
       ASSERT_EQ(60351u, Summary.getMaxCount());
@@ -108,7 +112,7 @@ struct SampleProfTest : ::testing::Test {
       ASSERT_EQ(60000u, EightyPerc->MinCount);
       ASSERT_EQ(12557u, NinetyPerc->MinCount);
       ASSERT_EQ(12557u, NinetyFivePerc->MinCount);
-      ASSERT_EQ(600u, NinetyNinePerc->MinCount);
+      ASSERT_EQ(610u, NinetyNinePerc->MinCount);
     };
     VerifySummary(Summary);
 
@@ -133,8 +137,10 @@ struct SampleProfTest : ::testing::Test {
   }
 
   void testRoundTrip(SampleProfileFormat Format, bool Remap, bool UseMD5) {
-    TempFile ProfileFile("profile", "", "", /*Unique*/ true);
-    createWriter(Format, ProfileFile.path());
+    SmallVector<char, 128> ProfilePath;
+    ASSERT_TRUE(NoError(llvm::sys::fs::createTemporaryFile("profile", "", ProfilePath)));
+    StringRef Profile(ProfilePath.data(), ProfilePath.size());
+    createWriter(Format, Profile);
     if (Format == SampleProfileFormat::SPF_Ext_Binary && UseMD5)
       static_cast<SampleProfileWriterExtBinary *>(Writer.get())->setUseMD5();
 
@@ -148,22 +154,6 @@ struct SampleProfTest : ::testing::Test {
     FooSamples.addBodySamples(4, 0, 60000);
     FooSamples.addBodySamples(8, 0, 60351);
     FooSamples.addBodySamples(10, 0, 605);
-
-    // Add inline instance with name "_Z3gooi".
-    StringRef GooName("_Z3gooi");
-    auto &GooSamples =
-        FooSamples.functionSamplesAt(LineLocation(7, 0))[GooName.str()];
-    GooSamples.setName(GooName);
-    GooSamples.addTotalSamples(502);
-    GooSamples.addBodySamples(3, 0, 502);
-
-    // Add inline instance with name "_Z3hooi".
-    StringRef HooName("_Z3hooi");
-    auto &HooSamples =
-        GooSamples.functionSamplesAt(LineLocation(9, 0))[HooName.str()];
-    HooSamples.setName(HooName);
-    HooSamples.addTotalSamples(317);
-    HooSamples.addBodySamples(4, 0, 317);
 
     StringRef BarName("_Z3bari");
     FunctionSamples BarSamples;
@@ -201,12 +191,12 @@ struct SampleProfTest : ::testing::Test {
     FunctionType *fn_type =
         FunctionType::get(Type::getVoidTy(Context), {}, false);
 
-    TempFile RemapFile(createRemapFile());
+    SmallVector<char, 128> RemapPath;
+    StringRef RemapFile;
     if (Remap) {
+      createRemapFile(RemapPath, RemapFile);
       FooName = "_Z4fauxi";
       BarName = "_Z3barl";
-      GooName = "_Z3gool";
-      HooName = "_Z3hool";
     }
 
     M.getOrInsertFunction(FooName, fn_type);
@@ -226,7 +216,7 @@ struct SampleProfTest : ::testing::Test {
 
     Writer->getOutputStream().flush();
 
-    readProfile(M, ProfileFile.path(), RemapFile.path());
+    readProfile(M, Profile, RemapFile);
     EC = Reader->read();
     ASSERT_TRUE(NoError(EC));
 
@@ -244,33 +234,6 @@ struct SampleProfTest : ::testing::Test {
     }
     ASSERT_EQ(7711u, ReadFooSamples->getTotalSamples());
     ASSERT_EQ(610u, ReadFooSamples->getHeadSamples());
-
-    // Try to find a FunctionSamples with GooName at given callsites containing
-    // inline instance for GooName. Test the correct FunctionSamples can be
-    // found with Remapper support.
-    const FunctionSamples *ReadGooSamples =
-        ReadFooSamples->findFunctionSamplesAt(LineLocation(7, 0), GooName,
-                                              Reader->getRemapper());
-    ASSERT_TRUE(ReadGooSamples != nullptr);
-    ASSERT_EQ(502u, ReadGooSamples->getTotalSamples());
-
-    // Try to find a FunctionSamples with GooName at given callsites containing
-    // no inline instance for GooName. Test no FunctionSamples will be
-    // found with Remapper support.
-    const FunctionSamples *ReadGooSamplesAgain =
-        ReadFooSamples->findFunctionSamplesAt(LineLocation(9, 0), GooName,
-                                              Reader->getRemapper());
-    ASSERT_TRUE(ReadGooSamplesAgain == nullptr);
-
-    // The inline instance of Hoo is inside of the inline instance of Goo.
-    // Try to find a FunctionSamples with HooName at given callsites containing
-    // inline instance for HooName. Test the correct FunctionSamples can be
-    // found with Remapper support.
-    const FunctionSamples *ReadHooSamples =
-        ReadGooSamples->findFunctionSamplesAt(LineLocation(9, 0), HooName,
-                                              Reader->getRemapper());
-    ASSERT_TRUE(ReadHooSamples != nullptr);
-    ASSERT_EQ(317u, ReadHooSamples->getTotalSamples());
 
     FunctionSamples *ReadBarSamples = Reader->getSamplesFor(BarName);
     ASSERT_TRUE(ReadBarSamples != nullptr);
@@ -367,21 +330,24 @@ struct SampleProfTest : ::testing::Test {
 
   void testSuffixElisionPolicy(SampleProfileFormat Format, StringRef Policy,
                                const StringMap<uint64_t> &Expected) {
-    TempFile ProfileFile("profile", "", "", /*Unique*/ true);
+    SmallVector<char, 128> ProfilePath;
+    std::error_code EC;
+    EC = llvm::sys::fs::createTemporaryFile("profile", "", ProfilePath);
+    ASSERT_TRUE(NoError(EC));
+    StringRef ProfileFile(ProfilePath.data(), ProfilePath.size());
 
     Module M("my_module", Context);
     setupModuleForElisionTest(&M, Policy);
     StringMap<FunctionSamples> ProfMap = setupFcnSamplesForElisionTest(Policy);
 
     // write profile
-    createWriter(Format, ProfileFile.path());
-    std::error_code EC;
+    createWriter(Format, ProfileFile);
     EC = Writer->write(ProfMap);
     ASSERT_TRUE(NoError(EC));
     Writer->getOutputStream().flush();
 
     // read profile
-    readProfile(M, ProfileFile.path());
+    readProfile(M, ProfileFile);
     EC = Reader->read();
     ASSERT_TRUE(NoError(EC));
 

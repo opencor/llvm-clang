@@ -144,7 +144,7 @@ class ShrinkWrap : public MachineFunctionPass {
   unsigned FrameDestroyOpcode;
 
   /// Stack pointer register, used by llvm.{savestack,restorestack}
-  Register SP;
+  unsigned SP;
 
   /// Entry block.
   const MachineBasicBlock *Entry;
@@ -331,7 +331,11 @@ void ShrinkWrap::updateSaveRestorePoints(MachineBasicBlock &MBB,
     Save = &MBB;
   else
     Save = MDT->findNearestCommonDominator(Save, &MBB);
-  assert(Save);
+
+  if (!Save) {
+    LLVM_DEBUG(dbgs() << "Found a block that is not reachable from Entry\n");
+    return;
+  }
 
   if (!Restore)
     Restore = &MBB;
@@ -377,7 +381,7 @@ void ShrinkWrap::updateSaveRestorePoints(MachineBasicBlock &MBB,
   // C. Save and Restore are in the same loop.
   bool SaveDominatesRestore = false;
   bool RestorePostDominatesSave = false;
-  while (Restore &&
+  while (Save && Restore &&
          (!(SaveDominatesRestore = MDT->dominates(Save, Restore)) ||
           !(RestorePostDominatesSave = MPDT->dominates(Restore, Save)) ||
           // Post-dominance is not enough in loops to ensure that all uses/defs
@@ -408,7 +412,8 @@ void ShrinkWrap::updateSaveRestorePoints(MachineBasicBlock &MBB,
       Restore = MPDT->findNearestCommonDominator(Restore, Save);
 
     // Fix (C).
-    if (Restore && (MLI->getLoopFor(Save) || MLI->getLoopFor(Restore))) {
+    if (Save && Restore &&
+        (MLI->getLoopFor(Save) || MLI->getLoopFor(Restore))) {
       if (MLI->getLoopDepth(Save) > MLI->getLoopDepth(Restore)) {
         // Push Save outside of this loop if immediate dominator is different
         // from save block. If immediate dominator is not different, bail out.

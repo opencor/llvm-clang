@@ -48,10 +48,6 @@ void IO::setContext(void *Context) {
   Ctxt = Context;
 }
 
-void IO::setAllowUnknownKeys(bool Allow) {
-  llvm_unreachable("Only supported for Input");
-}
-
 //===----------------------------------------------------------------------===//
 //  Input
 //===----------------------------------------------------------------------===//
@@ -175,7 +171,7 @@ bool Input::preflightKey(const char *Key, bool Required, bool, bool &UseDefault,
     return false;
   }
   MN->ValidKeys.push_back(Key);
-  HNode *Value = MN->Mapping[Key].first.get();
+  HNode *Value = MN->Mapping[Key].get();
   if (!Value) {
     if (Required)
       setError(CurrentNode, Twine("missing required key '") + Key + "'");
@@ -201,12 +197,8 @@ void Input::endMapping() {
     return;
   for (const auto &NN : MN->Mapping) {
     if (!is_contained(MN->ValidKeys, NN.first())) {
-      const SMRange &ReportLoc = NN.second.second;
-      if (!AllowUnknownKeys) {
-        setError(ReportLoc, Twine("unknown key '") + NN.first() + "'");
-        break;
-      } else
-        reportWarning(ReportLoc, Twine("unknown key '") + NN.first() + "'");
+      setError(NN.second.get(), Twine("unknown key '") + NN.first() + "'");
+      break;
     }
   }
 }
@@ -378,24 +370,6 @@ void Input::setError(Node *node, const Twine &message) {
   EC = make_error_code(errc::invalid_argument);
 }
 
-void Input::setError(const SMRange &range, const Twine &message) {
-  Strm->printError(range, message);
-  EC = make_error_code(errc::invalid_argument);
-}
-
-void Input::reportWarning(HNode *hnode, const Twine &message) {
-  assert(hnode && "HNode must not be NULL");
-  Strm->printError(hnode->_node, message, SourceMgr::DK_Warning);
-}
-
-void Input::reportWarning(Node *node, const Twine &message) {
-  Strm->printError(node, message, SourceMgr::DK_Warning);
-}
-
-void Input::reportWarning(const SMRange &range, const Twine &message) {
-  Strm->printError(range, message, SourceMgr::DK_Warning);
-}
-
 std::unique_ptr<Input::HNode> Input::createHNodes(Node *N) {
   SmallString<128> StringStorage;
   if (ScalarNode *SN = dyn_cast<ScalarNode>(N)) {
@@ -439,8 +413,7 @@ std::unique_ptr<Input::HNode> Input::createHNodes(Node *N) {
       auto ValueHNode = createHNodes(Value);
       if (EC)
         break;
-      mapHNode->Mapping[KeyStr] =
-          std::make_pair(std::move(ValueHNode), KeyNode->getSourceRange());
+      mapHNode->Mapping[KeyStr] = std::move(ValueHNode);
     }
     return std::move(mapHNode);
   } else if (isa<NullNode>(N)) {
@@ -454,8 +427,6 @@ std::unique_ptr<Input::HNode> Input::createHNodes(Node *N) {
 void Input::setError(const Twine &Message) {
   setError(CurrentNode, Message);
 }
-
-void Input::setAllowUnknownKeys(bool Allow) { AllowUnknownKeys = Allow; }
 
 bool Input::canElideEmptySequence() {
   return false;
@@ -592,7 +563,7 @@ void Output::endSequence() {
   // If we did not emit anything, we should explicitly emit an empty sequence
   if (StateStack.back() == inSeqFirstElement) {
     Padding = PaddingBeforeContainer;
-    newLineCheck(/*EmptySequence=*/true);
+    newLineCheck();
     output("[]");
     Padding = "\n";
   }
@@ -798,7 +769,7 @@ void Output::outputNewLine() {
 // if seq in middle, use "- " if firstKey, else use "  "
 //
 
-void Output::newLineCheck(bool EmptySequence) {
+void Output::newLineCheck() {
   if (Padding != "\n") {
     output(Padding);
     Padding = {};
@@ -807,7 +778,7 @@ void Output::newLineCheck(bool EmptySequence) {
   outputNewLine();
   Padding = {};
 
-  if (StateStack.size() == 0 || EmptySequence)
+  if (StateStack.size() == 0)
     return;
 
   unsigned Indent = StateStack.size() - 1;
@@ -831,6 +802,7 @@ void Output::newLineCheck(bool EmptySequence) {
   if (OutputDash) {
     output("- ");
   }
+
 }
 
 void Output::paddedKey(StringRef key) {
@@ -884,8 +856,11 @@ void ScalarTraits<bool>::output(const bool &Val, void *, raw_ostream &Out) {
 }
 
 StringRef ScalarTraits<bool>::input(StringRef Scalar, void *, bool &Val) {
-  if (llvm::Optional<bool> Parsed = parseBool(Scalar)) {
-    Val = *Parsed;
+  if (Scalar.equals("true")) {
+    Val = true;
+    return StringRef();
+  } else if (Scalar.equals("false")) {
+    Val = false;
     return StringRef();
   }
   return "invalid boolean";
@@ -1056,7 +1031,8 @@ StringRef ScalarTraits<float>::input(StringRef Scalar, void *, float &Val) {
 }
 
 void ScalarTraits<Hex8>::output(const Hex8 &Val, void *, raw_ostream &Out) {
-  Out << format("0x%" PRIX8, (uint8_t)Val);
+  uint8_t Num = Val;
+  Out << format("0x%02X", Num);
 }
 
 StringRef ScalarTraits<Hex8>::input(StringRef Scalar, void *, Hex8 &Val) {
@@ -1070,7 +1046,8 @@ StringRef ScalarTraits<Hex8>::input(StringRef Scalar, void *, Hex8 &Val) {
 }
 
 void ScalarTraits<Hex16>::output(const Hex16 &Val, void *, raw_ostream &Out) {
-  Out << format("0x%" PRIX16, (uint16_t)Val);
+  uint16_t Num = Val;
+  Out << format("0x%04X", Num);
 }
 
 StringRef ScalarTraits<Hex16>::input(StringRef Scalar, void *, Hex16 &Val) {
@@ -1084,7 +1061,8 @@ StringRef ScalarTraits<Hex16>::input(StringRef Scalar, void *, Hex16 &Val) {
 }
 
 void ScalarTraits<Hex32>::output(const Hex32 &Val, void *, raw_ostream &Out) {
-  Out << format("0x%" PRIX32, (uint32_t)Val);
+  uint32_t Num = Val;
+  Out << format("0x%08X", Num);
 }
 
 StringRef ScalarTraits<Hex32>::input(StringRef Scalar, void *, Hex32 &Val) {
@@ -1098,7 +1076,8 @@ StringRef ScalarTraits<Hex32>::input(StringRef Scalar, void *, Hex32 &Val) {
 }
 
 void ScalarTraits<Hex64>::output(const Hex64 &Val, void *, raw_ostream &Out) {
-  Out << format("0x%" PRIX64, (uint64_t)Val);
+  uint64_t Num = Val;
+  Out << format("0x%016llX", Num);
 }
 
 StringRef ScalarTraits<Hex64>::input(StringRef Scalar, void *, Hex64 &Val) {
@@ -1106,17 +1085,5 @@ StringRef ScalarTraits<Hex64>::input(StringRef Scalar, void *, Hex64 &Val) {
   if (getAsUnsignedInteger(Scalar, 0, Num))
     return "invalid hex64 number";
   Val = Num;
-  return StringRef();
-}
-
-void ScalarTraits<VersionTuple>::output(const VersionTuple &Val, void *,
-                                        llvm::raw_ostream &Out) {
-  Out << Val.getAsString();
-}
-
-StringRef ScalarTraits<VersionTuple>::input(StringRef Scalar, void *,
-                                            VersionTuple &Val) {
-  if (Val.tryParse(Scalar))
-    return "invalid version format";
   return StringRef();
 }

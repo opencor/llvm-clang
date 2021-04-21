@@ -12,8 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "R600MachineScheduler.h"
+#include "AMDGPUSubtarget.h"
+#include "R600InstrInfo.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
-#include "R600Subtarget.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -40,7 +45,7 @@ void R600SchedStrategy::initialize(ScheduleDAGMI *dag) {
 void R600SchedStrategy::MoveUnits(std::vector<SUnit *> &QSrc,
                                   std::vector<SUnit *> &QDst)
 {
-  llvm::append_range(QDst, QSrc);
+  QDst.insert(QDst.end(), QSrc.begin(), QSrc.end());
   QSrc.clear();
 }
 
@@ -178,7 +183,7 @@ isPhysicalRegCopy(MachineInstr *MI) {
   if (MI->getOpcode() != R600::COPY)
     return false;
 
-  return !MI->getOperand(1).getReg().isVirtual();
+  return !Register::isVirtualRegister(MI->getOperand(1).getReg());
 }
 
 void R600SchedStrategy::releaseTopNode(SUnit *SU) {
@@ -202,9 +207,9 @@ void R600SchedStrategy::releaseBottomNode(SUnit *SU) {
 
 }
 
-bool R600SchedStrategy::regBelongsToClass(Register Reg,
+bool R600SchedStrategy::regBelongsToClass(unsigned Reg,
                                           const TargetRegisterClass *RC) const {
-  if (!Reg.isVirtual()) {
+  if (!Register::isVirtualRegister(Reg)) {
     return RC->contains(Reg);
   } else {
     return MRI->getRegClass(Reg) == RC;

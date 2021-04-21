@@ -165,10 +165,11 @@ class LitConfig(object):
         f = inspect.currentframe()
         # Step out of _write_message, and then out of wrapper.
         f = f.f_back.f_back
-        file = os.path.abspath(inspect.getsourcefile(f))
-        line = inspect.getlineno(f)
-        sys.stderr.write('%s: %s:%d: %s: %s\n' % (self.progname, file, line,
-                                                  kind, message))
+        file,line,_,_,_ = inspect.getframeinfo(f)
+        location = '%s:%d' % (file, line)
+
+        sys.stderr.write('%s: %s: %s: %s\n' % (self.progname, location,
+                                               kind, message))
 
     def note(self, message):
         if not self.quiet:

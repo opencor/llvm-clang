@@ -170,8 +170,7 @@ bool StackProtector::HasAddressTaken(const Instruction *AI,
     // If this instruction accesses memory make sure it doesn't access beyond
     // the bounds of the allocated object.
     Optional<MemoryLocation> MemLoc = MemoryLocation::getOrNone(I);
-    if (MemLoc.hasValue() && MemLoc->Size.hasValue() &&
-        MemLoc->Size.getValue() > AllocSize)
+    if (MemLoc.hasValue() && MemLoc->Size.getValue() > AllocSize)
       return true;
     switch (I->getOpcode()) {
     case Instruction::Store:
@@ -192,7 +191,7 @@ bool StackProtector::HasAddressTaken(const Instruction *AI,
       // Ignore intrinsics that do not become real instructions.
       // TODO: Narrow this to intrinsics that have store-like effects.
       const auto *CI = cast<CallInst>(I);
-      if (!CI->isDebugOrPseudoInst() && !CI->isLifetimeStartOrEnd())
+      if (!isa<DbgInfoIntrinsic>(CI) && !CI->isLifetimeStartOrEnd())
         return true;
       break;
     }
@@ -252,9 +251,10 @@ bool StackProtector::HasAddressTaken(const Instruction *AI,
 static const CallInst *findStackProtectorIntrinsic(Function &F) {
   for (const BasicBlock &BB : F)
     for (const Instruction &I : BB)
-      if (const auto *II = dyn_cast<IntrinsicInst>(&I))
-        if (II->getIntrinsicID() == Intrinsic::stackprotector)
-          return II;
+      if (const CallInst *CI = dyn_cast<CallInst>(&I))
+        if (CI->getCalledFunction() ==
+            Intrinsic::getDeclaration(F.getParent(), Intrinsic::stackprotector))
+          return CI;
   return nullptr;
 }
 
@@ -274,6 +274,7 @@ static const CallInst *findStackProtectorIntrinsic(Function &F) {
 bool StackProtector::RequiresStackProtector() {
   bool Strong = false;
   bool NeedsProtector = false;
+  HasPrologue = findStackProtectorIntrinsic(*F);
 
   if (F->hasFnAttribute(Attribute::SafeStack))
     return false;
@@ -294,6 +295,8 @@ bool StackProtector::RequiresStackProtector() {
     Strong = true; // Use the same heuristic as strong to determine SSPLayout
   } else if (F->hasFnAttribute(Attribute::StackProtectStrong))
     Strong = true;
+  else if (HasPrologue)
+    NeedsProtector = true;
   else if (!F->hasFnAttribute(Attribute::StackProtect))
     return false;
 
@@ -378,10 +381,7 @@ bool StackProtector::RequiresStackProtector() {
 static Value *getStackGuard(const TargetLoweringBase *TLI, Module *M,
                             IRBuilder<> &B,
                             bool *SupportsSelectionDAGSP = nullptr) {
-  Value *Guard = TLI->getIRStackGuard(B);
-  auto GuardMode = TLI->getTargetMachine().Options.StackProtectorGuard;
-  if ((GuardMode == llvm::StackProtectorGuards::TLS ||
-       GuardMode == llvm::StackProtectorGuards::None) && Guard)
+  if (Value *Guard = TLI->getIRStackGuard(B))
     return B.CreateLoad(B.getInt8PtrTy(), Guard, true, "StackGuard");
 
   // Use SelectionDAG SSP handling, since there isn't an IR guard.
@@ -556,9 +556,7 @@ BasicBlock *StackProtector::CreateFailBB() {
   LLVMContext &Context = F->getContext();
   BasicBlock *FailBB = BasicBlock::Create(Context, "CallStackCheckFailBlk", F);
   IRBuilder<> B(FailBB);
-  if (F->getSubprogram())
-    B.SetCurrentDebugLocation(
-        DILocation::get(Context, 0, 0, F->getSubprogram()));
+  B.SetCurrentDebugLocation(DebugLoc::get(0, 0, F->getSubprogram()));
   if (Trip.isOSOpenBSD()) {
     FunctionCallee StackChkFail = M->getOrInsertFunction(
         "__stack_smash_handler", Type::getVoidTy(Context),

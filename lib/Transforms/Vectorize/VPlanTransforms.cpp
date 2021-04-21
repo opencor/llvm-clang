@@ -48,8 +48,6 @@ void VPlanTransforms::VPInstructionsToVPRecipes(
       VPInstruction *VPInst = cast<VPInstruction>(Ingredient);
       Instruction *Inst = cast<Instruction>(VPInst->getUnderlyingValue());
       if (DeadInstructions.count(Inst)) {
-        VPValue DummyValue;
-        VPInst->replaceAllUsesWith(&DummyValue);
         Ingredient->eraseFromParent();
         continue;
       }
@@ -68,8 +66,7 @@ void VPlanTransforms::VPInstructionsToVPRecipes(
         InductionDescriptor II = Inductions.lookup(Phi);
         if (II.getKind() == InductionDescriptor::IK_IntInduction ||
             II.getKind() == InductionDescriptor::IK_FpInduction) {
-          VPValue *Start = Plan->getOrAddVPValue(II.getStartValue());
-          NewRecipe = new VPWidenIntOrFpInductionRecipe(Phi, Start);
+          NewRecipe = new VPWidenIntOrFpInductionRecipe(Phi);
         } else
           NewRecipe = new VPWidenPHIRecipe(Phi);
       } else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(Inst)) {
@@ -80,11 +77,6 @@ void VPlanTransforms::VPInstructionsToVPRecipes(
             new VPWidenRecipe(*Inst, Plan->mapToVPValues(Inst->operands()));
 
       NewRecipe->insertBefore(Ingredient);
-      if (NewRecipe->getNumDefinedValues() == 1)
-        VPInst->replaceAllUsesWith(NewRecipe->getVPValue());
-      else
-        assert(NewRecipe->getNumDefinedValues() == 0 &&
-               "Only recpies with zero or one defined values expected");
       Ingredient->eraseFromParent();
     }
   }

@@ -644,6 +644,7 @@ private:
 
     Symbol->setType(ELF::STT_NOTYPE);
     Symbol->setBinding(ELF::STB_LOCAL);
+    Symbol->setExternal(false);
   }
 
   void EmitMappingSymbol(StringRef Name, SMLoc Loc, MCFragment *F,
@@ -653,6 +654,7 @@ private:
     emitLabelAtPos(Symbol, Loc, F, Offset);
     Symbol->setType(ELF::STT_NOTYPE);
     Symbol->setBinding(ELF::STB_LOCAL);
+    Symbol->setExternal(false);
   }
 
   void emitThumbFunc(MCSymbol *Func) override {

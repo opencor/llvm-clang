@@ -83,6 +83,7 @@ private:
   int checkRWLaneHazards(MachineInstr *RWLane);
   int checkRFEHazards(MachineInstr *RFE);
   int checkInlineAsmHazards(MachineInstr *IA);
+  int checkAnyInstHazards(MachineInstr *MI);
   int checkReadM0Hazards(MachineInstr *SMovRel);
   int checkNSAtoVMEMHazard(MachineInstr *MI);
   int checkFPAtomicToDenormModeHazard(MachineInstr *MI);
@@ -108,8 +109,6 @@ public:
   unsigned PreEmitNoopsCommon(MachineInstr *);
   void AdvanceCycle() override;
   void RecedeCycle() override;
-  bool ShouldPreferAnother(SUnit *SU) override;
-  void Reset() override;
 };
 
 } // end namespace llvm

@@ -31,6 +31,8 @@ public:
 
   void onPassEntry() override;
 
+  std::unique_ptr<InlineAdvice> getAdvice(CallBase &CB) override;
+
   int64_t getIRSize(const Function &F) const { return F.getInstructionCount(); }
   void onSuccessfulInlining(const MLInlineAdvice &Advice,
                             bool CalleeWasDeleted);
@@ -40,16 +42,13 @@ public:
   const MLModelRunner &getModelRunner() const { return *ModelRunner.get(); }
 
 protected:
-  std::unique_ptr<InlineAdvice> getAdviceImpl(CallBase &CB) override;
-
-  std::unique_ptr<InlineAdvice> getMandatoryAdvice(CallBase &CB,
-                                                   bool Advice) override;
-
-  virtual std::unique_ptr<MLInlineAdvice> getMandatoryAdviceImpl(CallBase &CB);
+  virtual std::unique_ptr<MLInlineAdvice>
+  getMandatoryAdvice(CallBase &CB, OptimizationRemarkEmitter &ORE);
 
   virtual std::unique_ptr<MLInlineAdvice>
   getAdviceFromModel(CallBase &CB, OptimizationRemarkEmitter &ORE);
 
+  Module &M;
   std::unique_ptr<MLModelRunner> ModelRunner;
 
 private:

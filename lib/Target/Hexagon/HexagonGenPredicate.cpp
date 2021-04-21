@@ -48,8 +48,7 @@ namespace {
 
   // FIXME: Use TargetInstrInfo::RegSubRegPair
   struct RegisterSubReg {
-    Register R;
-    unsigned S;
+    unsigned R, S;
 
     RegisterSubReg(unsigned r = 0, unsigned s = 0) : R(r), S(s) {}
     RegisterSubReg(const MachineOperand &MO) : R(MO.getReg()), S(MO.getSubReg()) {}
@@ -112,7 +111,7 @@ namespace {
     VectOfInst PUsers;
     RegToRegMap G2P;
 
-    bool isPredReg(Register R);
+    bool isPredReg(unsigned R);
     void collectPredicateGPR(MachineFunction &MF);
     void processPredicateGPR(const RegisterSubReg &Reg);
     unsigned getPredForm(unsigned Opc);
@@ -134,8 +133,8 @@ INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
 INITIALIZE_PASS_END(HexagonGenPredicate, "hexagon-gen-pred",
   "Hexagon generate predicate operations", false, false)
 
-bool HexagonGenPredicate::isPredReg(Register R) {
-  if (!R.isVirtual())
+bool HexagonGenPredicate::isPredReg(unsigned R) {
+  if (!Register::isVirtualRegister(R))
     return false;
   const TargetRegisterClass *RC = MRI->getRegClass(R);
   return RC == &Hexagon::PredRegsRegClass;
@@ -215,7 +214,7 @@ void HexagonGenPredicate::collectPredicateGPR(MachineFunction &MF) {
         case TargetOpcode::COPY:
           if (isPredReg(MI->getOperand(1).getReg())) {
             RegisterSubReg RD = MI->getOperand(0);
-            if (RD.R.isVirtual())
+            if (Register::isVirtualRegister(RD.R))
               PredGPRs.insert(RD);
           }
           break;
@@ -247,7 +246,7 @@ RegisterSubReg HexagonGenPredicate::getPredRegFor(const RegisterSubReg &Reg) {
   // Create a predicate register for a given Reg. The newly created register
   // will have its value copied from Reg, so that it can be later used as
   // an operand in other instructions.
-  assert(Reg.R.isVirtual());
+  assert(Register::isVirtualRegister(Reg.R));
   RegToRegMap::iterator F = G2P.find(Reg);
   if (F != G2P.end())
     return F->second;
@@ -473,9 +472,9 @@ bool HexagonGenPredicate::eliminatePredCopies(MachineFunction &MF) {
         continue;
       RegisterSubReg DR = MI.getOperand(0);
       RegisterSubReg SR = MI.getOperand(1);
-      if (!DR.R.isVirtual())
+      if (!Register::isVirtualRegister(DR.R))
         continue;
-      if (!SR.R.isVirtual())
+      if (!Register::isVirtualRegister(SR.R))
         continue;
       if (MRI->getRegClass(DR.R) != PredRC)
         continue;

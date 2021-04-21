@@ -114,7 +114,7 @@ private:
   bool doOneIteration(Function &F);
 
   // Reassociates I for better CSE.
-  Instruction *tryReassociate(Instruction *I, const SCEV *&OrigSCEV);
+  Instruction *tryReassociate(Instruction *I);
 
   // Reassociate GEP for better CSE.
   Instruction *tryReassociateGEP(GetElementPtrInst *GEP);

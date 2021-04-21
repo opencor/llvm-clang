@@ -277,8 +277,6 @@ void Document::writeToBlob(std::string &Blob) {
     case Type::String:
       MPWriter.write(Node.getString());
       break;
-    case Type::Empty:
-      llvm_unreachable("unhandled empty msgpack node");
     default:
       llvm_unreachable("unhandled msgpack object kind");
     }
@@ -312,3 +310,4 @@ void Document::writeToBlob(std::string &Blob) {
     }
   }
 }
+

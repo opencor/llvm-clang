@@ -24,6 +24,7 @@
 namespace llvm {
 
 class MCInst;
+class MCParsedAsmOperand;
 class MCStreamer;
 class MCSubtargetInfo;
 template <typename T> class SmallVectorImpl;
@@ -369,7 +370,7 @@ public:
 
   // Target-specific parsing of expression.
   virtual bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
-    return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
+    return getParser().parsePrimaryExpr(Res, EndLoc);
   }
 
   virtual bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc,

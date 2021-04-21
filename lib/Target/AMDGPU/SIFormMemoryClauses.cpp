@@ -14,8 +14,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
+#include "AMDGPUSubtarget.h"
 #include "GCNRegPressure.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
+#include "SIRegisterInfo.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/CodeGen/LiveIntervals.h"
+#include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/InitializePasses.h"
 
 using namespace llvm;
@@ -53,14 +60,9 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  MachineFunctionProperties getClearedProperties() const override {
-    return MachineFunctionProperties().set(
-        MachineFunctionProperties::Property::IsSSA);
-  }
-
 private:
   template <typename Callable>
-  void forAllLanes(Register Reg, LaneBitmask LaneMask, Callable Func) const;
+  void forAllLanes(unsigned Reg, LaneBitmask LaneMask, Callable Func) const;
 
   bool canBundle(const MachineInstr &MI, RegUse &Defs, RegUse &Uses) const;
   bool checkPressure(const MachineInstr &MI, GCNDownwardRPTracker &RPT);
@@ -143,15 +145,15 @@ static unsigned getMopState(const MachineOperand &MO) {
     S |= RegState::Kill;
   if (MO.isEarlyClobber())
     S |= RegState::EarlyClobber;
-  if (MO.getReg().isPhysical() && MO.isRenamable())
+  if (Register::isPhysicalRegister(MO.getReg()) && MO.isRenamable())
     S |= RegState::Renamable;
   return S;
 }
 
 template <typename Callable>
-void SIFormMemoryClauses::forAllLanes(Register Reg, LaneBitmask LaneMask,
+void SIFormMemoryClauses::forAllLanes(unsigned Reg, LaneBitmask LaneMask,
                                       Callable Func) const {
-  if (LaneMask.all() || Reg.isPhysical() ||
+  if (LaneMask.all() || Register::isPhysicalRegister(Reg) ||
       LaneMask == MRI->getMaxLaneMaskForVReg(Reg)) {
     Func(0);
     return;
@@ -226,7 +228,7 @@ bool SIFormMemoryClauses::canBundle(const MachineInstr &MI,
     if (Conflict == Map.end())
       continue;
 
-    if (Reg.isPhysical())
+    if (Register::isPhysicalRegister(Reg))
       return false;
 
     LaneBitmask Mask = TRI->getSubRegIndexLaneMask(MO.getSubReg());
@@ -268,7 +270,7 @@ void SIFormMemoryClauses::collectRegUses(const MachineInstr &MI,
     if (!Reg)
       continue;
 
-    LaneBitmask Mask = Reg.isVirtual()
+    LaneBitmask Mask = Register::isVirtualRegister(Reg)
                            ? TRI->getSubRegIndexLaneMask(MO.getSubReg())
                            : LaneBitmask::getAll();
     RegUse &Map = MO.isDef() ? Defs : Uses;
@@ -322,7 +324,6 @@ bool SIFormMemoryClauses::runOnMachineFunction(MachineFunction &MF) {
       MF.getFunction(), "amdgpu-max-memory-clause", MaxClause);
 
   for (MachineBasicBlock &MBB : MF) {
-    GCNDownwardRPTracker RPT(*LIS);
     MachineBasicBlock::instr_iterator Next;
     for (auto I = MBB.instr_begin(), E = MBB.instr_end(); I != E; I = Next) {
       MachineInstr &MI = *I;
@@ -333,19 +334,12 @@ bool SIFormMemoryClauses::runOnMachineFunction(MachineFunction &MF) {
       if (!isValidClauseInst(MI, IsVMEM))
         continue;
 
-      if (!RPT.getNext().isValid())
-        RPT.reset(MI);
-      else { // Advance the state to the current MI.
-        RPT.advance(MachineBasicBlock::const_iterator(MI));
-        RPT.advanceBeforeNext();
-      }
-
-      const GCNRPTracker::LiveRegSet LiveRegsCopy(RPT.getLiveRegs());
       RegUse Defs, Uses;
-      if (!processRegUses(MI, Defs, Uses, RPT)) {
-        RPT.reset(MI, &LiveRegsCopy);
+      GCNDownwardRPTracker RPT(*LIS);
+      RPT.reset(MI);
+
+      if (!processRegUses(MI, Defs, Uses, RPT))
         continue;
-      }
 
       unsigned Length = 1;
       for ( ; Next != E && Length < FuncMaxClause; ++Next) {
@@ -360,19 +354,14 @@ bool SIFormMemoryClauses::runOnMachineFunction(MachineFunction &MF) {
 
         ++Length;
       }
-      if (Length < 2) {
-        RPT.reset(MI, &LiveRegsCopy);
+      if (Length < 2)
         continue;
-      }
 
       Changed = true;
       MFI->limitOccupancy(LastRecordedOccupancy);
 
       auto B = BuildMI(MBB, I, DebugLoc(), TII->get(TargetOpcode::BUNDLE));
       Ind->insertMachineInstrInMaps(*B);
-
-      // Restore the state after processing the bundle.
-      RPT.reset(*B, &LiveRegsCopy);
 
       for (auto BI = I; BI != Next; ++BI) {
         BI->bundleWithPred();
@@ -399,17 +388,17 @@ bool SIFormMemoryClauses::runOnMachineFunction(MachineFunction &MF) {
       }
 
       for (auto &&R : Defs) {
-        Register Reg = R.first;
+        unsigned Reg = R.first;
         Uses.erase(Reg);
-        if (Reg.isPhysical())
+        if (Register::isPhysicalRegister(Reg))
           continue;
         LIS->removeInterval(Reg);
         LIS->createAndComputeVirtRegInterval(Reg);
       }
 
       for (auto &&R : Uses) {
-        Register Reg = R.first;
-        if (Reg.isPhysical())
+        unsigned Reg = R.first;
+        if (Register::isPhysicalRegister(Reg))
           continue;
         LIS->removeInterval(Reg);
         LIS->createAndComputeVirtRegInterval(Reg);

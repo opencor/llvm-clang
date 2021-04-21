@@ -1020,7 +1020,7 @@ SDValue LanaiTargetLowering::LowerDYNAMIC_STACKALLOC(SDValue Op,
   SDValue Size = Op.getOperand(1);
   SDLoc DL(Op);
 
-  Register SPReg = getStackPointerRegisterToSaveRestore();
+  unsigned SPReg = getStackPointerRegisterToSaveRestore();
 
   // Get a reference to the stack pointer.
   SDValue StackPointer = DAG.getCopyFromReg(Chain, DL, SPReg, MVT::i32);
@@ -1500,7 +1500,8 @@ void LanaiTargetLowering::computeKnownBitsForTargetNode(
     KnownBits Known2;
     Known = DAG.computeKnownBits(Op->getOperand(0), Depth + 1);
     Known2 = DAG.computeKnownBits(Op->getOperand(1), Depth + 1);
-    Known = KnownBits::commonBits(Known, Known2);
+    Known.Zero &= Known2.Zero;
+    Known.One &= Known2.One;
     break;
   }
 }

@@ -641,7 +641,7 @@ bool HexagonAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       return true;
     return finishBundle(IDLoc, Out);
   }
-  MCInst *SubInst = getParser().getContext().createMCInst();
+  MCInst *SubInst = new (getParser().getContext()) MCInst;
   if (matchOneInstruction(*SubInst, IDLoc, Operands, ErrorInfo,
                           MatchingInlineAsm)) {
     if (InBrackets)
@@ -945,7 +945,7 @@ bool HexagonAsmParser::isLabel(AsmToken &Token) {
   StringRef Raw(String.data(), Third.getString().data() - String.data() +
                                    Third.getString().size());
   std::string Collapsed = std::string(Raw);
-  llvm::erase_if(Collapsed, isSpace);
+  Collapsed.erase(llvm::remove_if(Collapsed, isSpace), Collapsed.end());
   StringRef Whole = Collapsed;
   std::pair<StringRef, StringRef> DotSplit = Whole.split('.');
   if (!matchRegister(DotSplit.first.lower()))
@@ -997,7 +997,7 @@ OperandMatchResultTy HexagonAsmParser::tryParseRegister(unsigned &RegNo,
     NeededWorkaround = NeededWorkaround || (Again && !(Contigious && Type));
   }
   std::string Collapsed = std::string(RawString);
-  llvm::erase_if(Collapsed, isSpace);
+  Collapsed.erase(llvm::remove_if(Collapsed, isSpace), Collapsed.end());
   StringRef FullString = Collapsed;
   std::pair<StringRef, StringRef> DotSplit = FullString.split('.');
   unsigned DotReg = matchRegister(DotSplit.first.lower());

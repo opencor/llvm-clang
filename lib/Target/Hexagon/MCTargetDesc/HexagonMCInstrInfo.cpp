@@ -110,7 +110,7 @@ HexagonMCInstrInfo::bundleInstructions(MCInstrInfo const &MCII,
 iterator_range<MCInst::const_iterator>
 HexagonMCInstrInfo::bundleInstructions(MCInst const &MCI) {
   assert(isBundle(MCI));
-  return drop_begin(MCI, bundleInstructionsOffset);
+  return make_range(MCI.begin() + bundleInstructionsOffset, MCI.end());
 }
 
 size_t HexagonMCInstrInfo::bundleSize(MCInst const &MCI) {

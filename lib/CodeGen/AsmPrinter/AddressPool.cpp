@@ -29,7 +29,9 @@ MCSymbol *AddressPool::emitHeader(AsmPrinter &Asm, MCSection *Section) {
   MCSymbol *BeginLabel = Asm.createTempSymbol(Prefix + "start");
   MCSymbol *EndLabel = Asm.createTempSymbol(Prefix + "end");
 
-  Asm.emitDwarfUnitLength(EndLabel, BeginLabel, "Length of contribution");
+  Asm.OutStreamer->AddComment("Length of contribution");
+  Asm.emitLabelDifference(EndLabel, BeginLabel,
+                          4); // TODO: Support DWARF64 format.
   Asm.OutStreamer->emitLabel(BeginLabel);
   Asm.OutStreamer->AddComment("DWARF version number");
   Asm.emitInt16(Asm.getDwarfVersion());

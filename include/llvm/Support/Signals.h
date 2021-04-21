@@ -50,9 +50,7 @@ namespace sys {
   void DisableSystemDialogsOnCrash();
 
   /// Print the stack trace using the given \c raw_ostream object.
-  /// \param Depth refers to the number of stackframes to print. If not
-  ///        specified, the entire frame is printed.
-  void PrintStackTrace(raw_ostream &OS, int Depth = 0);
+  void PrintStackTrace(raw_ostream &OS);
 
   // Run all registered signal handlers.
   void RunSignalHandlers();
@@ -117,8 +115,6 @@ namespace sys {
   /// Context is a system-specific failure context: it is the signal type on
   /// Unix; the ExceptionContext on Windows.
   void CleanupOnSignal(uintptr_t Context);
-
-  void unregisterHandlers();
 } // End sys namespace
 } // End llvm namespace
 

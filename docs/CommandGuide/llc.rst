@@ -163,9 +163,9 @@ End-user Options
 Tuning/Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. option:: --print-after-isel
+.. option:: --print-machineinstrs
 
- Print generated machine code after instruction selection (useful for debugging).
+ Print generated machine code between compilation phases (useful for debugging).
 
 .. option:: --regalloc=<allocator>
 

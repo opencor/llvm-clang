@@ -18,9 +18,6 @@ include "llvm/Target/Target.td"
 //===----------------------------------------------------------------------===//
 // VE Subtarget features.
 //
-def FeatureEnableVPU
-  : SubtargetFeature<"vpu", "EnableVPU", "true",
-                     "Enable the VPU">;
 
 //===----------------------------------------------------------------------===//
 // Register File, Calling Conv, Instruction Descriptions
@@ -46,7 +43,7 @@ def VEAsmParser : AsmParser {
 class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
-def : Proc<"generic", []>;
+def : Proc<"ve",             []>;
 
 //===----------------------------------------------------------------------===//
 // Declare the target which we are implementing

@@ -104,8 +104,7 @@ ArrayRef<MCSymbol *> MMIAddrLabelMap::getAddrLabelSymbolToEmit(BasicBlock *BB) {
   BBCallbacks.back().setMap(this);
   Entry.Index = BBCallbacks.size() - 1;
   Entry.Fn = BB->getParent();
-  MCSymbol *Sym = BB->hasAddressTaken() ? Context.createNamedTempSymbol()
-                                        : Context.createTempSymbol();
+  MCSymbol *Sym = Context.createTempSymbol(!BB->hasAddressTaken());
   Entry.Symbols.push_back(Sym);
   return Entry.Symbols;
 }
@@ -144,7 +143,8 @@ void MMIAddrLabelMap::UpdateForRAUWBlock(BasicBlock *Old, BasicBlock *New) {
   BBCallbacks[OldEntry.Index] = nullptr;    // Update the callback.
 
   // Otherwise, we need to add the old symbols to the new block's set.
-  llvm::append_range(NewEntry.Symbols, OldEntry.Symbols);
+  NewEntry.Symbols.insert(NewEntry.Symbols.end(), OldEntry.Symbols.begin(),
+                          OldEntry.Symbols.end());
 }
 
 void MMIAddrLabelMapCallbackPtr::deleted() {
@@ -170,7 +170,6 @@ void MachineModuleInfo::finalize() {
   AddrLabelSymbols = nullptr;
 
   Context.reset();
-  // We don't clear the ExternalContext.
 
   delete ObjFileMMI;
   ObjFileMMI = nullptr;
@@ -179,8 +178,7 @@ void MachineModuleInfo::finalize() {
 MachineModuleInfo::MachineModuleInfo(MachineModuleInfo &&MMI)
     : TM(std::move(MMI.TM)),
       Context(MMI.TM.getMCAsmInfo(), MMI.TM.getMCRegisterInfo(),
-              MMI.TM.getObjFileLowering(), nullptr, nullptr, false),
-      MachineFunctions(std::move(MMI.MachineFunctions)) {
+              MMI.TM.getObjFileLowering(), nullptr, nullptr, false) {
   ObjFileMMI = MMI.ObjFileMMI;
   CurCallSite = MMI.CurCallSite;
   UsesMSVCFloatingPoint = MMI.UsesMSVCFloatingPoint;
@@ -188,21 +186,12 @@ MachineModuleInfo::MachineModuleInfo(MachineModuleInfo &&MMI)
   HasSplitStack = MMI.HasSplitStack;
   HasNosplitStack = MMI.HasNosplitStack;
   AddrLabelSymbols = MMI.AddrLabelSymbols;
-  ExternalContext = MMI.ExternalContext;
   TheModule = MMI.TheModule;
 }
 
 MachineModuleInfo::MachineModuleInfo(const LLVMTargetMachine *TM)
     : TM(*TM), Context(TM->getMCAsmInfo(), TM->getMCRegisterInfo(),
                        TM->getObjFileLowering(), nullptr, nullptr, false) {
-  initialize();
-}
-
-MachineModuleInfo::MachineModuleInfo(const LLVMTargetMachine *TM,
-                                     MCContext *ExtContext)
-    : TM(*TM), Context(TM->getMCAsmInfo(), TM->getMCRegisterInfo(),
-                       TM->getObjFileLowering(), nullptr, nullptr, false),
-      ExternalContext(ExtContext) {
   initialize();
 }
 
@@ -214,7 +203,7 @@ ArrayRef<MCSymbol *>
 MachineModuleInfo::getAddrLabelSymbolToEmit(const BasicBlock *BB) {
   // Lazily create AddrLabelSymbols.
   if (!AddrLabelSymbols)
-    AddrLabelSymbols = new MMIAddrLabelMap(getContext());
+    AddrLabelSymbols = new MMIAddrLabelMap(Context);
  return AddrLabelSymbols->getAddrLabelSymbolToEmit(const_cast<BasicBlock*>(BB));
 }
 
@@ -303,12 +292,6 @@ FunctionPass *llvm::createFreeMachineFunctionPass() {
 MachineModuleInfoWrapperPass::MachineModuleInfoWrapperPass(
     const LLVMTargetMachine *TM)
     : ImmutablePass(ID), MMI(TM) {
-  initializeMachineModuleInfoWrapperPassPass(*PassRegistry::getPassRegistry());
-}
-
-MachineModuleInfoWrapperPass::MachineModuleInfoWrapperPass(
-    const LLVMTargetMachine *TM, MCContext *ExtContext)
-    : ImmutablePass(ID), MMI(TM, ExtContext) {
   initializeMachineModuleInfoWrapperPassPass(*PassRegistry::getPassRegistry());
 }
 

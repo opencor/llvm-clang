@@ -53,7 +53,6 @@ struct Limits {
 struct Table {
   TableType ElemType;
   Limits TableLimits;
-  uint32_t Index;
 };
 
 struct Export {
@@ -221,8 +220,6 @@ struct NameSection : CustomSection {
   }
 
   std::vector<NameEntry> FunctionNames;
-  std::vector<NameEntry> GlobalNames;
-  std::vector<NameEntry> DataSegmentNames;
 };
 
 struct LinkingSection : CustomSection {

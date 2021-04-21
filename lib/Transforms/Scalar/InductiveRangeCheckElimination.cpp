@@ -52,7 +52,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -110,11 +109,11 @@ static cl::opt<bool> PrintChangedLoops("irce-print-changed-loops", cl::Hidden,
 static cl::opt<bool> PrintRangeChecks("irce-print-range-checks", cl::Hidden,
                                       cl::init(false));
 
+static cl::opt<int> MaxExitProbReciprocal("irce-max-exit-prob-reciprocal",
+                                          cl::Hidden, cl::init(10));
+
 static cl::opt<bool> SkipProfitabilityChecks("irce-skip-profitability-checks",
                                              cl::Hidden, cl::init(false));
-
-static cl::opt<unsigned> MinRuntimeIterations("irce-min-runtime-iterations",
-                                              cl::Hidden, cl::init(10));
 
 static cl::opt<bool> AllowUnsignedLatchCondition("irce-allow-unsigned-latch",
                                                  cl::Hidden, cl::init(true));
@@ -146,6 +145,7 @@ class InductiveRangeCheck {
   const SCEV *Step = nullptr;
   const SCEV *End = nullptr;
   Use *CheckUse = nullptr;
+  bool IsSigned = true;
 
   static bool parseRangeCheckICmp(Loop *L, ICmpInst *ICI, ScalarEvolution &SE,
                                   Value *&Index, Value *&Length,
@@ -160,6 +160,7 @@ public:
   const SCEV *getBegin() const { return Begin; }
   const SCEV *getStep() const { return Step; }
   const SCEV *getEnd() const { return End; }
+  bool isSigned() const { return IsSigned; }
 
   void print(raw_ostream &OS) const {
     OS << "InductiveRangeCheck:\n";
@@ -228,27 +229,17 @@ public:
                                SmallVectorImpl<InductiveRangeCheck> &Checks);
 };
 
-struct LoopStructure;
-
 class InductiveRangeCheckElimination {
   ScalarEvolution &SE;
   BranchProbabilityInfo *BPI;
   DominatorTree &DT;
   LoopInfo &LI;
 
-  using GetBFIFunc =
-      llvm::Optional<llvm::function_ref<llvm::BlockFrequencyInfo &()> >;
-  GetBFIFunc GetBFI;
-
-  // Returns true if it is profitable to do a transform basing on estimation of
-  // number of iterations.
-  bool isProfitableToTransform(const Loop &L, LoopStructure &LS);
-
 public:
   InductiveRangeCheckElimination(ScalarEvolution &SE,
                                  BranchProbabilityInfo *BPI, DominatorTree &DT,
-                                 LoopInfo &LI, GetBFIFunc GetBFI = None)
-      : SE(SE), BPI(BPI), DT(DT), LI(LI), GetBFI(GetBFI) {}
+                                 LoopInfo &LI)
+      : SE(SE), BPI(BPI), DT(DT), LI(LI) {}
 
   bool run(Loop *L, function_ref<void(Loop *, bool)> LPMAddNewLoop);
 };
@@ -403,6 +394,7 @@ void InductiveRangeCheck::extractRangeChecksFromCond(
   IRC.Begin = IndexAddRec->getStart();
   IRC.Step = IndexAddRec->getStepRecurrence(SE);
   IRC.CheckUse = &ConditionUse;
+  IRC.IsSigned = IsSigned;
   Checks.push_back(IRC);
 }
 
@@ -505,8 +497,9 @@ struct LoopStructure {
     return Result;
   }
 
-  static Optional<LoopStructure> parseLoopStructure(ScalarEvolution &, Loop &,
-                                                    const char *&);
+  static Optional<LoopStructure> parseLoopStructure(ScalarEvolution &,
+                                                    BranchProbabilityInfo *BPI,
+                                                    Loop &, const char *&);
 };
 
 /// This class is used to constrain loops to run within a given iteration space.
@@ -750,7 +743,8 @@ static bool isSafeIncreasingBound(const SCEV *Start,
 }
 
 Optional<LoopStructure>
-LoopStructure::parseLoopStructure(ScalarEvolution &SE, Loop &L,
+LoopStructure::parseLoopStructure(ScalarEvolution &SE,
+                                  BranchProbabilityInfo *BPI, Loop &L,
                                   const char *&FailureReason) {
   if (!L.isLoopSimplifyForm()) {
     FailureReason = "loop not in LoopSimplify form";
@@ -784,6 +778,16 @@ LoopStructure::parseLoopStructure(ScalarEvolution &SE, Loop &L,
   }
 
   unsigned LatchBrExitIdx = LatchBr->getSuccessor(0) == Header ? 1 : 0;
+
+  BranchProbability ExitProbability =
+      BPI ? BPI->getEdgeProbability(LatchBr->getParent(), LatchBrExitIdx)
+          : BranchProbability::getZero();
+
+  if (!SkipProfitabilityChecks &&
+      ExitProbability > BranchProbability(1, MaxExitProbReciprocal)) {
+    FailureReason = "short running loop, not profitable";
+    return None;
+  }
 
   ICmpInst *ICI = dyn_cast<ICmpInst>(LatchBr->getCondition());
   if (!ICI || !isa<IntegerType>(ICI->getOperand(0)->getType())) {
@@ -1768,25 +1772,14 @@ PreservedAnalyses IRCEPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto &BPI = AM.getResult<BranchProbabilityAnalysis>(F);
   LoopInfo &LI = AM.getResult<LoopAnalysis>(F);
 
-  // Get BFI analysis result on demand. Please note that modification of
-  // CFG invalidates this analysis and we should handle it.
-  auto getBFI = [&F, &AM ]()->BlockFrequencyInfo & {
-    return AM.getResult<BlockFrequencyAnalysis>(F);
-  };
-  InductiveRangeCheckElimination IRCE(SE, &BPI, DT, LI, { getBFI });
+  InductiveRangeCheckElimination IRCE(SE, &BPI, DT, LI);
 
   bool Changed = false;
-  {
-    bool CFGChanged = false;
-    for (const auto &L : LI) {
-      CFGChanged |= simplifyLoop(L, &DT, &LI, &SE, nullptr, nullptr,
-                                 /*PreserveLCSSA=*/false);
-      Changed |= formLCSSARecursively(*L, DT, &LI, &SE);
-    }
-    Changed |= CFGChanged;
 
-    if (CFGChanged && !SkipProfitabilityChecks)
-      AM.invalidate<BlockFrequencyAnalysis>(F);
+  for (const auto &L : LI) {
+    Changed |= simplifyLoop(L, &DT, &LI, &SE, nullptr, nullptr,
+                            /*PreserveLCSSA=*/false);
+    Changed |= formLCSSARecursively(*L, DT, &LI, &SE);
   }
 
   SmallPriorityWorklist<Loop *, 4> Worklist;
@@ -1798,11 +1791,7 @@ PreservedAnalyses IRCEPass::run(Function &F, FunctionAnalysisManager &AM) {
 
   while (!Worklist.empty()) {
     Loop *L = Worklist.pop_back_val();
-    if (IRCE.run(L, LPMAddNewLoop)) {
-      Changed = true;
-      if (!SkipProfitabilityChecks)
-        AM.invalidate<BlockFrequencyAnalysis>(F);
-    }
+    Changed |= IRCE.run(L, LPMAddNewLoop);
   }
 
   if (!Changed)
@@ -1841,37 +1830,6 @@ bool IRCELegacyPass::runOnFunction(Function &F) {
     Changed |= IRCE.run(L, LPMAddNewLoop);
   }
   return Changed;
-}
-
-bool
-InductiveRangeCheckElimination::isProfitableToTransform(const Loop &L,
-                                                        LoopStructure &LS) {
-  if (SkipProfitabilityChecks)
-    return true;
-  if (GetBFI.hasValue()) {
-    BlockFrequencyInfo &BFI = (*GetBFI)();
-    uint64_t hFreq = BFI.getBlockFreq(LS.Header).getFrequency();
-    uint64_t phFreq = BFI.getBlockFreq(L.getLoopPreheader()).getFrequency();
-    if (phFreq != 0 && hFreq != 0 && (hFreq / phFreq < MinRuntimeIterations)) {
-      LLVM_DEBUG(dbgs() << "irce: could not prove profitability: "
-                        << "the estimated number of iterations basing on "
-                           "frequency info is " << (hFreq / phFreq) << "\n";);
-      return false;
-    }
-    return true;
-  }
-
-  if (!BPI)
-    return true;
-  BranchProbability ExitProbability =
-      BPI->getEdgeProbability(LS.Latch, LS.LatchBrExitIdx);
-  if (ExitProbability > BranchProbability(1, MinRuntimeIterations)) {
-    LLVM_DEBUG(dbgs() << "irce: could not prove profitability: "
-                      << "the exit probability is too big " << ExitProbability
-                      << "\n";);
-    return false;
-  }
-  return true;
 }
 
 bool InductiveRangeCheckElimination::run(
@@ -1913,15 +1871,13 @@ bool InductiveRangeCheckElimination::run(
 
   const char *FailureReason = nullptr;
   Optional<LoopStructure> MaybeLoopStructure =
-      LoopStructure::parseLoopStructure(SE, *L, FailureReason);
+      LoopStructure::parseLoopStructure(SE, BPI, *L, FailureReason);
   if (!MaybeLoopStructure.hasValue()) {
     LLVM_DEBUG(dbgs() << "irce: could not parse loop structure: "
                       << FailureReason << "\n";);
     return false;
   }
   LoopStructure LS = MaybeLoopStructure.getValue();
-  if (!isProfitableToTransform(*L, LS))
-    return false;
   const SCEVAddRecExpr *IndVar =
       cast<SCEVAddRecExpr>(SE.getMinusSCEV(SE.getSCEV(LS.IndVarBase), SE.getSCEV(LS.IndVarStep)));
 

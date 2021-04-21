@@ -1,5 +1,4 @@
-; RUN: opt < %s -asan -asan-module -enable-new-pm=0 -S | FileCheck %s
-; RUN: opt < %s -passes='asan-pipeline' -S | FileCheck %s
+; RUN: opt < %s -asan -asan-module -S | FileCheck %s
 
 ; Generated like so:
 ; $ clang -S -emit-llvm -Xclang -disable-llvm-passes -fsanitize=address -O1 t.cpp -o t.ll

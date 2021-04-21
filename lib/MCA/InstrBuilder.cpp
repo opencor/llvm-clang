@@ -259,9 +259,8 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
   //     the opcode descriptor (MCInstrDesc).
   //  2. Uses start at index #(MCDesc.getNumDefs()).
   //  3. There can only be a single optional register definition, an it is
-  //     either the last operand of the sequence (excluding extra operands
-  //     contributed by variadic opcodes) or one of the explicit register
-  //     definitions. The latter occurs for some Thumb1 instructions.
+  //     always the last operand of the sequence (excluding extra operands
+  //     contributed by variadic opcodes).
   //
   // These assumptions work quite well for most out-of-order in-tree targets
   // like x86. This is mainly because the vast majority of instructions is
@@ -309,17 +308,11 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
   // The first NumExplicitDefs register operands are expected to be register
   // definitions.
   unsigned CurrentDef = 0;
-  unsigned OptionalDefIdx = MCDesc.getNumOperands() - 1;
   unsigned i = 0;
   for (; i < MCI.getNumOperands() && CurrentDef < NumExplicitDefs; ++i) {
     const MCOperand &Op = MCI.getOperand(i);
     if (!Op.isReg())
       continue;
-
-    if (MCDesc.OpInfo[CurrentDef].isOptionalDef()) {
-      OptionalDefIdx = CurrentDef++;
-      continue;
-    }
 
     WriteDescriptor &Write = ID.Writes[CurrentDef];
     Write.OpIndex = i;
@@ -376,7 +369,7 @@ void InstrBuilder::populateWrites(InstrDesc &ID, const MCInst &MCI,
 
   if (MCDesc.hasOptionalDef()) {
     WriteDescriptor &Write = ID.Writes[NumExplicitDefs + NumImplicitDefs];
-    Write.OpIndex = OptionalDefIdx;
+    Write.OpIndex = MCDesc.getNumOperands() - 1;
     // Assign a default latency for this write.
     Write.Latency = ID.MaxLatency;
     Write.SClassOrWriteResourceID = 0;
@@ -525,8 +518,7 @@ InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   if (IsVariant) {
     unsigned CPUID = SM.getProcessorID();
     while (SchedClassID && SM.getSchedClassDesc(SchedClassID)->isVariant())
-      SchedClassID =
-          STI.resolveVariantSchedClass(SchedClassID, &MCI, &MCII, CPUID);
+      SchedClassID = STI.resolveVariantSchedClass(SchedClassID, &MCI, CPUID);
 
     if (!SchedClassID) {
       return make_error<InstructionError<MCInst>>(

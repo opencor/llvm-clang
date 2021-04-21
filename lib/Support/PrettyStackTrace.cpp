@@ -25,7 +25,6 @@
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
-#include <cstring>
 #include <tuple>
 
 #ifdef HAVE_CRASHREPORTERCLIENT_H
@@ -254,16 +253,8 @@ void PrettyStackTraceFormat::print(raw_ostream &OS) const { OS << Str << "\n"; }
 void PrettyStackTraceProgram::print(raw_ostream &OS) const {
   OS << "Program arguments: ";
   // Print the argument list.
-  for (int I = 0; I < ArgC; ++I) {
-    const bool HaveSpace = ::strchr(ArgV[I], ' ');
-    if (I)
-      OS << ' ';
-    if (HaveSpace)
-      OS << '"';
-    OS.write_escaped(ArgV[I]);
-    if (HaveSpace)
-      OS << '"';
-  }
+  for (unsigned i = 0, e = ArgC; i != e; ++i)
+    OS << ArgV[i] << ' ';
   OS << '\n';
 }
 

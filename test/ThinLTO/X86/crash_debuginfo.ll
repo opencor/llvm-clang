@@ -2,10 +2,12 @@
 ; RUN: opt -module-summary -o %t-src.bc %p/Inputs/crash_debuginfo.ll
 ; RUN: llvm-lto -thinlto -o %t-index %t-dst.bc %t-src.bc
 ; RUN: opt -function-import -inline -summary-file %t-index.thinlto.bc %t-dst.bc -o %t.out
-; RUN: llvm-nm -U %t.out | FileCheck %s --implicit-check-not=_bar
+; RUN: llvm-nm %t.out | FileCheck %s
 
 ; Verify that we import bar and inline it. It use to crash importing due to ODR type uniquing
-; CHECK: _foo
+; CHECK-NOT: bar
+; CHECK: foo
+; CHECK-NOT: bar
 
 ; ModuleID = 'test/ThinLTO/X86/crash_debuginfo.ll'
 source_filename = "test/ThinLTO/X86/crash_debuginfo.ll"

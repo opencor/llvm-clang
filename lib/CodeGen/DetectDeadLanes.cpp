@@ -25,7 +25,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <deque>
+#include <vector>
+
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
@@ -36,7 +40,6 @@
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include <deque>
 
 using namespace llvm;
 

@@ -353,10 +353,9 @@ COFFSymbol *WinCOFFObjectWriter::getLinkedSymbol(const MCSymbol &Symbol) {
     return nullptr;
 
   const MCSymbol &Aliasee = SymRef->getSymbol();
-  if (Aliasee.isUndefined() || Aliasee.isExternal())
-    return GetOrCreateCOFFSymbol(&Aliasee);
-  else
+  if (!Aliasee.isUndefined())
     return nullptr;
+  return GetOrCreateCOFFSymbol(&Aliasee);
 }
 
 /// This function takes a symbol data object from the assembler

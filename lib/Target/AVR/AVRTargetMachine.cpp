@@ -37,7 +37,7 @@ static StringRef getCPU(StringRef CPU) {
 }
 
 static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
-  return RM.getValueOr(Reloc::Static);
+  return RM.hasValue() ? *RM : Reloc::Static;
 }
 
 AVRTargetMachine::AVRTargetMachine(const Target &T, const Triple &TT,

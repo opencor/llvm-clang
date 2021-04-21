@@ -28,6 +28,8 @@ class TargetMachine;
 
 namespace orc {
 
+class JITTargetMachineBuilder;
+
 IRSymbolMapper::ManglingOptions
 irManglingOptionsFromTargetOptions(const TargetOptions &Opts);
 

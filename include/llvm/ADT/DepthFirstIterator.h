@@ -198,7 +198,7 @@ public:
   // nodes that a depth first iteration did not find: ie unreachable nodes.
   //
   bool nodeVisited(NodeRef Node) const {
-    return this->Visited.contains(Node);
+    return this->Visited.count(Node) != 0;
   }
 
   /// getPathLength - Return the length of the path from the entry node to the

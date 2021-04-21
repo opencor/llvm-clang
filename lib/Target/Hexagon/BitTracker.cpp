@@ -198,10 +198,10 @@ BitTracker::~BitTracker() {
 // the actual bits of the "self" register.
 // While this cannot happen in the current implementation, I'm not sure
 // if this should be ruled out in the future.
-bool BT::RegisterCell::meet(const RegisterCell &RC, Register SelfR) {
+bool BT::RegisterCell::meet(const RegisterCell &RC, unsigned SelfR) {
   // An example when "meet" can be invoked with SelfR == 0 is a phi node
   // with a physical register as an operand.
-  assert(SelfR == 0 || SelfR.isVirtual());
+  assert(SelfR == 0 || Register::isVirtualRegister(SelfR));
   bool Changed = false;
   for (uint16_t i = 0, n = Bits.size(); i < n; ++i) {
     const BitValue &RCV = RC[i];
@@ -335,13 +335,13 @@ uint16_t BT::MachineEvaluator::getRegBitWidth(const RegisterRef &RR) const {
   // 1. find a physical register PhysR from the same class as RR.Reg,
   // 2. find a physical register PhysS that corresponds to PhysR:RR.Sub,
   // 3. find a register class that contains PhysS.
-  if (RR.Reg.isVirtual()) {
+  if (Register::isVirtualRegister(RR.Reg)) {
     const auto &VC = composeWithSubRegIndex(*MRI.getRegClass(RR.Reg), RR.Sub);
     return TRI.getRegSizeInBits(VC);
   }
-  assert(RR.Reg.isPhysical());
-  MCRegister PhysR =
-      (RR.Sub == 0) ? RR.Reg.asMCReg() : TRI.getSubReg(RR.Reg, RR.Sub);
+  assert(Register::isPhysicalRegister(RR.Reg));
+  Register PhysR =
+      (RR.Sub == 0) ? Register(RR.Reg) : TRI.getSubReg(RR.Reg, RR.Sub);
   return getPhysRegBitWidth(PhysR);
 }
 
@@ -351,10 +351,10 @@ BT::RegisterCell BT::MachineEvaluator::getCell(const RegisterRef &RR,
 
   // Physical registers are assumed to be present in the map with an unknown
   // value. Don't actually insert anything in the map, just return the cell.
-  if (RR.Reg.isPhysical())
+  if (Register::isPhysicalRegister(RR.Reg))
     return RegisterCell::self(0, BW);
 
-  assert(RR.Reg.isVirtual());
+  assert(Register::isVirtualRegister(RR.Reg));
   // For virtual registers that belong to a class that is not tracked,
   // generate an "unknown" value as well.
   const TargetRegisterClass *C = MRI.getRegClass(RR.Reg);
@@ -377,7 +377,7 @@ void BT::MachineEvaluator::putCell(const RegisterRef &RR, RegisterCell RC,
   // While updating the cell map can be done in a meaningful way for
   // a part of a register, it makes little sense to implement it as the
   // SSA representation would never contain such "partial definitions".
-  if (!RR.Reg.isVirtual())
+  if (!Register::isVirtualRegister(RR.Reg))
     return;
   assert(RR.Sub == 0 && "Unexpected sub-register in definition");
   // Eliminate all ref-to-reg-0 bit values: replace them with "self".
@@ -704,14 +704,15 @@ BT::RegisterCell BT::MachineEvaluator::eINS(const RegisterCell &A1,
   return Res;
 }
 
-BT::BitMask BT::MachineEvaluator::mask(Register Reg, unsigned Sub) const {
+BT::BitMask BT::MachineEvaluator::mask(unsigned Reg, unsigned Sub) const {
   assert(Sub == 0 && "Generic BitTracker::mask called for Sub != 0");
   uint16_t W = getRegBitWidth(Reg);
   assert(W > 0 && "Cannot generate mask for empty register");
   return BitMask(0, W-1);
 }
 
-uint16_t BT::MachineEvaluator::getPhysRegBitWidth(MCRegister Reg) const {
+uint16_t BT::MachineEvaluator::getPhysRegBitWidth(unsigned Reg) const {
+  assert(Register::isPhysicalRegister(Reg));
   const TargetRegisterClass &PC = *TRI.getMinimalPhysRegClass(Reg);
   return TRI.getRegSizeInBits(PC);
 }
@@ -874,7 +875,7 @@ void BT::visitNonBranch(const MachineInstr &MI) {
       continue;
     RegisterRef RD(MO);
     assert(RD.Sub == 0 && "Unexpected sub-register in definition");
-    if (!RD.Reg.isVirtual())
+    if (!Register::isVirtualRegister(RD.Reg))
       continue;
 
     bool Changed = false;
@@ -979,7 +980,7 @@ void BT::visitBranchesFrom(const MachineInstr &BI) {
     FlowQ.push(CFGEdge(ThisN, TB->getNumber()));
 }
 
-void BT::visitUsesOf(Register Reg) {
+void BT::visitUsesOf(unsigned Reg) {
   if (Trace)
     dbgs() << "queuing uses of modified reg " << printReg(Reg, &ME.TRI)
            << " cell: " << ME.getCell(Reg, Map) << '\n';

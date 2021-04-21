@@ -204,7 +204,8 @@ Error MSFBuilder::setStreamSize(uint32_t Idx, uint32_t Size) {
     if (auto EC = allocateBlocks(AddedBlocks, AddedBlockList))
       return EC;
     auto &CurrentBlocks = StreamData[Idx].second;
-    llvm::append_range(CurrentBlocks, AddedBlockList);
+    CurrentBlocks.insert(CurrentBlocks.end(), AddedBlockList.begin(),
+                         AddedBlockList.end());
   } else if (OldBlocks > NewBlocks) {
     // For shrinking, free all the Blocks in the Block map, update the stream
     // data, then shrink the directory.
@@ -267,7 +268,8 @@ Expected<MSFLayout> MSFBuilder::generateLayout() {
     ExtraBlocks.resize(NumExtraBlocks);
     if (auto EC = allocateBlocks(NumExtraBlocks, ExtraBlocks))
       return std::move(EC);
-    llvm::append_range(DirectoryBlocks, ExtraBlocks);
+    DirectoryBlocks.insert(DirectoryBlocks.end(), ExtraBlocks.begin(),
+                           ExtraBlocks.end());
   } else if (NumDirectoryBlocks < DirectoryBlocks.size()) {
     uint32_t NumUnnecessaryBlocks = DirectoryBlocks.size() - NumDirectoryBlocks;
     for (auto B :

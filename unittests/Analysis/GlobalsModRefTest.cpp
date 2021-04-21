@@ -9,7 +9,6 @@
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/CallGraph.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"

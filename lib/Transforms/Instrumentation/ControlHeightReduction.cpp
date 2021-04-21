@@ -260,9 +260,10 @@ class CHRScope {
           if (TailRegionSet.count(Parent))
             return false;
 
-          assert(llvm::any_of(
-                     RegInfos,
-                     [&Parent](const RegInfo &RI) { return Parent == RI.R; }) &&
+          assert(llvm::find_if(RegInfos,
+                               [&Parent](const RegInfo &RI) {
+                                 return Parent == RI.R;
+                               }) != RegInfos.end() &&
                  "Must be in head");
           return true;
         });
@@ -731,7 +732,7 @@ static Instruction* getBranchInsertPoint(RegInfo &RI) {
     }
   }
   for (Instruction &I : *EntryBB) {
-    if (EntryBlockSelectSet.contains(&I)) {
+    if (EntryBlockSelectSet.count(&I) > 0) {
       assert(&I == HoistPoint &&
              "HoistPoint must be the first one in Selects");
       break;
@@ -949,9 +950,10 @@ void CHR::checkScopeHoistable(CHRScope *Scope) {
                 << "Dropped select due to unhoistable branch";
           });
         }
-        llvm::erase_if(Selects, [EntryBB](SelectInst *SI) {
-          return SI->getParent() == EntryBB;
-        });
+        Selects.erase(std::remove_if(Selects.begin(), Selects.end(),
+                                     [EntryBB](SelectInst *SI) {
+                                       return SI->getParent() == EntryBB;
+                                     }), Selects.end());
         Unhoistables.clear();
         InsertPoint = Branch;
       }
@@ -1247,7 +1249,7 @@ SmallVector<CHRScope *, 8> CHR::splitScope(
       SmallVector<CHRScope *, 8> SubSplits = splitScope(
           Sub, Split, &SplitConditionValues, SplitInsertPoint, Output,
           SplitUnhoistables);
-      llvm::append_range(NewSubs, SubSplits);
+      NewSubs.insert(NewSubs.end(), SubSplits.begin(), SubSplits.end());
     }
     Split->Subs = NewSubs;
   }
@@ -1304,17 +1306,17 @@ void CHR::classifyBiasedScopes(CHRScope *Scope, CHRScope *OutermostScope) {
   for (RegInfo &RI : Scope->RegInfos) {
     if (RI.HasBranch) {
       Region *R = RI.R;
-      if (TrueBiasedRegionsGlobal.contains(R))
+      if (TrueBiasedRegionsGlobal.count(R) > 0)
         OutermostScope->TrueBiasedRegions.insert(R);
-      else if (FalseBiasedRegionsGlobal.contains(R))
+      else if (FalseBiasedRegionsGlobal.count(R) > 0)
         OutermostScope->FalseBiasedRegions.insert(R);
       else
         llvm_unreachable("Must be biased");
     }
     for (SelectInst *SI : RI.Selects) {
-      if (TrueBiasedSelectsGlobal.contains(SI))
+      if (TrueBiasedSelectsGlobal.count(SI) > 0)
         OutermostScope->TrueBiasedSelects.insert(SI);
-      else if (FalseBiasedSelectsGlobal.contains(SI))
+      else if (FalseBiasedSelectsGlobal.count(SI) > 0)
         OutermostScope->FalseBiasedSelects.insert(SI);
       else
         llvm_unreachable("Must be biased");
@@ -1397,8 +1399,8 @@ void CHR::setCHRRegions(CHRScope *Scope, CHRScope *OutermostScope) {
     DenseSet<Instruction *> HoistStops;
     bool IsHoisted = false;
     if (RI.HasBranch) {
-      assert((OutermostScope->TrueBiasedRegions.contains(R) ||
-              OutermostScope->FalseBiasedRegions.contains(R)) &&
+      assert((OutermostScope->TrueBiasedRegions.count(R) > 0 ||
+              OutermostScope->FalseBiasedRegions.count(R) > 0) &&
              "Must be truthy or falsy");
       auto *BI = cast<BranchInst>(R->getEntry()->getTerminator());
       // Note checkHoistValue fills in HoistStops.
@@ -1410,8 +1412,8 @@ void CHR::setCHRRegions(CHRScope *Scope, CHRScope *OutermostScope) {
       IsHoisted = true;
     }
     for (SelectInst *SI : RI.Selects) {
-      assert((OutermostScope->TrueBiasedSelects.contains(SI) ||
-              OutermostScope->FalseBiasedSelects.contains(SI)) &&
+      assert((OutermostScope->TrueBiasedSelects.count(SI) > 0 ||
+              OutermostScope->FalseBiasedSelects.count(SI) > 0) &&
              "Must be true or false biased");
       // Note checkHoistValue fills in HoistStops.
       DenseMap<Instruction *, bool> Visited;
@@ -1607,7 +1609,9 @@ static void insertTrivialPHIs(CHRScope *Scope,
         // Insert a trivial phi for I (phi [&I, P0], [&I, P1], ...) at
         // ExitBlock. Replace I with the new phi in UI unless UI is another
         // phi at ExitBlock.
-        PHINode *PN = PHINode::Create(I.getType(), pred_size(ExitBlock), "",
+        unsigned PredCount = std::distance(pred_begin(ExitBlock),
+                                           pred_end(ExitBlock));
+        PHINode *PN = PHINode::Create(I.getType(), PredCount, "",
                                       &ExitBlock->front());
         for (BasicBlock *Pred : predecessors(ExitBlock)) {
           PN->addIncoming(&I, Pred);

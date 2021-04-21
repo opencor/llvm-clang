@@ -224,16 +224,10 @@ ValueMapping::ValueMapping(const Module &M) {
     // Constants used by instructions.
     for (const BasicBlock &BB : F)
       for (const Instruction &I : BB)
-        for (const Value *Op : I.operands()) {
-          // Look through a metadata wrapper.
-          if (const auto *MAV = dyn_cast<MetadataAsValue>(Op))
-            if (const auto *VAM = dyn_cast<ValueAsMetadata>(MAV->getMetadata()))
-              Op = VAM->getValue();
-
+        for (const Value *Op : I.operands())
           if ((isa<Constant>(Op) && !isa<GlobalValue>(*Op)) ||
               isa<InlineAsm>(Op))
             map(Op);
-        }
   }
 }
 
@@ -506,15 +500,10 @@ static void changeUseLists(Module &M, Changer changeValueUseList) {
     // Constants used by instructions.
     for (BasicBlock &BB : F)
       for (Instruction &I : BB)
-        for (Value *Op : I.operands()) {
-          // Look through a metadata wrapper.
-          if (auto *MAV = dyn_cast<MetadataAsValue>(Op))
-            if (auto *VAM = dyn_cast<ValueAsMetadata>(MAV->getMetadata()))
-              Op = VAM->getValue();
+        for (Value *Op : I.operands())
           if ((isa<Constant>(Op) && !isa<GlobalValue>(*Op)) ||
               isa<InlineAsm>(Op))
             changeValueUseList(Op);
-        }
   }
 
   if (verifyModule(M, &errs()))

@@ -1,9 +1,5 @@
-; RUN: opt -O2 %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck %s
-; RUN: opt -passes='default<O2>' %s | llvm-dis > %t1
-; RUN: llc -filetype=asm -o - %t1 | FileCheck %s
-; RUN: llc -mattr=+alu32 -filetype=asm -o - %t1 | FileCheck %s
+; RUN: llc -march=bpfel -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -march=bpfel -mattr=+alu32 -filetype=asm -o - %s | FileCheck %s
 ; Source code:
 ;   struct t {
 ;     int a;
@@ -15,9 +11,7 @@
 ;       return foo(param);
 ;   }
 ; Compiler flag to generate IR:
-;   clang -target bpf -S -O2 -g -emit-llvm -Xclang -disable-llvm-passes test.c
-
-target triple = "bpf"
+;   clang -target bpf -S -O2 -g -emit-llvm test.c
 
 %struct.t = type { i32 }
 

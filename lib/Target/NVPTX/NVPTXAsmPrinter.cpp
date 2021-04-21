@@ -1272,6 +1272,9 @@ void NVPTXAsmPrinter::emitPTXAddressSpace(unsigned int AddressSpace,
 std::string
 NVPTXAsmPrinter::getPTXFundamentalTypeStr(Type *Ty, bool useB4PTR) const {
   switch (Ty->getTypeID()) {
+  default:
+    llvm_unreachable("unexpected type");
+    break;
   case Type::IntegerTyID: {
     unsigned NumBits = cast<IntegerType>(Ty)->getBitWidth();
     if (NumBits == 1)
@@ -1302,10 +1305,9 @@ NVPTXAsmPrinter::getPTXFundamentalTypeStr(Type *Ty, bool useB4PTR) const {
       return "b32";
     else
       return "u32";
-  default:
-    break;
   }
   llvm_unreachable("unexpected type");
+  return nullptr;
 }
 
 void NVPTXAsmPrinter::emitPTXGlobalVariable(const GlobalVariable *GVar,

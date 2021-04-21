@@ -271,11 +271,11 @@ private:
       object::OwningBinary<object::ObjectFile> O,
       RuntimeDyld::MemoryManager &MemMgr, JITSymbolResolver &Resolver,
       bool ProcessAllSections,
-      unique_function<Error(const object::ObjectFile &Obj, LoadedObjectInfo &,
+      unique_function<Error(const object::ObjectFile &Obj,
+                            std::unique_ptr<LoadedObjectInfo>,
                             std::map<StringRef, JITEvaluatedSymbol>)>
           OnLoaded,
-      unique_function<void(object::OwningBinary<object::ObjectFile> O,
-                           std::unique_ptr<LoadedObjectInfo>, Error)>
+      unique_function<void(object::OwningBinary<object::ObjectFile> O, Error)>
           OnEmitted);
 
   // RuntimeDyldImpl is the actual class. RuntimeDyld is just the public
@@ -298,11 +298,10 @@ void jitLinkForORC(
     RuntimeDyld::MemoryManager &MemMgr, JITSymbolResolver &Resolver,
     bool ProcessAllSections,
     unique_function<Error(const object::ObjectFile &Obj,
-                          RuntimeDyld::LoadedObjectInfo &,
+                          std::unique_ptr<RuntimeDyld::LoadedObjectInfo>,
                           std::map<StringRef, JITEvaluatedSymbol>)>
         OnLoaded,
-    unique_function<void(object::OwningBinary<object::ObjectFile>,
-                         std::unique_ptr<RuntimeDyld::LoadedObjectInfo>, Error)>
+    unique_function<void(object::OwningBinary<object::ObjectFile>, Error)>
         OnEmitted);
 
 } // end namespace llvm

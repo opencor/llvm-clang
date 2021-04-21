@@ -1,5 +1,3 @@
-add_llvm_component_group(X86 HAS_JIT)
-
 set(LLVM_TARGET_DEFINITIONS X86.td)
 
 tablegen(LLVM X86GenAsmMatcher.inc -gen-asm-matcher)
@@ -30,11 +28,9 @@ set(sources
   X86CallingConv.cpp
   X86CallLowering.cpp
   X86CmovConversion.cpp
+  X86CondBrFolding.cpp
   X86DomainReassignment.cpp
   X86DiscriminateMemOps.cpp
-  X86LowerAMXType.cpp
-  X86TileConfig.cpp
-  X86PreTileConfig.cpp
   X86ExpandPseudo.cpp
   X86FastISel.cpp
   X86FixupBWInsts.cpp
@@ -51,7 +47,6 @@ set(sources
   X86IndirectThunks.cpp
   X86InterleavedAccess.cpp
   X86InsertPrefetch.cpp
-  X86InstCombineIntrinsic.cpp
   X86InstrFMA3Info.cpp
   X86InstrFoldTables.cpp
   X86InstrInfo.cpp
@@ -81,25 +76,7 @@ set(sources
   X86InsertWait.cpp
   )
 
-add_llvm_target(X86CodeGen ${sources}
-  LINK_COMPONENTS
-  Analysis
-  AsmPrinter
-  CodeGen
-  Core
-  MC
-  SelectionDAG
-  Support
-  Target
-  X86Desc
-  X86Info
-  GlobalISel
-  ProfileData
-  CFGuard
-
-  ADD_TO_COMPONENT
-  X86
-)
+add_llvm_target(X86CodeGen ${sources})
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)

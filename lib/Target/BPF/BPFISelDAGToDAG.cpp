@@ -494,6 +494,8 @@ void BPFDAGToDAGISel::PreprocessTrunc(SDNode *Node,
   CurDAG->ReplaceAllUsesWith(SDValue(Node, 0), BaseV);
   I++;
   CurDAG->DeleteNode(Node);
+
+  return;
 }
 
 FunctionPass *llvm::createBPFISelDag(BPFTargetMachine &TM) {

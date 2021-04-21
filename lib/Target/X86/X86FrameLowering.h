@@ -14,7 +14,6 @@
 #define LLVM_LIB_TARGET_X86_X86FRAMELOWERING_H
 
 #include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/Support/TypeSize.h"
 
 namespace llvm {
 
@@ -103,17 +102,16 @@ public:
   bool canSimplifyCallFramePseudos(const MachineFunction &MF) const override;
   bool needsFrameIndexResolution(const MachineFunction &MF) const override;
 
-  StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
-                                     Register &FrameReg) const override;
+  int getFrameIndexReference(const MachineFunction &MF, int FI,
+                             Register &FrameReg) const override;
 
   int getWin64EHFrameIndexRef(const MachineFunction &MF, int FI,
                               Register &SPReg) const;
-  StackOffset getFrameIndexReferenceSP(const MachineFunction &MF, int FI,
-                                       Register &SPReg, int Adjustment) const;
-  StackOffset
-  getFrameIndexReferencePreferSP(const MachineFunction &MF, int FI,
-                                 Register &FrameReg,
-                                 bool IgnoreSPUpdates) const override;
+  int getFrameIndexReferenceSP(const MachineFunction &MF, int FI,
+                               Register &SPReg, int Adjustment) const;
+  int getFrameIndexReferencePreferSP(const MachineFunction &MF, int FI,
+                                     Register &FrameReg,
+                                     bool IgnoreSPUpdates) const override;
 
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
@@ -224,7 +222,12 @@ private:
                                        const DebugLoc &DL, uint64_t Offset,
                                        uint64_t Align) const;
 
-  void adjustFrameForMsvcCxxEh(MachineFunction &MF) const;
+  /// Emit a stub to later inline the target stack probe.
+  MachineInstr *emitStackProbeInlineStub(MachineFunction &MF,
+                                         MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator MBBI,
+                                         const DebugLoc &DL,
+                                         bool InProlog) const;
 
   /// Aligns the stack pointer by ANDing it with -MaxAlign.
   void BuildStackAlignAND(MachineBasicBlock &MBB,

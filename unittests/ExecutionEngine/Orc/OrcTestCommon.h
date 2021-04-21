@@ -44,12 +44,6 @@ namespace orc {
 //     linkage and non-hidden visibility.
 // (5) V -- A JITDylib associated with ES.
 class CoreAPIsBasedStandardTest : public testing::Test {
-public:
-  ~CoreAPIsBasedStandardTest() {
-    if (auto Err = ES.endSession())
-      ES.reportError(std::move(Err));
-  }
-
 protected:
   std::shared_ptr<SymbolStringPool> SSP = std::make_shared<SymbolStringPool>();
   ExecutionSession ES{SSP};
@@ -92,7 +86,7 @@ private:
 class SimpleMaterializationUnit : public orc::MaterializationUnit {
 public:
   using MaterializeFunction =
-      std::function<void(std::unique_ptr<orc::MaterializationResponsibility>)>;
+      std::function<void(orc::MaterializationResponsibility)>;
   using DiscardFunction =
       std::function<void(const orc::JITDylib &, orc::SymbolStringPtr)>;
   using DestructorFunction = std::function<void()>;
@@ -102,7 +96,8 @@ public:
       orc::SymbolStringPtr InitSym = nullptr,
       DiscardFunction Discard = DiscardFunction(),
       DestructorFunction Destructor = DestructorFunction())
-      : MaterializationUnit(std::move(SymbolFlags), std::move(InitSym)),
+      : MaterializationUnit(std::move(SymbolFlags), std::move(InitSym),
+                            orc::VModuleKey()),
         Materialize(std::move(Materialize)), Discard(std::move(Discard)),
         Destructor(std::move(Destructor)) {}
 
@@ -113,8 +108,7 @@ public:
 
   StringRef getName() const override { return "<Simple>"; }
 
-  void
-  materialize(std::unique_ptr<orc::MaterializationResponsibility> R) override {
+  void materialize(orc::MaterializationResponsibility R) override {
     Materialize(std::move(R));
   }
 
@@ -161,11 +155,6 @@ public:
       SupportsIndirection = !!orc::createLocalCompileCallbackManager(TT, ES, 0);
     }
   };
-
-  ~OrcExecutionTest() {
-    if (auto Err = ES.endSession())
-      ES.reportError(std::move(Err));
-  }
 
 protected:
   orc::ExecutionSession ES;

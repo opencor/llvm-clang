@@ -22,7 +22,6 @@
 namespace llvm {
 
 class MCAssembler;
-class MCContext;
 struct MCFixupKindInfo;
 
 /// Utilities for manipulating generated AVR machine code.
@@ -46,6 +45,11 @@ public:
 
   unsigned getNumFixupKinds() const override {
     return AVR::NumTargetFixupKinds;
+  }
+
+  bool mayNeedRelaxation(const MCInst &Inst,
+                         const MCSubtargetInfo &STI) const override {
+    return false;
   }
 
   bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,

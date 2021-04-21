@@ -196,7 +196,7 @@ void CodeGenRegister::buildObjectGraph(CodeGenRegBank &RegBank) {
   }
 }
 
-StringRef CodeGenRegister::getName() const {
+const StringRef CodeGenRegister::getName() const {
   assert(TheDef && "no def");
   return TheDef->getName();
 }
@@ -496,10 +496,11 @@ void CodeGenRegister::computeSecondarySubRegs(CodeGenRegBank &RegBank) {
       assert(getSubRegIndex(SubReg) == SubRegIdx && "LeadingSuperRegs correct");
       for (CodeGenRegister *SubReg : Cand->ExplicitSubRegs) {
         if (CodeGenSubRegIndex *SubRegIdx = getSubRegIndex(SubReg)) {
-          if (SubRegIdx->ConcatenationOf.empty())
+          if (SubRegIdx->ConcatenationOf.empty()) {
             Parts.push_back(SubRegIdx);
-          else
-            append_range(Parts, SubRegIdx->ConcatenationOf);
+          } else
+            for (CodeGenSubRegIndex *SubIdx : SubRegIdx->ConcatenationOf)
+              Parts.push_back(SubIdx);
         } else {
           // Sub-register doesn't exist.
           Parts.clear();
@@ -742,8 +743,6 @@ CodeGenRegisterClass::CodeGenRegisterClass(CodeGenRegBank &RegBank, Record *R)
       TopoSigs(RegBank.getNumTopoSigs()), EnumValue(-1) {
   GeneratePressureSet = R->getValueAsBit("GeneratePressureSet");
   std::vector<Record*> TypeList = R->getValueAsListOfDefs("RegTypes");
-  if (TypeList.empty())
-    PrintFatalError(R->getLoc(), "RegTypes list must not be empty!");
   for (unsigned i = 0, e = TypeList.size(); i != e; ++i) {
     Record *Type = TypeList[i];
     if (!Type->isSubClassOf("ValueType"))
@@ -752,6 +751,7 @@ CodeGenRegisterClass::CodeGenRegisterClass(CodeGenRegBank &RegBank, Record *R)
                           "' does not derive from the ValueType class!");
     VTs.push_back(getValueTypeByHwMode(Type, RegBank.getHwModes()));
   }
+  assert(!VTs.empty() && "RegisterClass must contain at least one ValueType!");
 
   // Allocation order 0 is the full set. AltOrders provides others.
   const SetTheory::RecVec *Elements = RegBank.getSets().expand(R);
@@ -998,8 +998,6 @@ CodeGenRegisterClass::getMatchingSubClassWithSubRegs(
                       const CodeGenRegisterClass *B) {
     // If there are multiple, identical register classes, prefer the original
     // register class.
-    if (A == B)
-      return false;
     if (A->getMembers().size() == B->getMembers().size())
       return A == this;
     return A->getMembers().size() > B->getMembers().size();
@@ -1237,7 +1235,8 @@ CodeGenSubRegIndex *CodeGenRegBank::getSubRegIdx(Record *Def) {
 
 const CodeGenSubRegIndex *
 CodeGenRegBank::findSubRegIdx(const Record* Def) const {
-  return Def2SubRegIdx.lookup(Def);
+  auto I = Def2SubRegIdx.find(Def);
+  return (I == Def2SubRegIdx.end()) ? nullptr : I->second;
 }
 
 CodeGenRegister *CodeGenRegBank::getReg(Record *Def) {
@@ -2009,7 +2008,7 @@ void CodeGenRegBank::computeRegUnitSets() {
     if (RCRegUnits.empty())
       continue;
 
-    LLVM_DEBUG(dbgs() << "RC " << RC.getName() << " Units:\n";
+    LLVM_DEBUG(dbgs() << "RC " << RC.getName() << " Units: \n";
                for (auto U
                     : RCRegUnits) printRegUnitName(U);
                dbgs() << "\n  UnitSetIDs:");

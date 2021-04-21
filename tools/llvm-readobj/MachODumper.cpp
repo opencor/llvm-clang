@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Error.h"
 #include "ObjDumper.h"
 #include "StackMapPrinter.h"
 #include "llvm-readobj.h"
@@ -27,7 +28,7 @@ namespace {
 class MachODumper : public ObjDumper {
 public:
   MachODumper(const MachOObjectFile *Obj, ScopedPrinter &Writer)
-      : ObjDumper(Writer, Obj->getFileName()), Obj(Obj) {}
+      : ObjDumper(Writer), Obj(Obj) {}
 
   void printFileHeaders() override;
   void printSectionHeaders() override;
@@ -67,9 +68,15 @@ private:
 
 namespace llvm {
 
-std::unique_ptr<ObjDumper> createMachODumper(const object::MachOObjectFile &Obj,
-                                             ScopedPrinter &Writer) {
-  return std::make_unique<MachODumper>(&Obj, Writer);
+std::error_code createMachODumper(const object::ObjectFile *Obj,
+                                  ScopedPrinter &Writer,
+                                  std::unique_ptr<ObjDumper> &Result) {
+  const MachOObjectFile *MachOObj = dyn_cast<MachOObjectFile>(Obj);
+  if (!MachOObj)
+    return readobj_error::unsupported_obj_file_format;
+
+  Result.reset(new MachODumper(MachOObj, Writer));
+  return readobj_error::success;
 }
 
 } // namespace llvm
@@ -154,9 +161,8 @@ static const EnumEntry<uint32_t> MachOHeaderCpuSubtypesARM[] = {
 };
 
 static const EnumEntry<uint32_t> MachOHeaderCpuSubtypesARM64[] = {
-    LLVM_READOBJ_ENUM_ENT(MachO, CPU_SUBTYPE_ARM64_ALL),
-    LLVM_READOBJ_ENUM_ENT(MachO, CPU_SUBTYPE_ARM64_V8),
-    LLVM_READOBJ_ENUM_ENT(MachO, CPU_SUBTYPE_ARM64E),
+  LLVM_READOBJ_ENUM_ENT(MachO, CPU_SUBTYPE_ARM64_ALL),
+  LLVM_READOBJ_ENUM_ENT(MachO, CPU_SUBTYPE_ARM64E),
 };
 
 static const EnumEntry<uint32_t> MachOHeaderCpuSubtypesSPARC[] = {
@@ -623,20 +629,13 @@ void MachODumper::printSymbol(const SymbolRef &Symbol) {
   getSymbol(Obj, Symbol.getRawDataRefImpl(), MOSymbol);
 
   StringRef SectionName = "";
-  // Don't ask a Mach-O STABS symbol for its section unless we know that
-  // STAB symbol's section field refers to a valid section index. Otherwise
-  // the symbol may error trying to load a section that does not exist.
-  // TODO: Add a whitelist of STABS symbol types that contain valid section
-  // indices.
-  if (!(MOSymbol.Type & MachO::N_STAB)) {
-    Expected<section_iterator> SecIOrErr = Symbol.getSection();
-    if (!SecIOrErr)
-      reportError(SecIOrErr.takeError(), Obj->getFileName());
+  Expected<section_iterator> SecIOrErr = Symbol.getSection();
+  if (!SecIOrErr)
+    reportError(SecIOrErr.takeError(), Obj->getFileName());
 
-    section_iterator SecI = *SecIOrErr;
-    if (SecI != Obj->section_end())
-      SectionName = unwrapOrError(Obj->getFileName(), SecI->getName());
-  }
+  section_iterator SecI = *SecIOrErr;
+  if (SecI != Obj->section_end())
+    SectionName = unwrapOrError(Obj->getFileName(), SecI->getName());
 
   DictScope D(W, "Symbol");
   W.printNumber("Name", SymbolName, MOSymbol.StringIndex);

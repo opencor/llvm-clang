@@ -43,7 +43,6 @@
 #include "llvm/IR/IntrinsicsR600.h"
 #include "llvm/IR/IntrinsicsRISCV.h"
 #include "llvm/IR/IntrinsicsS390.h"
-#include "llvm/IR/IntrinsicsVE.h"
 #include "llvm/IR/IntrinsicsWebAssembly.h"
 #include "llvm/IR/IntrinsicsX86.h"
 #include "llvm/IR/IntrinsicsXCore.h"
@@ -87,11 +86,9 @@ void Argument::setParent(Function *parent) {
   Parent = parent;
 }
 
-bool Argument::hasNonNullAttr(bool AllowUndefOrPoison) const {
+bool Argument::hasNonNullAttr() const {
   if (!getType()->isPointerTy()) return false;
-  if (getParent()->hasParamAttribute(getArgNo(), Attribute::NonNull) &&
-      (AllowUndefOrPoison ||
-       getParent()->hasParamAttribute(getArgNo(), Attribute::NoUndef)))
+  if (getParent()->hasParamAttribute(getArgNo(), Attribute::NonNull))
     return true;
   else if (getDereferenceableBytes() > 0 &&
            !NullPointerIsDefined(getParent(),
@@ -103,12 +100,6 @@ bool Argument::hasNonNullAttr(bool AllowUndefOrPoison) const {
 bool Argument::hasByValAttr() const {
   if (!getType()->isPointerTy()) return false;
   return hasAttribute(Attribute::ByVal);
-}
-
-bool Argument::hasByRefAttr() const {
-  if (!getType()->isPointerTy())
-    return false;
-  return hasAttribute(Attribute::ByRef);
 }
 
 bool Argument::hasSwiftSelfAttr() const {
@@ -130,7 +121,7 @@ bool Argument::hasPreallocatedAttr() const {
   return hasAttribute(Attribute::Preallocated);
 }
 
-bool Argument::hasPassPointeeByValueCopyAttr() const {
+bool Argument::hasPassPointeeByValueAttr() const {
   if (!getType()->isPointerTy()) return false;
   AttributeList Attrs = getParent()->getAttributes();
   return Attrs.hasParamAttribute(getArgNo(), Attribute::ByVal) ||
@@ -138,52 +129,25 @@ bool Argument::hasPassPointeeByValueCopyAttr() const {
          Attrs.hasParamAttribute(getArgNo(), Attribute::Preallocated);
 }
 
-bool Argument::hasPointeeInMemoryValueAttr() const {
-  if (!getType()->isPointerTy())
-    return false;
-  AttributeList Attrs = getParent()->getAttributes();
-  return Attrs.hasParamAttribute(getArgNo(), Attribute::ByVal) ||
-         Attrs.hasParamAttribute(getArgNo(), Attribute::StructRet) ||
-         Attrs.hasParamAttribute(getArgNo(), Attribute::InAlloca) ||
-         Attrs.hasParamAttribute(getArgNo(), Attribute::Preallocated) ||
-         Attrs.hasParamAttribute(getArgNo(), Attribute::ByRef);
-}
+uint64_t Argument::getPassPointeeByValueCopySize(const DataLayout &DL) const {
+  AttributeSet ParamAttrs
+    = getParent()->getAttributes().getParamAttributes(getArgNo());
 
-/// For a byval, sret, inalloca, or preallocated parameter, get the in-memory
-/// parameter type.
-static Type *getMemoryParamAllocType(AttributeSet ParamAttrs, Type *ArgTy) {
   // FIXME: All the type carrying attributes are mutually exclusive, so there
   // should be a single query to get the stored type that handles any of them.
   if (Type *ByValTy = ParamAttrs.getByValType())
-    return ByValTy;
-  if (Type *ByRefTy = ParamAttrs.getByRefType())
-    return ByRefTy;
+    return DL.getTypeAllocSize(ByValTy);
   if (Type *PreAllocTy = ParamAttrs.getPreallocatedType())
-    return PreAllocTy;
+    return DL.getTypeAllocSize(PreAllocTy);
 
-  // FIXME: sret and inalloca always depends on pointee element type. It's also
-  // possible for byval to miss it.
+  // FIXME: inalloca always depends on pointee element type. It's also possible
+  // for byval to miss it.
   if (ParamAttrs.hasAttribute(Attribute::InAlloca) ||
       ParamAttrs.hasAttribute(Attribute::ByVal) ||
-      ParamAttrs.hasAttribute(Attribute::StructRet) ||
       ParamAttrs.hasAttribute(Attribute::Preallocated))
-    return cast<PointerType>(ArgTy)->getElementType();
+    return DL.getTypeAllocSize(cast<PointerType>(getType())->getElementType());
 
-  return nullptr;
-}
-
-uint64_t Argument::getPassPointeeByValueCopySize(const DataLayout &DL) const {
-  AttributeSet ParamAttrs =
-      getParent()->getAttributes().getParamAttributes(getArgNo());
-  if (Type *MemTy = getMemoryParamAllocType(ParamAttrs, getType()))
-    return DL.getTypeAllocSize(MemTy);
   return 0;
-}
-
-Type *Argument::getPointeeInMemoryValueType() const {
-  AttributeSet ParamAttrs =
-      getParent()->getAttributes().getParamAttributes(getArgNo());
-  return getMemoryParamAllocType(ParamAttrs, getType());
 }
 
 unsigned Argument::getParamAlignment() const {
@@ -199,16 +163,6 @@ MaybeAlign Argument::getParamAlign() const {
 Type *Argument::getParamByValType() const {
   assert(getType()->isPointerTy() && "Only pointers have byval types");
   return getParent()->getParamByValType(getArgNo());
-}
-
-Type *Argument::getParamStructRetType() const {
-  assert(getType()->isPointerTy() && "Only pointers have sret types");
-  return getParent()->getParamStructRetType(getArgNo());
-}
-
-Type *Argument::getParamByRefType() const {
-  assert(getType()->isPointerTy() && "Only pointers have byval types");
-  return getParent()->getParamByRefType(getArgNo());
 }
 
 uint64_t Argument::getDereferenceableBytes() const {
@@ -580,21 +534,6 @@ void Function::addDereferenceableOrNullParamAttr(unsigned ArgNo,
   setAttributes(PAL);
 }
 
-DenormalMode Function::getDenormalMode(const fltSemantics &FPType) const {
-  if (&FPType == &APFloat::IEEEsingle()) {
-    Attribute Attr = getFnAttribute("denormal-fp-math-f32");
-    StringRef Val = Attr.getValueAsString();
-    if (!Val.empty())
-      return parseDenormalFPAttribute(Val);
-
-    // If the f32 variant of the attribute isn't specified, try to use the
-    // generic one.
-  }
-
-  Attribute Attr = getFnAttribute("denormal-fp-math");
-  return parseDenormalFPAttribute(Attr.getValueAsString());
-}
-
 const std::string &Function::getGC() const {
   assert(hasGC() && "Function has no collector");
   return getContext().getGC(*this);
@@ -610,12 +549,6 @@ void Function::clearGC() {
     return;
   getContext().deleteGC(*this);
   setValueSubclassDataBit(14, false);
-}
-
-bool Function::hasStackProtectorFnAttr() const {
-  return hasFnAttribute(Attribute::StackProtect) ||
-         hasFnAttribute(Attribute::StackProtectStrong) ||
-         hasFnAttribute(Attribute::StackProtectReq);
 }
 
 /// Copy all additional attributes (those not needed to create a Function) from
@@ -648,14 +581,6 @@ static const char * const IntrinsicNameTable[] = {
 #define GET_INTRINSIC_TARGET_DATA
 #include "llvm/IR/IntrinsicImpl.inc"
 #undef GET_INTRINSIC_TARGET_DATA
-
-bool Function::isTargetIntrinsic(Intrinsic::ID IID) {
-  return IID > TargetInfos[0].Count;
-}
-
-bool Function::isTargetIntrinsic() const {
-  return isTargetIntrinsic(IntID);
-}
 
 /// Find the segment of \c IntrinsicNameTable for intrinsics with the same
 /// target as \c Name, or the generic table if \c Name is not target specific.
@@ -749,10 +674,9 @@ static std::string getMangledTypeStr(Type* Ty) {
     Result += "f";
   } else if (VectorType* VTy = dyn_cast<VectorType>(Ty)) {
     ElementCount EC = VTy->getElementCount();
-    if (EC.isScalable())
+    if (EC.Scalable)
       Result += "nx";
-    Result += "v" + utostr(EC.getKnownMinValue()) +
-              getMangledTypeStr(VTy->getElementType());
+    Result += "v" + utostr(EC.Min) + getMangledTypeStr(VTy->getElementType());
   } else if (Ty) {
     switch (Ty->getTypeID()) {
     default: llvm_unreachable("Unhandled type");
@@ -766,7 +690,6 @@ static std::string getMangledTypeStr(Type* Ty) {
     case Type::FP128TyID:     Result += "f128";     break;
     case Type::PPC_FP128TyID: Result += "ppcf128";  break;
     case Type::X86_MMXTyID:   Result += "x86mmx";   break;
-    case Type::X86_AMXTyID:   Result += "x86amx";   break;
     case Type::IntegerTyID:
       Result += "i" + utostr(cast<IntegerType>(Ty)->getBitWidth());
       break;
@@ -784,8 +707,6 @@ StringRef Intrinsic::getName(ID id) {
 
 std::string Intrinsic::getName(ID id, ArrayRef<Type*> Tys) {
   assert(id < num_intrinsics && "Invalid intrinsic ID!");
-  assert((Tys.empty() || Intrinsic::isOverloaded(id)) &&
-         "This version of getName is for overloaded intrinsics only");
   std::string Result(IntrinsicNameTable[id]);
   for (Type *Ty : Tys) {
     Result += "." + getMangledTypeStr(Ty);
@@ -849,10 +770,7 @@ enum IIT_Info {
   IIT_SUBDIVIDE4_ARG = 45,
   IIT_VEC_OF_BITCASTS_TO_INT = 46,
   IIT_V128 = 47,
-  IIT_BF16 = 48,
-  IIT_STRUCT9 = 49,
-  IIT_V256 = 50,
-  IIT_AMX  = 51
+  IIT_BF16 = 48
 };
 
 static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
@@ -874,9 +792,6 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
     return;
   case IIT_MMX:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::MMX, 0));
-    return;
-  case IIT_AMX:
-    OutputTable.push_back(IITDescriptor::get(IITDescriptor::AMX, 0));
     return;
   case IIT_TOKEN:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Token, 0));
@@ -949,10 +864,6 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
     OutputTable.push_back(IITDescriptor::getVector(128, IsScalableVector));
     DecodeIITType(NextElt, Infos, Info, OutputTable);
     return;
-  case IIT_V256:
-    OutputTable.push_back(IITDescriptor::getVector(256, IsScalableVector));
-    DecodeIITType(NextElt, Infos, Info, OutputTable);
-    return;
   case IIT_V512:
     OutputTable.push_back(IITDescriptor::getVector(512, IsScalableVector));
     DecodeIITType(NextElt, Infos, Info, OutputTable);
@@ -1021,7 +932,6 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
   case IIT_EMPTYSTRUCT:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Struct, 0));
     return;
-  case IIT_STRUCT9: ++StructElts; LLVM_FALLTHROUGH;
   case IIT_STRUCT8: ++StructElts; LLVM_FALLTHROUGH;
   case IIT_STRUCT7: ++StructElts; LLVM_FALLTHROUGH;
   case IIT_STRUCT6: ++StructElts; LLVM_FALLTHROUGH;
@@ -1115,7 +1025,6 @@ static Type *DecodeFixedType(ArrayRef<Intrinsic::IITDescriptor> &Infos,
   case IITDescriptor::Void: return Type::getVoidTy(Context);
   case IITDescriptor::VarArg: return Type::getVoidTy(Context);
   case IITDescriptor::MMX: return Type::getX86_MMXTy(Context);
-  case IITDescriptor::AMX: return Type::getX86_AMXTy(Context);
   case IITDescriptor::Token: return Type::getTokenTy(Context);
   case IITDescriptor::Metadata: return Type::getMetadataTy(Context);
   case IITDescriptor::Half: return Type::getHalfTy(Context);
@@ -1253,7 +1162,7 @@ Function *Intrinsic::getDeclaration(Module *M, ID id, ArrayRef<Type*> Tys) {
   // There can never be multiple globals with the same name of different types,
   // because intrinsics must be a specific type.
   return cast<Function>(
-      M->getOrInsertFunction(Tys.empty() ? getName(id) : getName(id, Tys),
+      M->getOrInsertFunction(getName(id, Tys),
                              getType(M->getContext(), id, Tys))
           .getCallee());
 }
@@ -1295,7 +1204,6 @@ static bool matchIntrinsicType(
     case IITDescriptor::Void: return !Ty->isVoidTy();
     case IITDescriptor::VarArg: return true;
     case IITDescriptor::MMX:  return !Ty->isX86_MMXTy();
-    case IITDescriptor::AMX:  return !Ty->isX86_AMXTy();
     case IITDescriptor::Token: return !Ty->isTokenTy();
     case IITDescriptor::Metadata: return !Ty->isMetadataTy();
     case IITDescriptor::Half: return !Ty->isHalfTy();
@@ -1448,10 +1356,10 @@ static bool matchIntrinsicType(
       // Verify the overloaded type "matches" the Ref type.
       // i.e. Ty is a vector with the same width as Ref.
       // Composed of pointers to the same element type as Ref.
-      auto *ReferenceType = dyn_cast<VectorType>(ArgTys[RefArgNumber]);
-      auto *ThisArgVecTy = dyn_cast<VectorType>(Ty);
+      VectorType *ReferenceType = dyn_cast<VectorType>(ArgTys[RefArgNumber]);
+      VectorType *ThisArgVecTy = dyn_cast<VectorType>(Ty);
       if (!ThisArgVecTy || !ReferenceType ||
-          (ReferenceType->getElementCount() != ThisArgVecTy->getElementCount()))
+          (ReferenceType->getNumElements() != ThisArgVecTy->getNumElements()))
         return true;
       PointerType *ThisArgEltTy =
           dyn_cast<PointerType>(ThisArgVecTy->getElementType());

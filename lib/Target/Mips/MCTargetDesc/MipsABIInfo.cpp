@@ -9,6 +9,7 @@
 #include "MipsABIInfo.h"
 #include "MipsRegisterInfo.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/CommandLine.h"
 

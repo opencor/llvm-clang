@@ -134,9 +134,8 @@ public:
     Ctx(C), OrigTy(Ty), PromotedWidth(Width), Visited(visited),
     Sources(sources), Sinks(sinks), SafeWrap(wrap) {
     ExtTy = IntegerType::get(Ctx, PromotedWidth);
-    assert(OrigTy->getPrimitiveSizeInBits().getFixedSize() <
-               ExtTy->getPrimitiveSizeInBits().getFixedSize() &&
-           "Original type not smaller than extended type");
+    assert(OrigTy->getPrimitiveSizeInBits() < ExtTy->getPrimitiveSizeInBits()
+           && "Original type not smaller than extended type");
   }
 
   void Mutate();
@@ -810,7 +809,7 @@ bool TypePromotion::isLegalToPromote(Value *V) {
 
 bool TypePromotion::TryToPromote(Value *V, unsigned PromotedWidth) {
   Type *OrigTy = V->getType();
-  TypeSize = OrigTy->getPrimitiveSizeInBits().getFixedSize();
+  TypeSize = OrigTy->getPrimitiveSizeInBits();
   SafeToPromote.clear();
   SafeWrap.clear();
 
@@ -981,14 +980,15 @@ bool TypePromotion::runOnFunction(Function &F) {
           if (TLI->getTypeAction(ICmp->getContext(), SrcVT) !=
               TargetLowering::TypePromoteInteger)
             break;
+
           EVT PromotedVT = TLI->getTypeToTransformTo(ICmp->getContext(), SrcVT);
-          if (RegisterBitWidth < PromotedVT.getFixedSizeInBits()) {
+          if (RegisterBitWidth < PromotedVT.getSizeInBits()) {
             LLVM_DEBUG(dbgs() << "IR Promotion: Couldn't find target register "
                        << "for promoted type\n");
             break;
           }
 
-          MadeChange |= TryToPromote(I, PromotedVT.getFixedSizeInBits());
+          MadeChange |= TryToPromote(I, PromotedVT.getSizeInBits());
           break;
         }
       }

@@ -6,13 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AMDGPUArgumentUsageInfo.h"
 #include "AMDGPU.h"
+#include "AMDGPUArgumentUsageInfo.h"
 #include "AMDGPUTargetMachine.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "SIRegisterInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/IR/Function.h"
 #include "llvm/Support/NativeFormatting.h"
 #include "llvm/Support/raw_ostream.h"
 

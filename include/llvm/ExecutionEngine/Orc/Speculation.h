@@ -18,10 +18,14 @@
 #include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/DebugUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/Debug.h"
+
 #include <mutex>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace llvm {
 namespace orc {
@@ -181,8 +185,7 @@ public:
       : IRLayer(ES, BaseLayer.getManglingOptions()), NextLayer(BaseLayer),
         S(Spec), Mangle(Mangle), QueryAnalysis(Interpreter) {}
 
-  void emit(std::unique_ptr<MaterializationResponsibility> R,
-            ThreadSafeModule TSM) override;
+  void emit(MaterializationResponsibility R, ThreadSafeModule TSM);
 
 private:
   TargetAndLikelies
