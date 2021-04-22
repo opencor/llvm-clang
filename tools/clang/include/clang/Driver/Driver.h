@@ -304,7 +304,7 @@ public:
                                       StringRef CustomResourceDir = "");
 
   Driver(StringRef ClangExecutable, StringRef TargetTriple,
-         DiagnosticsEngine &Diags,
+         DiagnosticsEngine &Diags, std::string Title = "clang LLVM compiler",
          IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS = nullptr);
 
   /// @name Accessors
@@ -317,7 +317,7 @@ public:
 
   const llvm::opt::OptTable &getOpts() const { return getDriverOptTable(); }
 
-  const DiagnosticsEngine &getDiags() const { return Diags; }
+  DiagnosticsEngine &getDiags() const { return Diags; }
 
   llvm::vfs::FileSystem &getVFS() const { return *VFS; }
 
