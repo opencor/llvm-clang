@@ -1144,7 +1144,26 @@ if(LLVMCLANG_BUILD_SHARED_LIB)
   get_property(LLVMCLANG_COMPILE_DEFINITIONS GLOBAL PROPERTY LLVMCLANG_COMPILE_DEFINITIONS)
   include_directories(${CMAKE_SOURCE_DIR}/include
                       ${CMAKE_SOURCE_DIR}/tools/clang/include
-                      ${LLVMCLANG_INCLUDE_DIRS})
+                      ${LLVMCLANG_INCLUDE_DIRS}
+                      ${CMAKE_BINARY_DIR}/include/llvm/Frontend/OpenACC
+                      ${CMAKE_BINARY_DIR}/include/llvm/Frontend/OpenMP
+                      ${CMAKE_BINARY_DIR}/include/llvm/IR
+                      ${CMAKE_BINARY_DIR}/lib/Target/X86
+                      ${CMAKE_BINARY_DIR}/lib/ToolDrivers/llvm-dlltool
+                      ${CMAKE_BINARY_DIR}/lib/ToolDrivers/llvm-lib
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/AST
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Basic
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Driver
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Parse
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Sema
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Serialization
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/StaticAnalyzer/Checkers
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Tooling
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Tooling/Syntax
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/AST
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/Basic
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/Sema
+                      ${CMAKE_BINARY_DIR}/tools/llvm-config)
   add_library(LLVMClang SHARED ${LLVMCLANG_SOURCES})
   set_property(TARGET LLVMClang APPEND PROPERTY COMPILE_DEFINITIONS ${LLVMCLANG_COMPILE_DEFINITIONS})
   if(WIN32)
