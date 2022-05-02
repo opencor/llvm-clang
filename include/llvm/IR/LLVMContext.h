@@ -15,6 +15,7 @@
 #define LLVM_IR_LLVMCONTEXT_H
 
 #include "llvm-c/Types.h"
+#include "llvm/Config/opencor.h"
 #include "llvm/IR/DiagnosticHandler.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include <cstdint>
@@ -65,7 +66,7 @@ enum {
 /// infrastructure, including the type and constant uniquing tables.
 /// LLVMContext itself provides no locking guarantees, so you should be careful
 /// to have one context per thread.
-class LLVMContext {
+class LLVMCLANG_EXPORT LLVMContext {
 public:
   LLVMContextImpl *const pImpl;
   LLVMContext();

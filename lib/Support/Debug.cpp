@@ -42,6 +42,14 @@ namespace llvm {
 /// Exported boolean set by the -debug option.
 bool DebugFlag = false;
 
+void setDebugFlag(bool debugFlag) {
+  DebugFlag = debugFlag;
+}
+
+bool debugFlag() {
+  return DebugFlag;
+}
+
 static ManagedStatic<std::vector<std::string>> CurrentDebugType;
 
 /// Return true if the specified string is the debug type

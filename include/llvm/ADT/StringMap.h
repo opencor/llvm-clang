@@ -14,6 +14,7 @@
 #define LLVM_ADT_STRINGMAP_H
 
 #include "llvm/ADT/StringMapEntry.h"
+#include "llvm/Config/opencor.h"
 #include "llvm/Support/AllocatorBase.h"
 #include "llvm/Support/PointerLikeTypeTraits.h"
 #include <initializer_list>
@@ -27,7 +28,7 @@ template <typename ValueTy> class StringMapKeyIterator;
 
 /// StringMapImpl - This is the base class of StringMap that is shared among
 /// all of its instantiations.
-class StringMapImpl {
+class LLVMCLANG_EXPORT StringMapImpl {
 protected:
   // Array of NumBuckets pointers to entries, null pointers are holes.
   // TheTable[NumBuckets] contains a sentinel value for easy iteration. Followed

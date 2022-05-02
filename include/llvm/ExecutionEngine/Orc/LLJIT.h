@@ -34,7 +34,7 @@ class TargetProcessControl;
 /// A pre-fabricated ORC JIT stack that can serve as an alternative to MCJIT.
 ///
 /// Create instances using LLJITBuilder.
-class LLJIT {
+class LLVMCLANG_EXPORT LLJIT {
   template <typename, typename, typename> friend class LLJITBuilderSetters;
 
   friend void setUpGenericLLVMIRPlatform(LLJIT &J);
@@ -248,7 +248,7 @@ private:
   std::unique_ptr<CompileOnDemandLayer> CODLayer;
 };
 
-class LLJITBuilderState {
+class LLVMCLANG_EXPORT LLJITBuilderState {
 public:
   using ObjectLinkingLayerCreator =
       std::function<Expected<std::unique_ptr<ObjectLayer>>(ExecutionSession &,
