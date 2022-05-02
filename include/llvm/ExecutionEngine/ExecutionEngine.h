@@ -97,7 +97,7 @@ using FunctionCreator = std::function<void *(const std::string &)>;
 /// Abstract interface for implementation execution of LLVM modules,
 /// designed to support both interpreter and just-in-time (JIT) compiler
 /// implementations.
-class LLVMCLANG_EXPORT ExecutionEngine {
+class ExecutionEngine {
   /// The state object holding the global address mapping, which must be
   /// accessed synchronously.
   //
@@ -532,7 +532,7 @@ namespace EngineKind {
 /// Builder class for ExecutionEngines. Use this by stack-allocating a builder,
 /// chaining the various set* methods, and terminating it with a .create()
 /// call.
-class LLVMCLANG_EXPORT EngineBuilder {
+class EngineBuilder {
 private:
   std::unique_ptr<Module> M;
   EngineKind::Kind WhichEngine;

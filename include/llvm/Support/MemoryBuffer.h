@@ -17,6 +17,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Config/opencor.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBufferRef.h"
