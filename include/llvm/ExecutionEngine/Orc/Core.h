@@ -50,7 +50,7 @@ using JITDylibSP = IntrusiveRefCntPtr<JITDylib>;
 using ResourceKey = uintptr_t;
 
 /// API to remove / transfer ownership of JIT resources.
-class ResourceTracker : public ThreadSafeRefCountedBase<ResourceTracker> {
+class LLVMCLANG_EXPORT ResourceTracker : public ThreadSafeRefCountedBase<ResourceTracker> {
 private:
   friend class ExecutionSession;
   friend class JITDylib;
@@ -663,7 +663,7 @@ private:
 /// JITDylibs. The JITDylib will call materialize when the address of a symbol
 /// is requested via the lookup method. The JITDylib will call discard if a
 /// stronger definition is added or already present.
-class MaterializationUnit {
+class LLVMCLANG_EXPORT MaterializationUnit {
   friend class ExecutionSession;
   friend class JITDylib;
 
@@ -729,7 +729,7 @@ private:
 ///
 /// All symbols will be resolved and marked ready as soon as the unit is
 /// materialized.
-class AbsoluteSymbolsMaterializationUnit : public MaterializationUnit {
+class LLVMCLANG_EXPORT AbsoluteSymbolsMaterializationUnit : public MaterializationUnit {
 public:
   AbsoluteSymbolsMaterializationUnit(SymbolMap Symbols);
 
@@ -944,8 +944,8 @@ public:
 ///
 /// JITDylibs cannot be moved or copied. Their address is stable, and useful as
 /// a key in some JIT data structures.
-class JITDylib : public ThreadSafeRefCountedBase<JITDylib>,
-                 public jitlink::JITLinkDylib {
+class LLVMCLANG_EXPORT JITDylib : public ThreadSafeRefCountedBase<JITDylib>,
+                                  public jitlink::JITLinkDylib {
   friend class AsynchronousSymbolQuery;
   friend class ExecutionSession;
   friend class Platform;
@@ -1356,7 +1356,7 @@ private:
 };
 
 /// An ExecutionSession represents a running JIT program.
-class ExecutionSession {
+class LLVMCLANG_EXPORT ExecutionSession {
   friend class InProgressLookupFlagsState;
   friend class InProgressFullLookupState;
   friend class JITDylib;

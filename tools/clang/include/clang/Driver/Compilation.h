@@ -10,6 +10,7 @@
 #define LLVM_CLANG_DRIVER_COMPILATION_H
 
 #include "clang/Basic/LLVM.h"
+#include "llvm/Config/opencor.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Util.h"

@@ -80,7 +80,7 @@ static cl::opt<bool> OptConst("insert-const", cl::init(false), cl::Hidden,
 // chunks of code. Use this function to detect debugging.
 inline static bool isDebug() {
 #ifndef NDEBUG
-  return DebugFlag && isCurrentDebugType(DEBUG_TYPE);
+  return debugFlag() && isCurrentDebugType(DEBUG_TYPE);
 #else
   return false;
 #endif

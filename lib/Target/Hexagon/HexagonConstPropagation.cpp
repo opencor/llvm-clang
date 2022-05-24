@@ -2795,7 +2795,7 @@ bool HexagonConstEvaluator::rewriteHexConstDefs(MachineInstr &MI,
   // Some diagnostics.
   // LLVM_DEBUG({...}) gets confused with all this code as an argument.
 #ifndef NDEBUG
-  bool Debugging = DebugFlag && isCurrentDebugType(DEBUG_TYPE);
+  bool Debugging = debugFlag() && isCurrentDebugType(DEBUG_TYPE);
   if (Debugging) {
     bool Const = true, HasUse = false;
     for (const MachineOperand &MO : MI.operands()) {

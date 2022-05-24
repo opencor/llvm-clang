@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
     StringRef ConnectArg = argv[FirstProgramArg++];
 #ifndef NDEBUG
     if (ConnectArg == "debug") {
-      DebugFlag = true;
+      setDebugFlag(true);
       ConnectArg = argv[FirstProgramArg++];
     }
 #endif

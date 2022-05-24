@@ -16,6 +16,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/Config/opencor.h"
 #include "llvm/Support/DataTypes.h"
 #include <cassert>
 #include <cstddef>
@@ -51,7 +52,7 @@ class FileLocker;
 /// output to a stream.  It does not support seeking, reopening, rewinding, line
 /// buffered disciplines etc. It is a simple buffer that outputs
 /// a chunk at a time.
-class raw_ostream {
+class LLVMCLANG_EXPORT raw_ostream {
 public:
   // Class kinds to support LLVM-style RTTI.
   enum class OStreamKind {
@@ -590,7 +591,7 @@ raw_fd_ostream &outs();
 raw_fd_ostream &errs();
 
 /// This returns a reference to a raw_ostream which simply discards output.
-raw_ostream &nulls();
+raw_ostream LLVMCLANG_EXPORT &nulls();
 
 //===----------------------------------------------------------------------===//
 // File Streams

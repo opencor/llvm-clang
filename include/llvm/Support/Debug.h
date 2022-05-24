@@ -28,6 +28,8 @@
 #ifndef LLVM_SUPPORT_DEBUG_H
 #define LLVM_SUPPORT_DEBUG_H
 
+#include "llvm/Config/opencor.h"
+
 namespace llvm {
 
 class raw_ostream;
@@ -38,7 +40,7 @@ class raw_ostream;
 /// specified on the command line, or if none was specified on the command line
 /// with the -debug-only=X option.
 ///
-bool isCurrentDebugType(const char *Type);
+bool LLVMCLANG_EXPORT isCurrentDebugType(const char *Type);
 
 /// setCurrentDebugType - Set the current debug type, as if the -debug-only=X
 /// option were specified.  Note that DebugFlag also needs to be set to true for
@@ -62,7 +64,7 @@ void setCurrentDebugTypes(const char **Types, unsigned Count);
 /// This will emit the debug information if -debug is present, and -debug-only
 /// is not specified, or is specified as "bitset".
 #define DEBUG_WITH_TYPE(TYPE, X)                                        \
-  do { if (::llvm::DebugFlag && ::llvm::isCurrentDebugType(TYPE)) { X; } \
+  do { if (::llvm::debugFlag() && ::llvm::isCurrentDebugType(TYPE)) { X; } \
   } while (false)
 
 #else
@@ -76,7 +78,8 @@ void setCurrentDebugTypes(const char **Types, unsigned Count);
 /// is specified.  This should probably not be referenced directly, instead, use
 /// the DEBUG macro below.
 ///
-extern bool DebugFlag;
+void LLVMCLANG_EXPORT setDebugFlag(bool debugFlag);
+bool LLVMCLANG_EXPORT debugFlag();
 
 /// EnableDebugBuffering - This defaults to false.  If true, the debug
 /// stream will install signal handlers to dump any buffered debug
@@ -89,7 +92,7 @@ extern bool EnableDebugBuffering;
 /// dbgs() - This returns a reference to a raw_ostream for debugging
 /// messages.  If debugging is disabled it returns errs().  Use it
 /// like: dbgs() << "foo" << "bar";
-raw_ostream &dbgs();
+raw_ostream LLVMCLANG_EXPORT &dbgs();
 
 // DEBUG macro - This macro should be used by passes to emit debug information.
 // In the '-debug' option is specified on the commandline, and if this is a

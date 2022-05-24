@@ -1719,7 +1719,7 @@ public:
 
 /// Abstract interface, implemented by clients of the front-end, which
 /// formats and prints fully processed diagnostics.
-class DiagnosticConsumer {
+class LLVMCLANG_EXPORT DiagnosticConsumer {
 protected:
   unsigned NumWarnings = 0;       ///< Number of warnings reported
   unsigned NumErrors = 0;         ///< Number of errors reported
