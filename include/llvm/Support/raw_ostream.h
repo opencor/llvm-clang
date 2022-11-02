@@ -724,7 +724,7 @@ class buffer_ostream : public raw_svector_ostream {
   raw_ostream &OS;
   SmallVector<char, 0> Buffer;
 
-  virtual void anchor() override;
+  void anchor() override;
 
 public:
   buffer_ostream(raw_ostream &OS) : raw_svector_ostream(Buffer), OS(OS) {}
@@ -735,7 +735,7 @@ class buffer_unique_ostream : public raw_svector_ostream {
   std::unique_ptr<raw_ostream> OS;
   SmallVector<char, 0> Buffer;
 
-  virtual void anchor() override;
+  void anchor() override;
 
 public:
   buffer_unique_ostream(std::unique_ptr<raw_ostream> OS)
