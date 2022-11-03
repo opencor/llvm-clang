@@ -43,10 +43,10 @@ class CGBlockInfo;
 /// codegeneration issues, like target-specific attributes, builtins and so
 /// on.
 class TargetCodeGenInfo {
-  std::unique_ptr<ABIInfo> Info;
+  std::unique_ptr<ABIInfo> Info = nullptr;
 
 public:
-  TargetCodeGenInfo(std::unique_ptr<ABIInfo> Info);
+  TargetCodeGenInfo(std::unique_ptr<ABIInfo> Info) : Info(std::move(Info)) {}
   virtual ~TargetCodeGenInfo();
 
   /// getABIInfo() - Returns ABI info helper for the target.
@@ -329,7 +329,7 @@ public:
   virtual llvm::Function *
   createEnqueuedBlockKernel(CodeGenFunction &CGF,
                             llvm::Function *BlockInvokeFunc,
-                            llvm::Type *BlockTy) const;
+                            llvm::Value *BlockLiteral) const;
 
   /// \return true if the target supports alias from the unmangled name to the
   /// mangled name of functions declared within an extern "C" region and marked

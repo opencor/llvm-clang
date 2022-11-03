@@ -21,6 +21,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "DFAEmitter.h"
+#include "CodeGenTarget.h"
 #include "SequenceToOffsetTable.h"
 #include "TableGenBackends.h"
 #include "llvm/ADT/SmallVector.h"
@@ -29,9 +30,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TableGen/Record.h"
+#include "llvm/TableGen/TableGenBackend.h"
 #include <cassert>
 #include <cstdint>
-#include <deque>
 #include <map>
 #include <set>
 #include <string>
@@ -305,7 +306,6 @@ void Automaton::emit(raw_ostream &OS) {
   }
   LLVM_DEBUG(dbgs() << "  NFA automaton has " << SeenStates.size()
                     << " states with " << NumTransitions << " transitions.\n");
-  (void) NumTransitions;
 
   const auto &ActionTypes = Transitions.back().getTypes();
   OS << "// The type of an action in the " << Name << " automaton.\n";

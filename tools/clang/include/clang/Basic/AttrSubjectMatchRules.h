@@ -19,9 +19,6 @@ namespace attr {
 enum SubjectMatchRule {
 #define ATTR_MATCH_RULE(X, Spelling, IsAbstract) X,
 #include "clang/Basic/AttrSubMatchRulesList.inc"
-  SubjectMatchRule_Last = -1
-#define ATTR_MATCH_RULE(X, Spelling, IsAbstract) +1
-#include "clang/Basic/AttrSubMatchRulesList.inc"
 };
 
 const char *getSubjectMatchRuleSpelling(SubjectMatchRule Rule);

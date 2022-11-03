@@ -45,7 +45,7 @@ static ProgramStateRef removeRefBinding(ProgramStateRef State, SymbolRef Sym) {
 
 void RefVal::print(raw_ostream &Out) const {
   if (!T.isNull())
-    Out << "Tracked " << T << " | ";
+    Out << "Tracked " << T.getAsString() << " | ";
 
   switch (getKind()) {
     default: llvm_unreachable("Invalid RefVal kind");
@@ -945,8 +945,7 @@ bool RetainCountChecker::evalCall(const CallEvent &Call,
 
       // Assume that output is zero on the other branch.
       NullOutputState = NullOutputState->BindExpr(
-          CE, LCtx, C.getSValBuilder().makeNullWithType(ResultTy),
-          /*Invalidate=*/false);
+          CE, LCtx, C.getSValBuilder().makeNull(), /*Invalidate=*/false);
       C.addTransition(NullOutputState, &getCastFailTag());
 
       // And on the original branch assume that both input and

@@ -40,6 +40,8 @@
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopNestAnalysis.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/PassInstrumentation.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Transforms/Utils/LCSSA.h"
 #include "llvm/Transforms/Utils/LoopSimplify.h"
@@ -50,7 +52,6 @@ namespace llvm {
 
 // Forward declarations of an update tracking API used in the pass manager.
 class LPMUpdater;
-class PassInstrumentation;
 
 namespace {
 

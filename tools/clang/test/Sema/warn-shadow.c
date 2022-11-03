@@ -2,7 +2,7 @@
 
 int i;          // expected-note 3 {{previous declaration is here}}
 
-void foo(void) {
+void foo() {
   int pass1;
   int i;        // expected-warning {{declaration shadows a variable in the global scope}} \
                 // expected-note {{previous declaration is here}}
@@ -52,11 +52,11 @@ void test7(void *context, void (*callback)(void *context)) {}
 extern int bob; // expected-note {{previous declaration is here}}
 
 // rdar://8883302
-void rdar8883302(void) {
+void rdar8883302() {
   extern int bob; // don't warn for shadowing.
 }
 
-void test8(void) {
+void test8() {
   int bob; // expected-warning {{declaration shadows a variable in the global scope}}
 }
 

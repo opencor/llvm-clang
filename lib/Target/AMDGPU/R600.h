@@ -26,7 +26,7 @@ FunctionPass *createR600EmitClauseMarkers();
 FunctionPass *createR600ClauseMergePass();
 FunctionPass *createR600Packetizer();
 FunctionPass *createR600ControlFlowFinalizer();
-FunctionPass *createR600MachineCFGStructurizerPass();
+FunctionPass *createAMDGPUCFGStructurizerPass();
 FunctionPass *createR600ISelDag(TargetMachine *TM, CodeGenOpt::Level OptLevel);
 ModulePass *createR600OpenCLImageTypeLoweringPass();
 

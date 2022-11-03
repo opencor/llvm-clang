@@ -14,18 +14,18 @@ enum gcc_type_class {
   lang_type_class
 };
 
-void foo(void) {
+void foo() {
   int i;
   char c;
   enum { red, green, blue } enum_obj;
   int *p;
   double d;
   _Complex double cc;
-  extern void f(void);
+  extern void f();
   struct { int a; float b; } s_obj;
   union { int a; float b; } u_obj;
   int arr[10];
-  int (^block)(void);
+  int (^block)();
   __attribute__((vector_size(16))) int vec;
   typedef __attribute__((ext_vector_type(4))) int evec_t;
   evec_t evec;
@@ -55,5 +55,5 @@ void foo(void) {
   int a19[__builtin_classify_type(complex_d) == complex_type_class ? 1 : -1];
 }
 
-extern int (^p)(void);
+extern int (^p)();
 int n = __builtin_classify_type(p);

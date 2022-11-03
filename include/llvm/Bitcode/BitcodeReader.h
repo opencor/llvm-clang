@@ -15,11 +15,12 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Bitstream/BitCodeEnums.h"
+#include "llvm/Bitstream/BitCodes.h"
+#include "llvm/IR/ModuleSummaryIndex.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorOr.h"
-#include "llvm/Support/MemoryBufferRef.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -29,8 +30,6 @@ namespace llvm {
 
 class LLVMContext;
 class Module;
-class MemoryBuffer;
-class ModuleSummaryIndex;
 
 typedef llvm::function_ref<Optional<std::string>(StringRef)>
     DataLayoutCallbackTy;

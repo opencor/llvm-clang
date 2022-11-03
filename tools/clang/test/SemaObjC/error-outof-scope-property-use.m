@@ -23,7 +23,7 @@
 @end
 
 void
-doLaunchdJobCPU(void)
+doLaunchdJobCPU()
 {
  [uuids_jobs enumerateKeysAndObjectsUsingBlock]; // expected-error {{use of undeclared identifier 'uuids_jobs'}}
 }

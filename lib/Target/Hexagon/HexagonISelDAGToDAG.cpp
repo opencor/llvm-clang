@@ -1345,8 +1345,7 @@ inline bool HexagonDAGToDAGISel::SelectAnyInt(SDValue &N, SDValue &R) {
   EVT T = N.getValueType();
   if (!T.isInteger() || T.getSizeInBits() != 32 || !isa<ConstantSDNode>(N))
     return false;
-  int32_t V = cast<const ConstantSDNode>(N)->getZExtValue();
-  R = CurDAG->getTargetConstant(V, SDLoc(N), N.getValueType());
+  R = N;
   return true;
 }
 
@@ -1541,7 +1540,7 @@ bool HexagonDAGToDAGISel::keepsLowBits(const SDValue &Val, unsigned NumBits,
     break;
   case ISD::AND: {
     // Check if this is an AND with NumBits of lower bits set to 1.
-    uint64_t Mask = (1ULL << NumBits) - 1;
+    uint64_t Mask = (1 << NumBits) - 1;
     if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Val.getOperand(0))) {
       if (C->getZExtValue() == Mask) {
         Src = Val.getOperand(1);
@@ -1559,7 +1558,7 @@ bool HexagonDAGToDAGISel::keepsLowBits(const SDValue &Val, unsigned NumBits,
   case ISD::OR:
   case ISD::XOR: {
     // OR/XOR with the lower NumBits bits set to 0.
-    uint64_t Mask = (1ULL << NumBits) - 1;
+    uint64_t Mask = (1 << NumBits) - 1;
     if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Val.getOperand(0))) {
       if ((C->getZExtValue() & Mask) == 0) {
         Src = Val.getOperand(1);
@@ -1581,7 +1580,7 @@ bool HexagonDAGToDAGISel::keepsLowBits(const SDValue &Val, unsigned NumBits,
 }
 
 bool HexagonDAGToDAGISel::isAlignedMemNode(const MemSDNode *N) const {
-  return N->getAlign().value() >= N->getMemoryVT().getStoreSize();
+  return N->getAlignment() >= N->getMemoryVT().getStoreSize();
 }
 
 bool HexagonDAGToDAGISel::isSmallStackStore(const StoreSDNode *N) const {
@@ -1656,7 +1655,7 @@ struct WeightedLeaf {
   int Weight;
   int InsertionOrder;
 
-  WeightedLeaf() {}
+  WeightedLeaf() : Value(SDValue()) { }
 
   WeightedLeaf(SDValue Value, int Weight, int InsertionOrder) :
     Value(Value), Weight(Weight), InsertionOrder(InsertionOrder) {

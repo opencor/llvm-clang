@@ -1,10 +1,10 @@
-// RUN: %clang_cc1 %s -fsyntax-only -verify -Wno-strict-prototypes
+// RUN: %clang_cc1 %s -fsyntax-only -verify
 int f(int a) { return 0; } // expected-note {{previous definition is here}}
 int f(int);
 int f(int a) { return 0; } // expected-error {{redefinition of 'f'}}
 
 // <rdar://problem/6097326>
-int foo(x) { // expected-warning {{parameter 'x' was not declared, defaults to 'int'; ISO C99 and later do not support implicit int}}
+int foo(x) {
   return 0;
 }
 int x = 1;

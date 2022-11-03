@@ -21,7 +21,6 @@
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
 
 #define DEBUG_TYPE "amdgpu-call-lowering"
@@ -350,6 +349,7 @@ bool AMDGPUCallLowering::lowerReturn(MachineIRBuilder &B, const Value *Val,
                                      FunctionLoweringInfo &FLI) const {
 
   MachineFunction &MF = B.getMF();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
   SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
   MFI->setIfReturnsVoid(!Val);
 
@@ -365,14 +365,39 @@ bool AMDGPUCallLowering::lowerReturn(MachineIRBuilder &B, const Value *Val,
     return true;
   }
 
-  unsigned ReturnOpc =
-      IsShader ? AMDGPU::SI_RETURN_TO_EPILOG : AMDGPU::SI_RETURN;
+  auto const &ST = MF.getSubtarget<GCNSubtarget>();
+
+  unsigned ReturnOpc = 0;
+  if (IsShader)
+    ReturnOpc = AMDGPU::SI_RETURN_TO_EPILOG;
+  else if (CC == CallingConv::AMDGPU_Gfx)
+    ReturnOpc = AMDGPU::S_SETPC_B64_return_gfx;
+  else
+    ReturnOpc = AMDGPU::S_SETPC_B64_return;
+
   auto Ret = B.buildInstrNoInsert(ReturnOpc);
+  Register ReturnAddrVReg;
+  if (ReturnOpc == AMDGPU::S_SETPC_B64_return) {
+    ReturnAddrVReg = MRI.createVirtualRegister(&AMDGPU::CCR_SGPR_64RegClass);
+    Ret.addUse(ReturnAddrVReg);
+  } else if (ReturnOpc == AMDGPU::S_SETPC_B64_return_gfx) {
+    ReturnAddrVReg =
+        MRI.createVirtualRegister(&AMDGPU::Gfx_CCR_SGPR_64RegClass);
+    Ret.addUse(ReturnAddrVReg);
+  }
 
   if (!FLI.CanLowerReturn)
     insertSRetStores(B, Val->getType(), VRegs, FLI.DemoteRegister);
   else if (!lowerReturnVal(B, Val, VRegs, Ret))
     return false;
+
+  if (ReturnOpc == AMDGPU::S_SETPC_B64_return ||
+      ReturnOpc == AMDGPU::S_SETPC_B64_return_gfx) {
+    const SIRegisterInfo *TRI = ST.getRegisterInfo();
+    Register LiveInReturn = MF.addLiveIn(TRI->getReturnAddressReg(MF),
+                                         &AMDGPU::SGPR_64RegClass);
+    B.buildCopy(ReturnAddrVReg, LiveInReturn);
+  }
 
   // TODO: Handle CalleeSavedRegsViaCopy.
 
@@ -454,7 +479,7 @@ static void allocateHSAUserSGPRs(CCState &CCInfo,
     CCInfo.AllocateReg(DispatchPtrReg);
   }
 
-  if (Info.hasQueuePtr() && AMDGPU::getAmdhsaCodeObjectVersion() < 5) {
+  if (Info.hasQueuePtr()) {
     Register QueuePtrReg = Info.addQueuePtr(TRI);
     MF.addLiveIn(QueuePtrReg, &AMDGPU::SGPR_64RegClass);
     CCInfo.AllocateReg(QueuePtrReg);
@@ -498,7 +523,7 @@ bool AMDGPUCallLowering::lowerFormalArgumentsKernel(
   const SITargetLowering &TLI = *getTLI<SITargetLowering>();
   const DataLayout &DL = F.getParent()->getDataLayout();
 
-  Info->allocateModuleLDSGlobal(F);
+  Info->allocateModuleLDSGlobal(F.getParent());
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(F.getCallingConv(), F.isVarArg(), MF, ArgLocs, F.getContext());
@@ -518,8 +543,9 @@ bool AMDGPUCallLowering::lowerFormalArgumentsKernel(
     if (AllocSize == 0)
       continue;
 
-    MaybeAlign ParamAlign = IsByRef ? Arg.getParamAlign() : None;
-    Align ABIAlign = DL.getValueOrABITypeAlignment(ParamAlign, ArgTy);
+    MaybeAlign ABIAlign = IsByRef ? Arg.getParamAlign() : None;
+    if (!ABIAlign)
+      ABIAlign = DL.getABITypeAlign(ArgTy);
 
     uint64_t ArgOffset = alignTo(ExplicitArgOffset, ABIAlign) + BaseOffset;
     ExplicitArgOffset = alignTo(ExplicitArgOffset, ABIAlign) + AllocSize;
@@ -582,10 +608,18 @@ bool AMDGPUCallLowering::lowerFormalArguments(
   const SIRegisterInfo *TRI = Subtarget.getRegisterInfo();
   const DataLayout &DL = F.getParent()->getDataLayout();
 
-  Info->allocateModuleLDSGlobal(F);
+  Info->allocateModuleLDSGlobal(F.getParent());
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CC, F.isVarArg(), MF, ArgLocs, F.getContext());
+
+  if (!IsEntryFunc) {
+    Register ReturnAddrReg = TRI->getReturnAddressReg(MF);
+    Register LiveInReturn = MF.addLiveIn(ReturnAddrReg,
+                                         &AMDGPU::SGPR_64RegClass);
+    MBB.addLiveIn(ReturnAddrReg);
+    B.buildCopy(LiveInReturn, ReturnAddrReg);
+  }
 
   if (Info->hasImplicitBufferPtr()) {
     Register ImplicitBufferPtrReg = Info->addImplicitBufferPtr(*TRI);
@@ -764,8 +798,7 @@ bool AMDGPUCallLowering::passSpecialInputs(MachineIRBuilder &MIRBuilder,
     AMDGPUFunctionArgInfo::DISPATCH_ID,
     AMDGPUFunctionArgInfo::WORKGROUP_ID_X,
     AMDGPUFunctionArgInfo::WORKGROUP_ID_Y,
-    AMDGPUFunctionArgInfo::WORKGROUP_ID_Z,
-    AMDGPUFunctionArgInfo::LDS_KERNEL_ID,
+    AMDGPUFunctionArgInfo::WORKGROUP_ID_Z
   };
 
   static constexpr StringLiteral ImplicitAttrNames[] = {
@@ -775,8 +808,7 @@ bool AMDGPUCallLowering::passSpecialInputs(MachineIRBuilder &MIRBuilder,
     "amdgpu-no-dispatch-id",
     "amdgpu-no-workgroup-id-x",
     "amdgpu-no-workgroup-id-y",
-    "amdgpu-no-workgroup-id-z",
-    "amdgpu-no-lds-kernel-id",
+    "amdgpu-no-workgroup-id-z"
   };
 
   MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -812,14 +844,6 @@ bool AMDGPUCallLowering::passSpecialInputs(MachineIRBuilder &MIRBuilder,
       LI->loadInputValue(InputReg, MIRBuilder, IncomingArg, ArgRC, ArgTy);
     } else if (InputID == AMDGPUFunctionArgInfo::IMPLICIT_ARG_PTR) {
       LI->getImplicitArgPtr(InputReg, MRI, MIRBuilder);
-    } else if (InputID == AMDGPUFunctionArgInfo::LDS_KERNEL_ID) {
-      Optional<uint32_t> Id =
-          AMDGPUMachineFunction::getLDSKernelIdMetadata(MF.getFunction());
-      if (Id.has_value()) {
-        MIRBuilder.buildConstant(InputReg, Id.value());
-      } else {
-        MIRBuilder.buildUndef(InputReg);
-      }
     } else {
       // We may have proven the input wasn't needed, although the ABI is
       // requiring it. We just need to allocate the register appropriately.

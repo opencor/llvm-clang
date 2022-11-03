@@ -3,7 +3,6 @@
 #include "llvm/CodeGen/MIRParser/MIRParser.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/MC/TargetRegistry.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "gtest/gtest.h"
@@ -14,7 +13,7 @@ namespace {
 std::unique_ptr<LLVMTargetMachine> createTargetMachine() {
   auto TT(Triple::normalize("aarch64--"));
   std::string CPU("generic");
-  std::string FS("+pauth,+mops,+mte");
+  std::string FS("");
 
   LLVMInitializeAArch64TargetInfo();
   LLVMInitializeAArch64Target();

@@ -74,7 +74,7 @@ FDRTraceWriter::FDRTraceWriter(raw_ostream &O, const XRayFileHeader &H)
   OS.write(FreeFormBytes);
 }
 
-FDRTraceWriter::~FDRTraceWriter() = default;
+FDRTraceWriter::~FDRTraceWriter() {}
 
 Error FDRTraceWriter::visit(BufferExtents &R) {
   return writeMetadata<7u>(OS, R.size());

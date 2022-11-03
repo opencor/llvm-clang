@@ -10,6 +10,7 @@
 #define LLVM_DWARFLINKER_DWARFSTREAMER_H
 
 #include "llvm/BinaryFormat/Swift.h"
+#include "llvm/CodeGen/AccelTable.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/DWARFLinker/DWARFLinker.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -17,11 +18,9 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
-template <typename DataT> class AccelTable;
 
 enum class OutputFileType {
   Object,
@@ -96,7 +95,7 @@ public:
   /// original \p Entries.
   void emitRangesEntries(
       int64_t UnitPcOffset, uint64_t OrigLowPc,
-      Optional<std::pair<AddressRange, int64_t>> FuncRange,
+      const FunctionIntervals::const_iterator &FuncRange,
       const std::vector<DWARFDebugRangeList::RangeListEntry> &Entries,
       unsigned AddressSize) override;
 

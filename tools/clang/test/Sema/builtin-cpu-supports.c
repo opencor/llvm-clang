@@ -5,7 +5,7 @@ extern void a(const char *);
 
 extern const char *str;
 
-int main(void) {
+int main() {
 #ifdef __x86_64__
   if (__builtin_cpu_supports("ss")) // expected-error {{invalid cpu feature string}}
     a("sse4.2");

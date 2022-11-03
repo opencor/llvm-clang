@@ -4,7 +4,6 @@ set(LLVM_LINK_COMPONENTS
   Object
   Support
   TextAPI
-  ${LLVM_TARGETS_TO_BUILD}
   )
 
 add_llvm_tool(llvm-libtool-darwin

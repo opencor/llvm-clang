@@ -1,4 +1,4 @@
-; REQUIRES: object-emission
+; REQUIRES: x86-registered-target
 ; RUN: llc -filetype=obj -o %t %s
 ; RUN: llvm-dwarfdump -debug-info %t | FileCheck %s
 ; Source:

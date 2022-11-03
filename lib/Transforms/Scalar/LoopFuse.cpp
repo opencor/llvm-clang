@@ -117,7 +117,7 @@ static cl::opt<FusionDependenceAnalysisChoice> FusionDependenceAnalysis(
                           "Use the dependence analysis interface"),
                clEnumValN(FUSION_DEPENDENCE_ANALYSIS_ALL, "all",
                           "Use all available analyses")),
-    cl::Hidden, cl::init(FUSION_DEPENDENCE_ANALYSIS_ALL));
+    cl::Hidden, cl::init(FUSION_DEPENDENCE_ANALYSIS_ALL), cl::ZeroOrMore);
 
 static cl::opt<unsigned> FusionPeelMaxCount(
     "loop-fusion-peel-max-count", cl::init(0), cl::Hidden,
@@ -128,7 +128,7 @@ static cl::opt<unsigned> FusionPeelMaxCount(
 static cl::opt<bool>
     VerboseFusionDebugging("loop-fusion-verbose-debug",
                            cl::desc("Enable verbose debugging for Loop Fusion"),
-                           cl::Hidden, cl::init(false));
+                           cl::Hidden, cl::init(false), cl::ZeroOrMore);
 #endif
 
 namespace {
@@ -178,12 +178,12 @@ struct FusionCandidate {
   /// FusionCandidateCompare function, required by FusionCandidateSet to
   /// determine where the FusionCandidate should be inserted into the set. These
   /// are used to establish ordering of the FusionCandidates based on dominance.
-  DominatorTree &DT;
+  const DominatorTree *DT;
   const PostDominatorTree *PDT;
 
   OptimizationRemarkEmitter &ORE;
 
-  FusionCandidate(Loop *L, DominatorTree &DT,
+  FusionCandidate(Loop *L, const DominatorTree *DT,
                   const PostDominatorTree *PDT, OptimizationRemarkEmitter &ORE,
                   TTI::PeelingPreferences PP)
       : Preheader(L->getLoopPreheader()), Header(L->getHeader()),
@@ -192,6 +192,7 @@ struct FusionCandidate {
         GuardBranch(L->getLoopGuardBranch()), PP(PP), AbleToPeel(canPeel(L)),
         Peeled(false), DT(DT), PDT(PDT), ORE(ORE) {
 
+    assert(DT && "Expected non-null DT!");
     // Walk over all blocks in the loop and check for conditions that may
     // prevent fusion. For each block, walk over all instructions and collect
     // the memory reads and writes If any instructions that prevent fusion are
@@ -390,7 +391,7 @@ struct FusionCandidateCompare {
   /// IF RHS dominates LHS and LHS post-dominates RHS, return false;
   bool operator()(const FusionCandidate &LHS,
                   const FusionCandidate &RHS) const {
-    const DominatorTree *DT = &(LHS.DT);
+    const DominatorTree *DT = LHS.DT;
 
     BasicBlock *LHSEntryBlock = LHS.getEntryBlock();
     BasicBlock *RHSEntryBlock = RHS.getEntryBlock();
@@ -645,7 +646,7 @@ private:
     for (Loop *L : LV) {
       TTI::PeelingPreferences PP =
           gatherPeelingPreferences(L, SE, TTI, None, None);
-      FusionCandidate CurrCand(L, DT, &PDT, ORE, PP);
+      FusionCandidate CurrCand(L, &DT, &PDT, ORE, PP);
       if (!CurrCand.isEligibleForFusion(SE))
         continue;
 
@@ -990,7 +991,7 @@ private:
                                                FuseCounter);
 
           FusionCandidate FusedCand(
-              performFusion((Peel ? FC0Copy : *FC0), *FC1), DT, &PDT, ORE,
+              performFusion((Peel ? FC0Copy : *FC0), *FC1), &DT, &PDT, ORE,
               FC0Copy.PP);
           FusedCand.verify();
           assert(FusedCand.isEligibleForFusion(SE) &&

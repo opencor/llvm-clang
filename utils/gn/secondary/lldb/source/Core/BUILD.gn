@@ -49,7 +49,6 @@ static_library("Core") {
     "Communication.cpp",
     "DataFileCache.cpp",
     "Debugger.cpp",
-    "DebuggerEvents.cpp",
     "Declaration.cpp",
     "Disassembler.cpp",
     "DumpDataExtractor.cpp",

@@ -78,13 +78,13 @@ void LiveRegMatrix::releaseMemory() {
 
 template <typename Callable>
 static bool foreachUnit(const TargetRegisterInfo *TRI,
-                        const LiveInterval &VRegInterval, MCRegister PhysReg,
+                        LiveInterval &VRegInterval, MCRegister PhysReg,
                         Callable Func) {
   if (VRegInterval.hasSubRanges()) {
     for (MCRegUnitMaskIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
       unsigned Unit = (*Units).first;
       LaneBitmask Mask = (*Units).second;
-      for (const LiveInterval::SubRange &S : VRegInterval.subranges()) {
+      for (LiveInterval::SubRange &S : VRegInterval.subranges()) {
         if ((S.LaneMask & Mask).any()) {
           if (Func(Unit, S))
             return true;
@@ -101,7 +101,7 @@ static bool foreachUnit(const TargetRegisterInfo *TRI,
   return false;
 }
 
-void LiveRegMatrix::assign(const LiveInterval &VirtReg, MCRegister PhysReg) {
+void LiveRegMatrix::assign(LiveInterval &VirtReg, MCRegister PhysReg) {
   LLVM_DEBUG(dbgs() << "assigning " << printReg(VirtReg.reg(), TRI) << " to "
                     << printReg(PhysReg, TRI) << ':');
   assert(!VRM->hasPhys(VirtReg.reg()) && "Duplicate VirtReg assignment");
@@ -118,7 +118,7 @@ void LiveRegMatrix::assign(const LiveInterval &VirtReg, MCRegister PhysReg) {
   LLVM_DEBUG(dbgs() << '\n');
 }
 
-void LiveRegMatrix::unassign(const LiveInterval &VirtReg) {
+void LiveRegMatrix::unassign(LiveInterval &VirtReg) {
   Register PhysReg = VRM->getPhys(VirtReg.reg());
   LLVM_DEBUG(dbgs() << "unassigning " << printReg(VirtReg.reg(), TRI)
                     << " from " << printReg(PhysReg, TRI) << ':');
@@ -143,7 +143,7 @@ bool LiveRegMatrix::isPhysRegUsed(MCRegister PhysReg) const {
   return false;
 }
 
-bool LiveRegMatrix::checkRegMaskInterference(const LiveInterval &VirtReg,
+bool LiveRegMatrix::checkRegMaskInterference(LiveInterval &VirtReg,
                                              MCRegister PhysReg) {
   // Check if the cached information is valid.
   // The same BitVector can be reused for all PhysRegs.
@@ -161,7 +161,7 @@ bool LiveRegMatrix::checkRegMaskInterference(const LiveInterval &VirtReg,
   return !RegMaskUsable.empty() && (!PhysReg || !RegMaskUsable.test(PhysReg));
 }
 
-bool LiveRegMatrix::checkRegUnitInterference(const LiveInterval &VirtReg,
+bool LiveRegMatrix::checkRegUnitInterference(LiveInterval &VirtReg,
                                              MCRegister PhysReg) {
   if (VirtReg.empty())
     return false;
@@ -183,8 +183,7 @@ LiveIntervalUnion::Query &LiveRegMatrix::query(const LiveRange &LR,
 }
 
 LiveRegMatrix::InterferenceKind
-LiveRegMatrix::checkInterference(const LiveInterval &VirtReg,
-                                 MCRegister PhysReg) {
+LiveRegMatrix::checkInterference(LiveInterval &VirtReg, MCRegister PhysReg) {
   if (VirtReg.empty())
     return IK_Free;
 
@@ -238,7 +237,7 @@ bool LiveRegMatrix::checkInterference(SlotIndex Start, SlotIndex End,
 }
 
 Register LiveRegMatrix::getOneVReg(unsigned PhysReg) const {
-  const LiveInterval *VRegInterval = nullptr;
+  LiveInterval *VRegInterval = nullptr;
   for (MCRegUnitIterator Unit(PhysReg, TRI); Unit.isValid(); ++Unit) {
     if ((VRegInterval = Matrix[*Unit].getOneVReg()))
       return VRegInterval->reg();

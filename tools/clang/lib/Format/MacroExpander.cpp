@@ -125,8 +125,9 @@ MacroExpander::MacroExpander(
     IdentifierTable &IdentTable)
     : SourceMgr(SourceMgr), Style(Style), Allocator(Allocator),
       IdentTable(IdentTable) {
-  for (const std::string &Macro : Macros)
+  for (const std::string &Macro : Macros) {
     parseDefinition(Macro);
+  }
 }
 
 MacroExpander::~MacroExpander() = default;

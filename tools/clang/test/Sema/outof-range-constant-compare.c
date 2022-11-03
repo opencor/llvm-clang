@@ -3,7 +3,7 @@
 
 int value(void);
 
-int main(void)
+int main()
 {
     int a = value();
 

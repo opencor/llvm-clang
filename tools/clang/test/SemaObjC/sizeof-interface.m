@@ -80,7 +80,7 @@ int bar(I0 *P) {
 
 @interface Foo @end
 
-int foo(void)
+int foo()
 {
   Foo *f;
   

@@ -26,7 +26,7 @@ typedef struct NestedNonnullMember {
   int *_Nonnull Value;
 } NestedNonnullMember;
 
-NestedNonnullMember *foo(void);
+NestedNonnullMember *foo();
 
 void f1(NestedNonnullMember *Root) {
   NestedNonnullMember *Grandson = Root->Child->Child;

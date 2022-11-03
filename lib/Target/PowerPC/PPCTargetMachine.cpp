@@ -26,7 +26,6 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
-#include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/Localizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
@@ -98,13 +97,6 @@ static cl::opt<bool>
   ReduceCRLogical("ppc-reduce-cr-logicals",
                   cl::desc("Expand eligible cr-logical binary ops to branches"),
                   cl::init(true), cl::Hidden);
-
-static cl::opt<bool> EnablePPCGenScalarMASSEntries(
-    "enable-ppc-gen-scalar-mass", cl::init(false),
-    cl::desc("Enable lowering math functions to their corresponding MASS "
-             "(scalar) entries"),
-    cl::Hidden);
-
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePowerPCTarget() {
   // Register the targets
   RegisterTargetMachine<PPCTargetMachine> A(getThePPC32Target());
@@ -131,10 +123,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePowerPCTarget() {
   initializePPCTLSDynamicCallPass(PR);
   initializePPCMIPeepholePass(PR);
   initializePPCLowerMASSVEntriesPass(PR);
-  initializePPCGenScalarMASSEntriesPass(PR);
   initializePPCExpandAtomicPseudoPass(PR);
   initializeGlobalISel(PR);
-  initializePPCCTRLoopsPass(PR);
 }
 
 static bool isLittleEndianTriple(const Triple &T) {
@@ -246,10 +236,10 @@ static PPCTargetMachine::PPCABI computeTargetABI(const Triple &TT,
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
                                            Optional<Reloc::Model> RM) {
-  assert((!TT.isOSAIX() || !RM || *RM == Reloc::PIC_) &&
+  assert((!TT.isOSAIX() || !RM.hasValue() || *RM == Reloc::PIC_) &&
          "Invalid relocation model for AIX.");
 
-  if (RM)
+  if (RM.hasValue())
     return *RM;
 
   // Big Endian PPC and AIX default to PIC.
@@ -439,14 +429,6 @@ void PPCPassConfig::addIRPasses() {
   // Lower generic MASSV routines to PowerPC subtarget-specific entries.
   addPass(createPPCLowerMASSVEntriesPass());
 
-  // Generate PowerPC target-specific entries for scalar math functions
-  // that are available in IBM MASS (scalar) library.
-  if (TM->getOptLevel() == CodeGenOpt::Aggressive &&
-      EnablePPCGenScalarMASSEntries) {
-    TM->Options.PPCGenScalarMASSEntries = EnablePPCGenScalarMASSEntries;
-    addPass(createPPCGenScalarMASSEntriesPass());
-  }
-
   // If explicitly requested, add explicit data prefetch intrinsics.
   if (EnablePrefetch.getNumOccurrences() > 0)
     addPass(createLoopDataPrefetchPass());
@@ -540,16 +522,6 @@ void PPCPassConfig::addPreRegAlloc() {
   if (EnableExtraTOCRegDeps)
     addPass(createPPCTOCRegDepsPass());
 
-  // Run CTR loops pass before MachinePipeliner pass.
-  // MachinePipeliner will pipeline all instructions before the terminator, but
-  // we don't want DecreaseCTRPseudo to be pipelined.
-  // Note we may lose some MachinePipeliner opportunities if we run CTR loops
-  // generation pass before MachinePipeliner and the loop is converted back to
-  // a normal loop. We can revisit this later for running PPCCTRLoops after
-  // MachinePipeliner and handling DecreaseCTRPseudo in MachinePipeliner pass.
-  if (getOptLevel() != CodeGenOpt::None)
-    addPass(createPPCCTRLoopsPass());
-
   if (getOptLevel() != CodeGenOpt::None)
     addPass(&MachinePipelinerID);
 }
@@ -577,7 +549,7 @@ void PPCPassConfig::addPreEmitPass2() {
 }
 
 TargetTransformInfo
-PPCTargetMachine::getTargetTransformInfo(const Function &F) const {
+PPCTargetMachine::getTargetTransformInfo(const Function &F) {
   return TargetTransformInfo(PPCTTIImpl(this, F));
 }
 

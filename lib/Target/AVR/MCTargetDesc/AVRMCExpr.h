@@ -84,7 +84,7 @@ private:
 private:
   explicit AVRMCExpr(VariantKind Kind, const MCExpr *Expr, bool Negated)
       : Kind(Kind), SubExpr(Expr), Negated(Negated) {}
-  ~AVRMCExpr() = default;
+  ~AVRMCExpr() {}
 };
 
 } // end namespace llvm

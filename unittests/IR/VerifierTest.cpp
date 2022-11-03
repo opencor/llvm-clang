@@ -99,8 +99,7 @@ TEST(VerifierTest, InvalidRetAttribute) {
   FunctionType *FTy = FunctionType::get(Type::getInt32Ty(C), /*isVarArg=*/false);
   Function *F = Function::Create(FTy, Function::ExternalLinkage, "foo", M);
   AttributeList AS = F->getAttributes();
-  F->setAttributes(AS.addRetAttribute(
-      C, Attribute::getWithUWTableKind(C, UWTableKind::Default)));
+  F->setAttributes(AS.addRetAttribute(C, Attribute::UWTable));
 
   std::string Error;
   raw_string_ostream ErrorOS(Error);
@@ -138,15 +137,15 @@ TEST(VerifierTest, CrossModuleRef) {
   EXPECT_TRUE(verifyModule(M2, &ErrorOS));
   EXPECT_TRUE(StringRef(ErrorOS.str())
                   .equals("Global is referenced in a different module!\n"
-                          "ptr @foo2\n"
+                          "i32 ()* @foo2\n"
                           "; ModuleID = 'M2'\n"
                           "  %call = call i32 @foo2()\n"
-                          "ptr @foo1\n"
+                          "i32 ()* @foo1\n"
                           "; ModuleID = 'M1'\n"
                           "Global is used by function in a different module\n"
-                          "ptr @foo2\n"
+                          "i32 ()* @foo2\n"
                           "; ModuleID = 'M2'\n"
-                          "ptr @foo3\n"
+                          "i32 ()* @foo3\n"
                           "; ModuleID = 'M3'\n"));
 
   Error.clear();
@@ -155,7 +154,7 @@ TEST(VerifierTest, CrossModuleRef) {
       "Referencing function in another module!\n"
       "  %call = call i32 @foo2()\n"
       "; ModuleID = 'M1'\n"
-      "ptr @foo2\n"
+      "i32 ()* @foo2\n"
       "; ModuleID = 'M2'\n"));
 
   Error.clear();

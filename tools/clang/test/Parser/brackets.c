@@ -4,7 +4,7 @@
 // RUN: %clang_cc1 -fsyntax-only %t -x c -DFIXIT
 // RUN: not %clang_cc1 -fsyntax-only -fdiagnostics-parseable-fixits %s 2>&1 | FileCheck %s -strict-whitespace
 
-void test1(void) {
+void test1() {
   int a[] = {0,1,1,2,3};
   int []b = {0,1,4,9,16};
   // expected-error@-1{{brackets are not allowed here; to declare an array, place the brackets after the identifier}}
@@ -32,7 +32,7 @@ struct S {
 } s;
 
 #ifndef FIXIT
-void test2(void) {
+void test2() {
   int [][][];
   // expected-error@-1{{expected identifier or '('}}
   // CHECK: {{^}}  int [][][];
@@ -47,7 +47,7 @@ void test2(void) {
   };
 }
 
-void test3(void) {
+void test3() {
   int [5] *;
   // expected-error@-1{{expected identifier or '('}}
   // CHECK: {{^}}  int [5] *;

@@ -58,6 +58,8 @@ void WebAssemblyTargetAsmStreamer::emitLocal(ArrayRef<wasm::ValType> Types) {
   }
 }
 
+void WebAssemblyTargetAsmStreamer::emitEndFunc() { OS << "\t.endfunc\n"; }
+
 void WebAssemblyTargetAsmStreamer::emitFunctionType(const MCSymbolWasm *Sym) {
   assert(Sym->isFunction());
   OS << "\t.functype\t" << Sym->getName() << " ";
@@ -132,6 +134,10 @@ void WebAssemblyTargetWasmStreamer::emitLocal(ArrayRef<wasm::ValType> Types) {
     Streamer.emitULEB128IntValue(Pair.second);
     emitValueType(Pair.first);
   }
+}
+
+void WebAssemblyTargetWasmStreamer::emitEndFunc() {
+  llvm_unreachable(".end_func is not needed for direct wasm output");
 }
 
 void WebAssemblyTargetWasmStreamer::emitIndIdx(const MCExpr *Value) {

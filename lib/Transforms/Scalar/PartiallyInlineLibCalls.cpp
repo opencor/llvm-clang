@@ -125,9 +125,6 @@ static bool runPartiallyInlineLibCalls(Function &F, TargetLibraryInfo *TLI,
       if (Call->isNoBuiltin() || Call->isStrictFP())
         continue;
 
-      if (Call->isMustTailCall())
-        continue;
-
       // Skip if function either has local linkage or is not a known library
       // function.
       LibFunc LF;
@@ -140,7 +137,7 @@ static bool runPartiallyInlineLibCalls(Function &F, TargetLibraryInfo *TLI,
       case LibFunc_sqrt:
         if (TTI->haveFastSqrt(Call->getType()) &&
             optimizeSQRT(Call, CalledFunc, *CurrBB, BB, TTI,
-                         DTU ? DTU.getPointer() : nullptr))
+                         DTU.hasValue() ? DTU.getPointer() : nullptr))
           break;
         continue;
       default:

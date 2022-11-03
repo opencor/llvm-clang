@@ -286,14 +286,14 @@ void bar(id x) {
   [x release];
 }
 
-void test(void) {
+void test() {
   NSString *s = [[NSString alloc] init]; // expected-warning {{Potential leak}}
   foo(s);
   foo(s);
   bar(s);
 }
 
-void test_neg(void) {
+void test_neg() {
   NSString *s = [[NSString alloc] init]; // no-warning  
   foo(s);
   foo(s);
@@ -396,11 +396,11 @@ CFStringRef test_return_ratained_CF(char *bytes) {
 }
 
 // On return (intraprocedural), assume NSObjects are not leaked.
-id test_return_retained_NS(void) {
+id test_return_retained_NS() {
   return [[NSString alloc] init]; // no-warning
 }
 
-void test_test_return_retained(void) {
+void test_test_return_retained() {
   id x = test_return_retained_NS(); // expected-warning {{leak}}
   [x retain];
   [x release];
@@ -437,14 +437,14 @@ void test_test_return_inline_2(char *bytes) {
 extern CFStringRef getString(void);
 CFStringRef testCovariantReturnType(void) __attribute__((cf_returns_retained));
 
-void usetestCovariantReturnType(void) {
+void usetestCovariantReturnType() {
   CFStringRef S = ((void*)0);
   S = testCovariantReturnType();
   if (S)
     CFRelease(S);
 } 
 
-CFStringRef testCovariantReturnType(void) {
+CFStringRef testCovariantReturnType() {
   CFStringRef Str = ((void*)0);
   Str = getString();
   if (Str) {

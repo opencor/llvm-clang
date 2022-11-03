@@ -14,6 +14,7 @@
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/MSF/MappedBlockStream.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/DbiStream.h"
 #include "llvm/DebugInfo/PDB/Native/RawError.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/BinaryStreamWriter.h"
@@ -29,7 +30,7 @@ DbiStreamBuilder::DbiStreamBuilder(msf::MSFBuilder &Msf)
       PdbDllVersion(0), PdbDllRbld(0), Flags(0), MachineType(PDB_Machine::x86),
       Header(nullptr) {}
 
-DbiStreamBuilder::~DbiStreamBuilder() = default;
+DbiStreamBuilder::~DbiStreamBuilder() {}
 
 void DbiStreamBuilder::setVersionHeader(PdbRaw_DbiVer V) { VerHeader = V; }
 
@@ -71,7 +72,7 @@ void DbiStreamBuilder::setPublicsStreamIndex(uint32_t Index) {
 }
 
 void DbiStreamBuilder::addNewFpoData(const codeview::FrameData &FD) {
-  if (!NewFpoData)
+  if (!NewFpoData.hasValue())
     NewFpoData.emplace(false);
 
   NewFpoData->addFrameData(FD);
@@ -285,7 +286,7 @@ Error DbiStreamBuilder::finalize() {
 }
 
 Error DbiStreamBuilder::finalizeMsfLayout() {
-  if (NewFpoData) {
+  if (NewFpoData.hasValue()) {
     DbgStreams[(int)DbgHeaderType::NewFPO].emplace();
     DbgStreams[(int)DbgHeaderType::NewFPO]->Size =
         NewFpoData->calculateSerializedSize();
@@ -306,7 +307,7 @@ Error DbiStreamBuilder::finalizeMsfLayout() {
   }
 
   for (auto &S : DbgStreams) {
-    if (!S)
+    if (!S.hasValue())
       continue;
     auto ExpectedIndex = Msf.addStream(S->Size);
     if (!ExpectedIndex)
@@ -427,14 +428,14 @@ Error DbiStreamBuilder::commit(const msf::MSFLayout &Layout,
 
   for (auto &Stream : DbgStreams) {
     uint16_t StreamNumber = kInvalidStreamIndex;
-    if (Stream)
+    if (Stream.hasValue())
       StreamNumber = Stream->StreamNumber;
     if (auto EC = Writer.writeInteger(StreamNumber))
       return EC;
   }
 
   for (auto &Stream : DbgStreams) {
-    if (!Stream)
+    if (!Stream.hasValue())
       continue;
     assert(Stream->StreamNumber != kInvalidStreamIndex);
 

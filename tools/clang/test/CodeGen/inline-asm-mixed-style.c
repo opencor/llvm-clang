@@ -4,7 +4,7 @@
 
 #include <immintrin.h>
 
-void f(void) {
+void f() {
   __asm mov eax, ebx
   __asm mov ebx, ecx
   __asm__("movl %ecx, %edx");

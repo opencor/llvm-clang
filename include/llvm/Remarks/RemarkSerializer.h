@@ -13,6 +13,7 @@
 #ifndef LLVM_REMARKS_REMARKSERIALIZER_H
 #define LLVM_REMARKS_REMARKSERIALIZER_H
 
+#include "llvm/Remarks/Remark.h"
 #include "llvm/Remarks/RemarkFormat.h"
 #include "llvm/Remarks/RemarkStringTable.h"
 

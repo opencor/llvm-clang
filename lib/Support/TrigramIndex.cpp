@@ -15,7 +15,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/TrigramIndex.h"
-#include "llvm/ADT/StringRef.h"
 #include <set>
 
 using namespace llvm;

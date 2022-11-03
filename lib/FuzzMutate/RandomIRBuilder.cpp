@@ -8,10 +8,10 @@
 
 #include "llvm/FuzzMutate/RandomIRBuilder.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/FuzzMutate/OpDescriptor.h"
 #include "llvm/FuzzMutate/Random.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 
@@ -53,11 +53,8 @@ Value *RandomIRBuilder::newSource(BasicBlock &BB, ArrayRef<Instruction *> Insts,
       IP = ++I->getIterator();
       assert(IP != BB.end() && "guaranteed by the findPointer");
     }
-    // For opaque pointers, pick the type independently.
-    Type *AccessTy = Ptr->getType()->isOpaquePointerTy()
-                         ? RS.getSelection()->getType()
-                         : Ptr->getType()->getNonOpaquePointerElementType();
-    auto *NewLoad = new LoadInst(AccessTy, Ptr, "L", &*IP);
+    auto *NewLoad =
+        new LoadInst(Ptr->getType()->getPointerElementType(), Ptr, "L", &*IP);
 
     // Only sample this load if it really matches the descriptor
     if (Pred.matches(Srcs, NewLoad))
@@ -142,12 +139,9 @@ Value *RandomIRBuilder::findPointer(BasicBlock &BB,
     if (Inst->isTerminator())
       return false;
 
-    if (auto *PtrTy = dyn_cast<PointerType>(Inst->getType())) {
-      if (PtrTy->isOpaque())
-        return true;
-
+    if (auto PtrTy = dyn_cast<PointerType>(Inst->getType())) {
       // We can never generate loads from non first class or non sized types
-      Type *ElemTy = PtrTy->getNonOpaquePointerElementType();
+      Type *ElemTy = PtrTy->getPointerElementType();
       if (!ElemTy->isSized() || !ElemTy->isFirstClassType())
         return false;
 

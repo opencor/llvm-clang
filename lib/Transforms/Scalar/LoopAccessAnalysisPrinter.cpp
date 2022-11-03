@@ -8,7 +8,6 @@
 
 #include "llvm/Transforms/Scalar/LoopAccessAnalysisPrinter.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
-#include "llvm/Analysis/LoopInfo.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "loop-accesses"

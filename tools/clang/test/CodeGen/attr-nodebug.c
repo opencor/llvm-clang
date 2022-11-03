@@ -1,14 +1,14 @@
 // RUN: %clang_cc1 -debug-info-kind=limited -emit-llvm -o - %s | FileCheck %s
 
-void t1(void) __attribute__((nodebug));
+void t1() __attribute__((nodebug));
 
-void t1(void)
+void t1()
 {
   int a = 10;
   a++;
 }
 
-void t2(void)
+void t2()
 {
   int b = 10;
   b++;

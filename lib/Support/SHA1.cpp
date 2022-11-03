@@ -263,7 +263,7 @@ void SHA1::pad() {
   addUncounted(InternalState.ByteCount << 3);
 }
 
-void SHA1::final(std::array<uint32_t, HASH_LENGTH / 4> &HashResult) {
+StringRef SHA1::final() {
   // Pad to complete the last block
   pad();
 
@@ -281,19 +281,12 @@ void SHA1::final(std::array<uint32_t, HASH_LENGTH / 4> &HashResult) {
                     (((InternalState.State[i]) >> 24) & 0x000000ff);
   }
 #endif
+
+  // Return pointer to hash (20 characters)
+  return StringRef((char *)HashResult, HASH_LENGTH);
 }
 
-std::array<uint8_t, 20> SHA1::final() {
-  union {
-    std::array<uint32_t, HASH_LENGTH / 4> HashResult;
-    std::array<uint8_t, HASH_LENGTH> ReturnResult;
-  };
-  static_assert(sizeof(HashResult) == sizeof(ReturnResult), "");
-  final(HashResult);
-  return ReturnResult;
-}
-
-std::array<uint8_t, 20> SHA1::result() {
+StringRef SHA1::result() {
   auto StateToRestore = InternalState;
 
   auto Hash = final();
@@ -308,5 +301,9 @@ std::array<uint8_t, 20> SHA1::result() {
 std::array<uint8_t, 20> SHA1::hash(ArrayRef<uint8_t> Data) {
   SHA1 Hash;
   Hash.update(Data);
-  return Hash.final();
+  StringRef S = Hash.final();
+
+  std::array<uint8_t, 20> Arr;
+  memcpy(Arr.data(), S.data(), S.size());
+  return Arr;
 }

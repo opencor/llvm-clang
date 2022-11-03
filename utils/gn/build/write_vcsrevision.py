@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 """Gets the current revision and writes it to VCSRevision.h."""
+
+from __future__ import print_function
 
 import argparse
 import os

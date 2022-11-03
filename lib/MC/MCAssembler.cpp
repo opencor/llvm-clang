@@ -27,6 +27,7 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/Alignment.h"
@@ -35,17 +36,15 @@
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <tuple>
 #include <utility>
 
 using namespace llvm;
-
-namespace llvm {
-class MCSubtargetInfo;
-}
 
 #define DEBUG_TYPE "assembler"
 
@@ -331,11 +330,11 @@ uint64_t MCAssembler::computeFragmentSize(const MCAsmLayout &Layout,
   case MCFragment::FT_Align: {
     const MCAlignFragment &AF = cast<MCAlignFragment>(F);
     unsigned Offset = Layout.getFragmentOffset(&AF);
-    unsigned Size = offsetToAlignment(Offset, AF.getAlignment());
+    unsigned Size = offsetToAlignment(Offset, Align(AF.getAlignment()));
 
     // Insert extra Nops for code alignment if the target define
     // shouldInsertExtraNopBytesForCodeAlign target hook.
-    if (AF.getParent()->useCodeAlign() && AF.hasEmitNops() &&
+    if (AF.getParent()->UseCodeAlign() && AF.hasEmitNops() &&
         getBackend().shouldInsertExtraNopBytesForCodeAlign(AF, Size))
       return Size;
 
@@ -343,7 +342,7 @@ uint64_t MCAssembler::computeFragmentSize(const MCAsmLayout &Layout,
     // minimum nop size.
     if (Size > 0 && AF.hasEmitNops()) {
       while (Size % getBackend().getMinimumNopSize())
-        Size += AF.getAlignment().value();
+        Size += AF.getAlignment();
     }
     if (Size > AF.getMaxBytesToEmit())
       return 0;
@@ -874,7 +873,7 @@ void MCAssembler::layout(MCAsmLayout &Layout) {
         MCAlignFragment &AF = cast<MCAlignFragment>(Frag);
         // Insert fixup type for code alignment if the target define
         // shouldInsertFixupForCodeAlign target hook.
-        if (Sec.useCodeAlign() && AF.hasEmitNops())
+        if (Sec.UseCodeAlign() && AF.hasEmitNops())
           getBackend().shouldInsertFixupForCodeAlign(*this, Layout, AF);
         continue;
       }

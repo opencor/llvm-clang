@@ -419,6 +419,9 @@ struct LineState {
   /// The token that needs to be next formatted.
   FormatToken *NextToken;
 
+  /// \c true if this line contains a continued for-loop section.
+  bool LineContainsContinuedForLoopSection;
+
   /// \c true if \p NextToken should not continue this line.
   bool NoContinuation;
 
@@ -434,7 +437,7 @@ struct LineState {
 
   /// A stack keeping track of properties applying to parenthesis
   /// levels.
-  SmallVector<ParenState> Stack;
+  std::vector<ParenState> Stack;
 
   /// Ignore the stack of \c ParenStates for state comparison.
   ///
@@ -465,6 +468,9 @@ struct LineState {
       return NextToken < Other.NextToken;
     if (Column != Other.Column)
       return Column < Other.Column;
+    if (LineContainsContinuedForLoopSection !=
+        Other.LineContainsContinuedForLoopSection)
+      return LineContainsContinuedForLoopSection;
     if (NoContinuation != Other.NoContinuation)
       return NoContinuation;
     if (StartOfLineLevel != Other.StartOfLineLevel)

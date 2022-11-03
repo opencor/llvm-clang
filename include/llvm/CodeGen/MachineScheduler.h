@@ -103,10 +103,8 @@ extern cl::opt<bool> ForceBottomUp;
 extern cl::opt<bool> VerifyScheduling;
 #ifndef NDEBUG
 extern cl::opt<bool> ViewMISchedDAGs;
-extern cl::opt<bool> PrintDAGs;
 #else
 extern const bool ViewMISchedDAGs;
-extern const bool PrintDAGs;
 #endif
 
 class AAResults;
@@ -289,7 +287,7 @@ protected:
   const SUnit *NextClusterPred = nullptr;
   const SUnit *NextClusterSucc = nullptr;
 
-#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+#ifndef NDEBUG
   /// The number of instructions scheduled so far. Used to cut off the
   /// scheduler at the point determined by misched-cutoff.
   unsigned NumInstrsScheduled = 0;
@@ -681,7 +679,7 @@ private:
   // For each PIdx, stores the resource group IDs of its subunits
   SmallVector<APInt, 16> ResourceGroupSubUnitMasks;
 
-#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+#ifndef NDEBUG
   // Remember the greatest possible stall as an upper bound on the number of
   // times we should retry the pending queue because of a hazard.
   unsigned MaxObservedStall;

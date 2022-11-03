@@ -10,7 +10,6 @@
 #define LLVM_DEBUGINFO_DWARF_DWARFRELOCMAP_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/Object/ObjectFile.h"
 #include "llvm/Object/RelocationResolver.h"
 #include <cstdint>
 

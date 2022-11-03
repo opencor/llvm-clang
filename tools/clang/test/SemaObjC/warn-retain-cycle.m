@@ -130,7 +130,7 @@ void doSomething(unsigned v);
 @end
 
 
-void testBlockVariable(void) {
+void testBlockVariable() {
   typedef void (^block_t)(void);
   
   // This case will be caught by -Wuninitialized, and does not create a

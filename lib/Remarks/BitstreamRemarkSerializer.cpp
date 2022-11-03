@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Remarks/BitstreamRemarkSerializer.h"
-#include "llvm/Remarks/Remark.h"
 
 using namespace llvm;
 using namespace llvm::remarks;

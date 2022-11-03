@@ -12,7 +12,7 @@
 @interface MyClass : NSObject <MyProtocol>
 @end
 
-int main (void)
+int main ()
 {
     id<MyProtocol> c;
     c.level = 10;

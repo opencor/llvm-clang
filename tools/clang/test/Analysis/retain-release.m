@@ -351,7 +351,7 @@ typedef struct {
 // Test cases.
 //===----------------------------------------------------------------------===//
 
-CFAbsoluteTime f1(void) {
+CFAbsoluteTime f1() {
   CFAbsoluteTime t = CFAbsoluteTimeGetCurrent();
   CFDateRef date = CFDateCreate(0, t);
   CFRetain(date);
@@ -362,7 +362,7 @@ CFAbsoluteTime f1(void) {
   return t;
 }
 
-CFAbsoluteTime f2(void) {
+CFAbsoluteTime f2() {
   CFAbsoluteTime t = CFAbsoluteTimeGetCurrent();
   CFDateRef date = CFDateCreate(0, t);  
   [((NSDate*) date) retain];
@@ -379,7 +379,7 @@ NSDate* global_x;
 // Test to see if we suppress an error when we store the pointer
 // to a global.
 
-CFAbsoluteTime f3(void) {
+CFAbsoluteTime f3() {
   CFAbsoluteTime t = CFAbsoluteTimeGetCurrent();
   CFDateRef date = CFDateCreate(0, t);  
   [((NSDate*) date) retain];
@@ -418,7 +418,7 @@ CFDateRef f6(int x) {
 
 // Test a leak involving an overwrite.
 
-CFDateRef f7(void) {
+CFDateRef f7() {
   CFDateRef date = CFDateCreate(0, CFAbsoluteTimeGetCurrent());  //expected-warning{{leak}}
   CFRetain(date);
   date = CFDateCreate(0, CFAbsoluteTimeGetCurrent()); // expected-warning {{leak}}
@@ -427,15 +427,15 @@ CFDateRef f7(void) {
 
 // Generalization of Create rule.  MyDateCreate returns a CFXXXTypeRef, and
 // has the word create.
-CFDateRef MyDateCreate(void);
+CFDateRef MyDateCreate();
 
-CFDateRef f8(void) {
+CFDateRef f8() {
   CFDateRef date = MyDateCreate(); // expected-warning{{leak}}
   CFRetain(date);  
   return date;
 }
 
-__attribute__((cf_returns_retained)) CFDateRef f9(void) {
+__attribute__((cf_returns_retained)) CFDateRef f9() {
   CFDateRef date = CFDateCreate(0, CFAbsoluteTimeGetCurrent()); // no-warning
   int *p = 0;
   // When allocations fail, CFDateCreate can return null.
@@ -474,23 +474,23 @@ void f10(io_service_t media, DADiskRef d, CFStringRef s) {
 struct CMFoo;
 typedef struct CMFoo *CMFooRef;
 
-CMFooRef CMCreateFooRef(void);
-CMFooRef CMGetFooRef(void);
+CMFooRef CMCreateFooRef();
+CMFooRef CMGetFooRef();
 
 typedef signed long SInt32;
 typedef SInt32  OSStatus;
 OSStatus CMCreateFooAndReturnViaOutParameter(CMFooRef * CF_RETURNS_RETAINED fooOut);
 
-void testLeakCoreMediaReferenceType(void) {
+void testLeakCoreMediaReferenceType() {
   CMFooRef f = CMCreateFooRef(); // expected-warning{{leak}}
 }
 
-void testOverReleaseMediaReferenceType(void) {
+void testOverReleaseMediaReferenceType() {
   CMFooRef f = CMGetFooRef();
   CFRelease(f); // expected-warning{{Incorrect decrement of the reference count}}
 }
 
-void testOkToReleaseReturnsRetainedOutParameter(void) {
+void testOkToReleaseReturnsRetainedOutParameter() {
   CMFooRef foo = 0;
   OSStatus status = CMCreateFooAndReturnViaOutParameter(&foo);
 
@@ -500,7 +500,7 @@ void testOkToReleaseReturnsRetainedOutParameter(void) {
   CFRelease(foo); // no-warning
 }
 
-void testLeakWithReturnsRetainedOutParameter(void) {
+void testLeakWithReturnsRetainedOutParameter() {
   CMFooRef foo = 0;
   OSStatus status = CMCreateFooAndReturnViaOutParameter(&foo);
 
@@ -529,7 +529,7 @@ void testCMBufferQueueDequeueAndRetain(CMBufferQueueRef queue) {
 }
 
 // Test retain/release checker with CFString and CFMutableArray.
-void f11(void) {
+void f11() {
   // Create the array.
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
 
@@ -554,32 +554,32 @@ void f11(void) {
 }
 
 // PR 3337: Handle functions declared using typedefs.
-typedef CFTypeRef CREATEFUN(void);
+typedef CFTypeRef CREATEFUN();
 CREATEFUN MyCreateFun;
 
-void f12(void) {
+void f12() {
   CFTypeRef o = MyCreateFun(); // expected-warning {{leak}}
 }
 
-void f13_autorelease(void) {
+void f13_autorelease() {
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
   [(id) A autorelease]; // no-warning
 }
 
-void f13_autorelease_b(void) {
+void f13_autorelease_b() {
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   [(id) A autorelease];
   [(id) A autorelease];
 } // expected-warning{{Object autoreleased too many times}}
 
-CFMutableArrayRef f13_autorelease_c(void) {
+CFMutableArrayRef f13_autorelease_c() {
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   [(id) A autorelease];
   [(id) A autorelease]; 
   return A; // expected-warning{{Object autoreleased too many times}}
 }
 
-CFMutableArrayRef f13_autorelease_d(void) {
+CFMutableArrayRef f13_autorelease_d() {
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   [(id) A autorelease];
   [(id) A autorelease]; 
@@ -590,13 +590,13 @@ CFMutableArrayRef f13_autorelease_d(void) {
 
 
 // This case exercises the logic where the leak site is the same as the allocation site.
-void f14_leakimmediately(void) {
+void f14_leakimmediately() {
   CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning{{leak}}
 }
 
 // Test that we track an allocated object beyond the point where the *name*
 // of the variable storing the reference is no longer live.
-void f15(void) {
+void f15() {
   // Create the array.
   CFMutableArrayRef A = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   CFMutableArrayRef *B = &A;
@@ -857,7 +857,7 @@ void rdar6704930(unsigned char *s, unsigned int length) {
 // <rdar://problem/6257780> clang checker fails to catch use-after-release
 //===----------------------------------------------------------------------===//
 
-int rdar_6257780_Case1(void) {
+int rdar_6257780_Case1() {
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
   NSArray *array = [NSArray array];
   [array release]; // expected-warning{{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
@@ -869,7 +869,7 @@ int rdar_6257780_Case1(void) {
 // <rdar://problem/10640253> Analyzer is confused about NSAutoreleasePool -allocWithZone:.
 //===----------------------------------------------------------------------===//
 
-void rdar_10640253_autorelease_allocWithZone(void) {
+void rdar_10640253_autorelease_allocWithZone() {
     NSAutoreleasePool *pool = [[NSAutoreleasePool allocWithZone:(NSZone*)0] init];
     (void) pool;
 }
@@ -878,7 +878,7 @@ void rdar_10640253_autorelease_allocWithZone(void) {
 // <rdar://problem/6866843> Checker should understand new/setObject:/release constructs
 //===----------------------------------------------------------------------===//
 
-void rdar_6866843(void) {
+void rdar_6866843() {
  NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
  NSMutableDictionary* dictionary = [[NSMutableDictionary alloc] init];
  NSArray* array = [[NSArray alloc] init];
@@ -950,7 +950,7 @@ typedef CFTypeRef OtherRef;
 @implementation RDar6320065Subclass
 @end
 
-int RDar6320065_test(void) {
+int RDar6320065_test() {
   RDar6320065 *test = [[RDar6320065 alloc] init]; // no-warning
   [test release];
   return 0;
@@ -1082,7 +1082,7 @@ void IOServiceNameMatching_wrapper(const char * name) {
   IOServiceNameMatching(name); // expected-warning{{leak}}
 }
 
-CF_RETURNS_RETAINED CFDictionaryRef CreateDict(void);
+CF_RETURNS_RETAINED CFDictionaryRef CreateDict();
 
 void IOServiceAddNotification_wrapper(mach_port_t mainPort, const io_name_t notificationType,
   mach_port_t wakePort, uintptr_t reference, io_iterator_t * notification ) {
@@ -1575,25 +1575,25 @@ void test_attr1c(TestOwnershipAttr *X) {
   NSString *str4 = [[X newString_auto] retain]; // expected-warning {{leak}}
 }
 
-void testattr2_a(void) {
+void testattr2_a() {
   TestOwnershipAttr *x = [TestOwnershipAttr alloc]; // expected-warning{{leak}}
 }
 
-void testattr2_b(void) {
+void testattr2_b() {
   TestOwnershipAttr *x = [[TestOwnershipAttr alloc] pseudoInit];  // expected-warning{{leak}}
 }
 
-void testattr2_b_11358224_self_assign_looses_the_leak(void) {
+void testattr2_b_11358224_self_assign_looses_the_leak() {
   TestOwnershipAttr *x = [[TestOwnershipAttr alloc] pseudoInit];// expected-warning{{leak}}
   x = x;
 }
 
-void testattr2_c(void) {
+void testattr2_c() {
   TestOwnershipAttr *x = [[TestOwnershipAttr alloc] pseudoInit]; // no-warning
   [x release];
 }
 
-void testattr3(void) {
+void testattr3() {
   TestOwnershipAttr *x = [TestOwnershipAttr alloc]; // no-warning
   [TestOwnershipAttr consume:x];
   TestOwnershipAttr *y = [TestOwnershipAttr alloc]; // no-warning
@@ -1603,7 +1603,7 @@ void testattr3(void) {
 void consume_ns(id NS_CONSUMED x);
 void consume_cf(id CF_CONSUMED x);
 
-void testattr4(void) {
+void testattr4() {
   TestOwnershipAttr *x = [TestOwnershipAttr alloc]; // no-warning
   consume_ns(x);
   TestOwnershipAttr *y = [TestOwnershipAttr alloc]; // no-warning
@@ -1631,7 +1631,7 @@ void testattr4(void) {
 @end
 
 CF_RETURNS_RETAINED
-CFDateRef returnsRetainedCFDate(void)  {
+CFDateRef returnsRetainedCFDate()  {
   return CFDateCreate(0, CFAbsoluteTimeGetCurrent());
 }
 
@@ -1673,15 +1673,15 @@ CFDateRef returnsRetainedCFDate(void)  {
 // to a noreturn or panic function
 //===----------------------------------------------------------------------===//
 
-void panic(void) __attribute__((noreturn));
-void panic_not_in_hardcoded_list(void) __attribute__((noreturn));
+void panic() __attribute__((noreturn));
+void panic_not_in_hardcoded_list() __attribute__((noreturn));
 
-void test_panic_negative(void) {
+void test_panic_negative() {
   signed z = 1;
   CFNumberRef value = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &z);  // expected-warning{{leak}}
 }
 
-void test_panic_positive(void) {
+void test_panic_positive() {
   signed z = 1;
   CFNumberRef value = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &z); // no-warning
   panic();
@@ -1753,8 +1753,8 @@ void test_blocks_1_indirect_retain_via_call(void) {
 // detector.
 
 @protocol Prot_R8272168 @end
-Class <Prot_R8272168> GetAClassThatImplementsProt_R8272168(void);
-void r8272168(void) {
+Class <Prot_R8272168> GetAClassThatImplementsProt_R8272168();
+void r8272168() {
   GetAClassThatImplementsProt_R8272168();
 }
 
@@ -1804,7 +1804,7 @@ static void rdar_8724287(CFErrorRef error)
 // correctly in argument positions besides the first.
 extern void *CFStringCreate(void);
 extern void rdar_9234108_helper(void *key, void * CF_CONSUMED value);
-void rdar_9234108(void) {
+void rdar_9234108() {
   rdar_9234108_helper(0, CFStringCreate());
 }
 
@@ -1827,7 +1827,7 @@ typedef struct TwoDoubles TwoDoubles;
 }
 @end
 
-void rdar9726279(void) {
+void rdar9726279() {
   TwoDoubles twoDoubles = { 0.0, 0.0 };
   NSValue *value = [[NSValue alloc] _prefix_initWithTwoDoubles:twoDoubles];
   [value release];
@@ -1836,52 +1836,52 @@ void rdar9726279(void) {
 // <rdar://problem/9732321>
 // Test camelcase support for CF conventions.  While Core Foundation APIs
 // don't use camel casing, other code is allowed to use it.
-CFArrayRef camelcase_create_1(void) {
+CFArrayRef camelcase_create_1() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef camelcase_createno(void) {
+CFArrayRef camelcase_createno() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning {{leak}}
 }
 
-CFArrayRef camelcase_copy(void) {
+CFArrayRef camelcase_copy() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef camelcase_copying(void) {
+CFArrayRef camelcase_copying() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning {{leak}}
 }
 
-CFArrayRef copyCamelCase(void) {
+CFArrayRef copyCamelCase() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef __copyCamelCase(void) {
+CFArrayRef __copyCamelCase() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef __createCamelCase(void) {
+CFArrayRef __createCamelCase() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef camel_create(void) {
+CFArrayRef camel_create() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
 
-CFArrayRef camel_creat(void) {
+CFArrayRef camel_creat() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning {{leak}}
 }
 
-CFArrayRef camel_copy(void) {
+CFArrayRef camel_copy() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef camel_copyMachine(void) {
+CFArrayRef camel_copyMachine() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // no-warning
 }
 
-CFArrayRef camel_copymachine(void) {
+CFArrayRef camel_copymachine() {
   return CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning {{leak}}
 }
 
@@ -1916,7 +1916,7 @@ void rdar6582778_2(void) {
 // <rdar://problem/10232019> - Test that objects passed to containers
 // are marked "escaped".
 
-void rdar10232019(void) {
+void rdar10232019() {
   NSMutableArray *array = [NSMutableArray array];
 
   NSString *string = [[NSString alloc] initWithUTF8String:"foo"];
@@ -1927,7 +1927,7 @@ void rdar10232019(void) {
   NSLog(@"%@", otherString);
 }
 
-void rdar10232019_positive(void) {
+void rdar10232019_positive() {
   NSMutableArray *array = [NSMutableArray array];
 
   NSString *string = [[NSString alloc] initWithUTF8String:"foo"];
@@ -1943,7 +1943,7 @@ typedef void * xpc_object_t;
 xpc_object_t _CFXPCCreateXPCObjectFromCFObject(CFTypeRef cf);
 void xpc_release(xpc_object_t object);
 
-void rdar9658496(void) {
+void rdar9658496() {
   CFStringRef cf;
   xpc_object_t xpc;
   cf = CFStringCreateWithCString( ((CFAllocatorRef)0), "test", kCFStringEncodingUTF8 ); // no-warning
@@ -1964,7 +1964,7 @@ void rdar9658496(void) {
 }
 @end
 
-void rdar_10824732(void) {
+void rdar_10824732() {
   @autoreleasepool {
     NSString *obj = @"test";
     RDar10824732 *foo = [[RDar10824732 alloc] initWithObj:obj]; // no-warning
@@ -2040,14 +2040,14 @@ extern id NSApp;
 //===----------------------------------------------------------------------===//
 void *malloc(size_t);
 struct rdar11104566 { CFStringRef myStr; };
-struct rdar11104566 test_rdar11104566(void) {
+struct rdar11104566 test_rdar11104566() {
   CFStringRef cf = CFStringCreateWithCString( ((CFAllocatorRef)0), "test", kCFStringEncodingUTF8 ); // no-warning
   struct rdar11104566 V;
   V.myStr = cf;
   return V; // no-warning
 }
 
-struct rdar11104566 *test_2_rdar11104566(void) {
+struct rdar11104566 *test_2_rdar11104566() {
   CFStringRef cf = CFStringCreateWithCString( ((CFAllocatorRef)0), "test", kCFStringEncodingUTF8 ); // no-warning
   struct rdar11104566 *V = (struct rdar11104566 *) malloc(sizeof(*V));
   V->myStr = cf;
@@ -2058,7 +2058,7 @@ struct rdar11104566 *test_2_rdar11104566(void) {
 // ObjC literals support.
 //===----------------------------------------------------------------------===//
 
-void test_objc_arrays(void) {
+void test_objc_arrays() {
     { // CASE ONE -- OBJECT IN ARRAY CREATED DIRECTLY
         NSObject *o = [[NSObject alloc] init];
         NSArray *a = [[NSArray alloc] initWithObjects:o, (void*)0]; // expected-warning {{leak}}
@@ -2103,7 +2103,7 @@ void test_objc_arrays(void) {
     }
 }
 
-void test_objc_integer_literals(void) {
+void test_objc_integer_literals() {
   id value = [@1 retain]; // expected-warning {{leak}}
   [value description];
 }
@@ -2131,8 +2131,8 @@ void rdar11400885(int y)
   }
 }
 
-id makeCollectableNonLeak(void) {
-  extern CFTypeRef CFCreateSomething(void);
+id makeCollectableNonLeak() {
+  extern CFTypeRef CFCreateSomething();
 
   CFTypeRef object = CFCreateSomething(); // +1
   CFRetain(object); // +2
@@ -2144,7 +2144,7 @@ id makeCollectableNonLeak(void) {
 void consumeAndStopTracking(id NS_CONSUMED obj, void (^callback)(void));
 void CFConsumeAndStopTracking(CFTypeRef CF_CONSUMED obj, void (^callback)(void));
 
-void testConsumeAndStopTracking(void) {
+void testConsumeAndStopTracking() {
   id retained = [@[] retain]; // +1
   consumeAndStopTracking(retained, ^{}); // no-warning
 
@@ -2157,7 +2157,7 @@ void testConsumeAndStopTracking(void) {
   consumeAndStopTracking(unretained, ^{}); // expected-warning {{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
 }
 
-void testCFConsumeAndStopTracking(void) {
+void testCFConsumeAndStopTracking() {
   id retained = [@[] retain]; // +1
   CFConsumeAndStopTracking((CFTypeRef)retained, ^{}); // no-warning
 
@@ -2175,10 +2175,10 @@ void testCFConsumeAndStopTracking(void) {
 
 typedef void *MyCFType;
 #pragma clang arc_cf_code_audited begin
-MyCFType CreateMyCFType(void);
+MyCFType CreateMyCFType();
 #pragma clang arc_cf_code_audited end 
     
-void test_custom_cf(void) {
+void test_custom_cf() {
   MyCFType x = CreateMyCFType(); // expected-warning {{leak of an object stored into 'x'}}
 }
 
@@ -2199,7 +2199,7 @@ void test_CFPlugInInstanceCreate(CFUUIDRef factoryUUID, CFUUIDRef typeUUID) {
 - (void)drain;
 @end
 
-void test_drain(void) {
+void test_drain() {
   PR14927 *obj = [[PR14927 alloc] init];
   [obj drain];
   [obj release]; // no-warning
@@ -2210,14 +2210,14 @@ void test_drain(void) {
 // value as tracked, even if the object isn't a known CF type.
 //===----------------------------------------------------------------------===//
 
-MyCFType getCustom(void) __attribute__((cf_returns_not_retained));
-MyCFType makeCustom(void) __attribute__((cf_returns_retained));
+MyCFType getCustom() __attribute__((cf_returns_not_retained));
+MyCFType makeCustom() __attribute__((cf_returns_retained));
 
-void testCustomReturnsRetained(void) {
+void testCustomReturnsRetained() {
   MyCFType obj = makeCustom(); // expected-warning {{leak of an object stored into 'obj'}}
 }
 
-void testCustomReturnsNotRetained(void) {
+void testCustomReturnsNotRetained() {
   CFRelease(getCustom()); // expected-warning {{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
 }
 
@@ -2246,23 +2246,23 @@ static int Cond;
 // CFAutorelease
 //===----------------------------------------------------------------------===//
 
-CFTypeRef getAutoreleasedCFType(void) {
-  extern CFTypeRef CFCreateSomething(void);
+CFTypeRef getAutoreleasedCFType() {
+  extern CFTypeRef CFCreateSomething();
   return CFAutorelease(CFCreateSomething()); // no-warning
 }
 
-CFTypeRef getIncorrectlyAutoreleasedCFType(void) {
-  extern CFTypeRef CFGetSomething(void);
+CFTypeRef getIncorrectlyAutoreleasedCFType() {
+  extern CFTypeRef CFGetSomething();
   return CFAutorelease(CFGetSomething()); // expected-warning{{Object autoreleased too many times}}
 }
 
-CFTypeRef createIncorrectlyAutoreleasedCFType(void) {
-  extern CFTypeRef CFCreateSomething(void);
+CFTypeRef createIncorrectlyAutoreleasedCFType() {
+  extern CFTypeRef CFCreateSomething();
   return CFAutorelease(CFCreateSomething()); // expected-warning{{Object with a +0 retain count returned to caller where a +1 (owning) retain count is expected}}
 }
 
-void useAfterAutorelease(void) {
-  extern CFTypeRef CFCreateSomething(void);
+void useAfterAutorelease() {
+  extern CFTypeRef CFCreateSomething();
   CFTypeRef obj = CFCreateSomething();
   CFAutorelease(obj);
 
@@ -2270,9 +2270,9 @@ void useAfterAutorelease(void) {
   useCF(obj); // no-warning
 }
 
-void useAfterRelease(void) {
+void useAfterRelease() {
   // Verify that the previous example would have warned with CFRelease.
-  extern CFTypeRef CFCreateSomething(void);
+  extern CFTypeRef CFCreateSomething();
   CFTypeRef obj = CFCreateSomething();
   CFRelease(obj);
 
@@ -2280,15 +2280,15 @@ void useAfterRelease(void) {
   useCF(obj); // expected-warning{{Reference-counted object is used after it is released}}
 }
 
-void testAutoreleaseReturnsInput(void) {
-  extern CFTypeRef CFCreateSomething(void);
+void testAutoreleaseReturnsInput() {
+  extern CFTypeRef CFCreateSomething();
   CFTypeRef obj = CFCreateSomething(); // expected-warning{{Potential leak of an object stored into 'second'}}
   CFTypeRef second = CFAutorelease(obj);
   CFRetain(second);
 }
 
-CFTypeRef testAutoreleaseReturnsInputSilent(void) {
-  extern CFTypeRef CFCreateSomething(void);
+CFTypeRef testAutoreleaseReturnsInputSilent() {
+  extern CFTypeRef CFCreateSomething();
   CFTypeRef obj = CFCreateSomething();
   CFTypeRef alias = CFAutorelease(obj);
   CFRetain(alias);
@@ -2296,18 +2296,18 @@ CFTypeRef testAutoreleaseReturnsInputSilent(void) {
   return obj; // no-warning
 }
 
-void autoreleaseTypedObject(void) {
+void autoreleaseTypedObject() {
   CFArrayRef arr = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   CFAutorelease((CFTypeRef)arr); // no-warning
 }
 
-void autoreleaseReturningTypedObject(void) {
+void autoreleaseReturningTypedObject() {
   CFArrayRef arr = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks); // expected-warning{{Potential leak of an object stored into 'alias'}}
   CFArrayRef alias = (CFArrayRef)CFAutorelease((CFTypeRef)arr);
   CFRetain(alias);
 }
 
-CFArrayRef autoreleaseReturningTypedObjectSilent(void) {
+CFArrayRef autoreleaseReturningTypedObjectSilent() {
   CFArrayRef arr = CFArrayCreateMutable(0, 10, &kCFTypeArrayCallBacks);
   CFArrayRef alias = (CFArrayRef)CFAutorelease((CFTypeRef)arr);
   CFRetain(alias);
@@ -2315,7 +2315,7 @@ CFArrayRef autoreleaseReturningTypedObjectSilent(void) {
   return alias; // no-warning
 }
 
-void autoreleaseObjC(void) {
+void autoreleaseObjC() {
   id obj = [@1 retain];
   CFAutorelease(obj); // no-warning
 
@@ -2349,7 +2349,7 @@ inline static void cleanupFunction(void *tp) {
     }
 }
 #define ADDCLEANUP __attribute__((cleanup(cleanupFunction)))
-void foo(void) {
+void foo() {
   ADDCLEANUP CFStringRef myString;
   myString = CFStringCreateWithCString(0, "hello world", kCFStringEncodingUTF8);
   ADDCLEANUP CFStringRef myString2 = 
@@ -2361,7 +2361,7 @@ void foo(void) {
 //===----------------------------------------------------------------------===//
 
 __attribute__((ns_returns_retained))
-id returnNSNull(void) {
+id returnNSNull() {
   return [NSNull null]; // no-warning
 }
 
@@ -2369,21 +2369,21 @@ id returnNSNull(void) {
 // cf_returns_[not_]retained on parameters
 //===----------------------------------------------------------------------===//
 
-void testCFReturnsNotRetained(void) {
+void testCFReturnsNotRetained() {
   extern void getViaParam(CFTypeRef * CF_RETURNS_NOT_RETAINED outObj);
   CFTypeRef obj;
   getViaParam(&obj);
   CFRelease(obj); // // expected-warning {{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
 }
 
-void testCFReturnsNotRetainedAnnotated(void) {
+void testCFReturnsNotRetainedAnnotated() {
   extern void getViaParam2(CFTypeRef * _Nonnull CF_RETURNS_NOT_RETAINED outObj);
   CFTypeRef obj;
   getViaParam2(&obj);
   CFRelease(obj); // // expected-warning {{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
 }
 
-void testCFReturnsRetained(void) {
+void testCFReturnsRetained() {
   extern int copyViaParam(CFTypeRef * CF_RETURNS_RETAINED outObj);
   CFTypeRef obj;
   copyViaParam(&obj);
@@ -2391,7 +2391,7 @@ void testCFReturnsRetained(void) {
   CFRelease(obj); // // FIXME-warning {{Incorrect decrement of the reference count of an object that is not owned at this point by the caller}}
 }
 
-void testCFReturnsRetainedError(void) {
+void testCFReturnsRetainedError() {
   extern int copyViaParam(CFTypeRef * CF_RETURNS_RETAINED outObj);
   CFTypeRef obj;
   if (copyViaParam(&obj) == -42)

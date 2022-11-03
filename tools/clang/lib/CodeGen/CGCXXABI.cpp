@@ -45,7 +45,8 @@ CGCallee CGCXXABI::EmitLoadOfMemberFunctionPointer(
   ErrorUnsupportedABI(CGF, "calls through member pointers");
 
   ThisPtrForCall = This.getPointer();
-  const auto *FPT = MPT->getPointeeType()->castAs<FunctionProtoType>();
+  const FunctionProtoType *FPT =
+    MPT->getPointeeType()->getAs<FunctionProtoType>();
   const auto *RD =
       cast<CXXRecordDecl>(MPT->getClass()->castAs<RecordType>()->getDecl());
   llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(

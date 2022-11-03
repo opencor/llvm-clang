@@ -7,28 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/DebugInfo/CodeView/TypeRecordMapping.h"
-
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
-#include "llvm/DebugInfo/CodeView/CodeViewRecordIO.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/DebugInfo/CodeView/EnumTables.h"
-#include "llvm/DebugInfo/CodeView/RecordSerialization.h"
-#include "llvm/DebugInfo/CodeView/TypeIndex.h"
-#include "llvm/DebugInfo/CodeView/TypeRecord.h"
-#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MD5.h"
-#include "llvm/Support/ScopedPrinter.h"
-
-#include <algorithm>
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -36,10 +18,8 @@ using namespace llvm::codeview;
 namespace {
 
 #define error(X)                                                               \
-  do {                                                                         \
-    if (auto EC = X)                                                           \
-      return EC;                                                               \
-  } while (false)
+  if (auto EC = X)                                                             \
+    return EC;
 
 static const EnumEntry<TypeLeafKind> LeafTypeNames[] = {
 #define CV_TYPE(enum, val) {#enum, enum},
@@ -230,8 +210,8 @@ static Error mapNameAndUniqueName(CodeViewRecordIO &IO, StringRef &Name,
 }
 
 Error TypeRecordMapping::visitTypeBegin(CVType &CVR) {
-  assert(!TypeKind && "Already in a type mapping!");
-  assert(!MemberKind && "Already in a member mapping!");
+  assert(!TypeKind.hasValue() && "Already in a type mapping!");
+  assert(!MemberKind.hasValue() && "Already in a member mapping!");
 
   // FieldList and MethodList records can be any length because they can be
   // split with continuation records.  All other record types cannot be
@@ -262,8 +242,8 @@ Error TypeRecordMapping::visitTypeBegin(CVType &CVR, TypeIndex Index) {
 }
 
 Error TypeRecordMapping::visitTypeEnd(CVType &Record) {
-  assert(TypeKind && "Not in a type mapping!");
-  assert(!MemberKind && "Still in a member mapping!");
+  assert(TypeKind.hasValue() && "Not in a type mapping!");
+  assert(!MemberKind.hasValue() && "Still in a member mapping!");
 
   error(IO.endRecord());
 
@@ -272,8 +252,8 @@ Error TypeRecordMapping::visitTypeEnd(CVType &Record) {
 }
 
 Error TypeRecordMapping::visitMemberBegin(CVMemberRecord &Record) {
-  assert(TypeKind && "Not in a type mapping!");
-  assert(!MemberKind && "Already in a member mapping!");
+  assert(TypeKind.hasValue() && "Not in a type mapping!");
+  assert(!MemberKind.hasValue() && "Already in a member mapping!");
 
   // The largest possible subrecord is one in which there is a record prefix,
   // followed by the subrecord, followed by a continuation, and that entire
@@ -298,8 +278,8 @@ Error TypeRecordMapping::visitMemberBegin(CVMemberRecord &Record) {
 }
 
 Error TypeRecordMapping::visitMemberEnd(CVMemberRecord &Record) {
-  assert(TypeKind && "Not in a type mapping!");
-  assert(MemberKind && "Not in a member mapping!");
+  assert(TypeKind.hasValue() && "Not in a type mapping!");
+  assert(MemberKind.hasValue() && "Not in a member mapping!");
 
   if (IO.isReading()) {
     if (auto EC = IO.skipPadding())

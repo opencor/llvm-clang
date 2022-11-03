@@ -3,7 +3,7 @@
 // Test case for: 
 //   <rdar://problem/6248119> @finally doesn't introduce a new scope
 
-void f0(void) {
+void f0() {
   int i;
   @try { 
   } @finally {
@@ -11,7 +11,7 @@ void f0(void) {
   }
 }
 
-void f1(void) {
+void f1() {
   int i;
   @try { 
     int i =0;
@@ -19,7 +19,7 @@ void f1(void) {
   }
 }
 
-void f2(void) {
+void f2() {
   int i;
   @try { 
   } @catch(id e) {

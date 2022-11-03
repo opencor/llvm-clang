@@ -13,7 +13,6 @@
 #ifndef LLVM_MC_MCINSTRINFO_H
 #define LLVM_MC_MCINSTRINFO_H
 
-#include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include <cassert>
 

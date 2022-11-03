@@ -221,7 +221,7 @@ void bad_assign_2(int *i) {
   *i = atom; // expected-warning {{implicit use of sequentially-consistent atomic may incur stronger memory barriers than necessary}}
 }
 
-void bad_assign_3(void) {
+void bad_assign_3() {
   atom = atom; // expected-warning {{implicit use of sequentially-consistent atomic may incur stronger memory barriers than necessary}}
 }
 

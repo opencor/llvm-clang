@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
@@ -78,7 +79,7 @@ bool LowerEmuTLS::runOnModule(Module &M) {
     if (G.isThreadLocal())
       TlsVars.append({&G});
   }
-  for (const auto *const G : TlsVars)
+  for (const auto G : TlsVars)
     Changed |= addEmuTlsVar(M, G);
   return Changed;
 }

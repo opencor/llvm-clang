@@ -12,16 +12,14 @@
 
 namespace clang {
 
-// First feature in a pair requires the second one to be supported.
-static const std::pair<StringRef, StringRef> DependentFeaturesList[] = {
+const OpenCLOptions::FeatureDepList OpenCLOptions::DependentFeaturesList = {
     {"__opencl_c_read_write_images", "__opencl_c_images"},
     {"__opencl_c_3d_image_writes", "__opencl_c_images"},
     {"__opencl_c_pipes", "__opencl_c_generic_address_space"},
     {"__opencl_c_device_enqueue", "__opencl_c_generic_address_space"},
     {"__opencl_c_device_enqueue", "__opencl_c_program_scope_global_variables"}};
 
-// Extensions and equivalent feature pairs.
-static const std::pair<StringRef, StringRef> FeatureExtensionMap[] = {
+const llvm::StringMap<llvm::StringRef> OpenCLOptions::FeatureExtensionMap = {
     {"cl_khr_fp64", "__opencl_c_fp64"},
     {"cl_khr_3d_image_writes", "__opencl_c_3d_image_writes"}};
 
@@ -142,11 +140,11 @@ bool OpenCLOptions::diagnoseFeatureExtensionDifferences(
 
   bool IsValid = true;
   for (auto &ExtAndFeat : FeatureExtensionMap)
-    if (TI.hasFeatureEnabled(OpenCLFeaturesMap, ExtAndFeat.first) !=
-        TI.hasFeatureEnabled(OpenCLFeaturesMap, ExtAndFeat.second)) {
+    if (TI.hasFeatureEnabled(OpenCLFeaturesMap, ExtAndFeat.getKey()) !=
+        TI.hasFeatureEnabled(OpenCLFeaturesMap, ExtAndFeat.getValue())) {
       IsValid = false;
       Diags.Report(diag::err_opencl_extension_and_feature_differs)
-          << ExtAndFeat.first << ExtAndFeat.second;
+          << ExtAndFeat.getKey() << ExtAndFeat.getValue();
     }
   return IsValid;
 }

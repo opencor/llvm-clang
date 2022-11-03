@@ -15,6 +15,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
 
@@ -199,7 +200,7 @@ public:
   RetTy visitCatchPadInst(CatchPadInst &I)     { DELEGATE(FuncletPadInst); }
   RetTy visitFreezeInst(FreezeInst &I)         { DELEGATE(Instruction); }
 
-  // Handle the special intrinsic instruction classes.
+  // Handle the special instrinsic instruction classes.
   RetTy visitDbgDeclareInst(DbgDeclareInst &I)    { DELEGATE(DbgVariableIntrinsic);}
   RetTy visitDbgValueInst(DbgValueInst &I)        { DELEGATE(DbgVariableIntrinsic);}
   RetTy visitDbgVariableIntrinsic(DbgVariableIntrinsic &I)

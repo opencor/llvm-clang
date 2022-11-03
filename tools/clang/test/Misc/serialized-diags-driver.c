@@ -15,7 +15,7 @@
 // CHECK: note: initialize the variable 'voodoo' to silence this warning []
 // CHECK: Number of diagnostics: 2
 
-void foo(void) {
+void foo() {
   int voodoo;
   voodoo = voodoo + 1;
 }

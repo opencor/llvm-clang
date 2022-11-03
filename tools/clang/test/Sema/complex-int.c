@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 %s -verify -fsyntax-only
 
-void a(void) {
+void a() {
 __complex__ int arr;
 __complex__ short brr;
 __complex__ unsigned xx;
@@ -27,7 +27,7 @@ switch (ii) {
 }
 }
 
-void Tester(void) {
+void Tester() {
 __complex short a1;
 __complex int a2;
 __complex float a3;

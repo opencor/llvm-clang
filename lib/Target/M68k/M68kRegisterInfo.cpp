@@ -19,7 +19,6 @@
 
 #include "MCTargetDesc/M68kMCTargetDesc.h"
 
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Type.h"

@@ -2,21 +2,21 @@
 
 // rdar://9167275
 
-int t1(void)
+int t1()
 {
   int x;
   __asm__("mov %0, 7" : "=r" (x));
   return x;
 }
 
-long t2(void)
+long t2()
 {
   long x;
   __asm__("mov %0, 7" : "=r" (x));
   return x;
 }
 
-long t3(void)
+long t3()
 {
   long x;
   __asm__("mov %w0, 7" : "=r" (x));

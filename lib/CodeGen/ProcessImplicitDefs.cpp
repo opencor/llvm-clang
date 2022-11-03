@@ -11,11 +11,10 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/Pass.h"
-#include "llvm/PassRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -46,11 +45,6 @@ public:
   void getAnalysisUsage(AnalysisUsage &au) const override;
 
   bool runOnMachineFunction(MachineFunction &MF) override;
-
-  MachineFunctionProperties getRequiredProperties() const override {
-    return MachineFunctionProperties().set(
-        MachineFunctionProperties::Property::IsSSA);
-  }
 };
 } // end anonymous namespace
 
@@ -130,7 +124,7 @@ void ProcessImplicitDefs::processImplicitDef(MachineInstr *MI) {
   // Using instr wasn't found, it could be in another block.
   // Leave the physreg IMPLICIT_DEF, but trim any extra operands.
   for (unsigned i = MI->getNumOperands() - 1; i; --i)
-    MI->removeOperand(i);
+    MI->RemoveOperand(i);
   LLVM_DEBUG(dbgs() << "Keeping physreg: " << *MI);
 }
 
@@ -146,6 +140,7 @@ bool ProcessImplicitDefs::runOnMachineFunction(MachineFunction &MF) {
   TII = MF.getSubtarget().getInstrInfo();
   TRI = MF.getSubtarget().getRegisterInfo();
   MRI = &MF.getRegInfo();
+  assert(MRI->isSSA() && "ProcessImplicitDefs only works on SSA form.");
   assert(WorkList.empty() && "Inconsistent worklist state");
 
   for (MachineBasicBlock &MBB : MF) {

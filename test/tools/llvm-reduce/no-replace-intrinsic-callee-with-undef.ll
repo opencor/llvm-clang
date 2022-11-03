@@ -12,17 +12,17 @@
 
 
 declare i8* @llvm.sponentry.p0i8()
-declare i8 @uninteresting()
+declare void @uninteresting()
 
 ; ALL-LABEL: define i8* @interesting(
 define i8* @interesting() {
 entry:
-  ; CHECK-INTERESTINGNESS: call i8
-  ; CHECK-NOCALL-NOT: call i8
+  ; CHECK-INTERESTINGNESS: call
+  ; CHECK-NOCALL-NOT: call
 
   ; CHECK-FINAL: %call = call i8* @llvm.sponentry.p0i8()
   ; CHECK-FINAL-NEXT: ret i8* %call
   %call = call i8* @llvm.sponentry.p0i8()
-  call i8 @uninteresting()
+  call void @uninteresting()
   ret i8* %call
 }

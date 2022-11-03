@@ -1122,9 +1122,6 @@ private:
   /// every summary of a GV is synchronized.
   bool WithDSOLocalPropagation = false;
 
-  /// Indicates that we have whole program visibility.
-  bool WithWholeProgramVisibility = false;
-
   /// Indicates that summary-based synthetic entry count propagation has run
   bool HasSyntheticEntryCounts = false;
 
@@ -1156,8 +1153,8 @@ private:
 
   // Used in cases where we want to record the name of a global, but
   // don't have the string owned elsewhere (e.g. the Strtab on a module).
-  BumpPtrAllocator Alloc;
   StringSaver Saver;
+  BumpPtrAllocator Alloc;
 
   // The total number of basic blocks in the module in the per-module summary or
   // the total number of basic blocks in the LTO unit in the combined index.
@@ -1282,9 +1279,6 @@ public:
 
   bool withDSOLocalPropagation() const { return WithDSOLocalPropagation; }
   void setWithDSOLocalPropagation() { WithDSOLocalPropagation = true; }
-
-  bool withWholeProgramVisibility() const { return WithWholeProgramVisibility; }
-  void setWithWholeProgramVisibility() { WithWholeProgramVisibility = true; }
 
   bool isReadOnly(const GlobalVarSummary *GVS) const {
     return WithAttributePropagation && GVS->maybeReadOnly();

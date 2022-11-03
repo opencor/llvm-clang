@@ -9,11 +9,10 @@
 #include "llvm/MC/MCInstrAnalysis.h"
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/MC/MCInstrInfo.h"
 #include <cstdint>
-
-namespace llvm {
-class MCSubtargetInfo;
-}
 
 using namespace llvm;
 

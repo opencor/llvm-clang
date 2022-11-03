@@ -144,8 +144,6 @@ public:
     return ActiveOffloadMask & Kind;
   }
 
-  unsigned getActiveOffloadKinds() const { return ActiveOffloadMask; }
-
   /// Iterator that visits device toolchains of a given kind.
   using const_offload_toolchains_iterator =
       const std::multimap<Action::OffloadKind,
@@ -156,11 +154,6 @@ public:
 
   template <Action::OffloadKind Kind>
   const_offload_toolchains_range getOffloadToolChains() const {
-    return OrderedOffloadingToolchains.equal_range(Kind);
-  }
-
-  const_offload_toolchains_range
-  getOffloadToolChains(Action::OffloadKind Kind) const {
     return OrderedOffloadingToolchains.equal_range(Kind);
   }
 
@@ -296,22 +289,16 @@ public:
   ///
   /// \param FailingCommand - For non-zero results, this will be set to the
   /// Command which failed, if any.
-  /// \param LogOnly - When true, only tries to log the command, not actually
-  /// execute it.
   /// \return The result code of the subprocess.
-  int ExecuteCommand(const Command &C, const Command *&FailingCommand,
-                     bool LogOnly = false) const;
+  int ExecuteCommand(const Command &C, const Command *&FailingCommand) const;
 
   /// ExecuteJob - Execute a single job.
   ///
   /// \param FailingCommands - For non-zero results, this will be a vector of
   /// failing commands and their associated result code.
-  /// \param LogOnly - When true, only tries to log the command, not actually
-  /// execute it.
-  void
-  ExecuteJobs(const JobList &Jobs,
-              SmallVectorImpl<std::pair<int, const Command *>> &FailingCommands,
-              bool LogOnly = false) const;
+  void ExecuteJobs(
+      const JobList &Jobs,
+      SmallVectorImpl<std::pair<int, const Command *>> &FailingCommands) const;
 
   /// initCompilationForDiagnostics - Remove stale state and suppress output
   /// so compilation can be reexecuted to generate additional diagnostic

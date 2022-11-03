@@ -373,8 +373,7 @@ void AMDGPUCombinerHelper::applyFoldableFneg(MachineInstr &MI,
     replaceRegWith(MRI, Dst, NegatedMatchInfo);
 
     // Recreate non negated value for other uses of old MatchInfoDst
-    auto NextInst = ++MatchInfo->getIterator();
-    Builder.setInstrAndDebugLoc(*NextInst);
+    Builder.setInstrAndDebugLoc(MI);
     Builder.buildFNeg(MatchInfoDst, NegatedMatchInfo, MI.getFlags());
   }
 

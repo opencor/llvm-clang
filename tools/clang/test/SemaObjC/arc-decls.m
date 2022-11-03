@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -fblocks -fobjc-arc -verify -Wno-objc-root-class -Wno-strict-prototypes %s
+// RUN: %clang_cc1 -fsyntax-only -fblocks -fobjc-arc -verify -Wno-objc-root-class %s
 
 // rdar://8843524
 
@@ -35,8 +35,7 @@ union u_trivial_c {
 
 // rdar://10260525
 struct r10260525 {
-  id (^block1) ();
-  id (^block2) (void);
+  id (^block) ();
 };
 
 struct S { 
@@ -55,7 +54,7 @@ __autoreleasing NSError *E; // expected-error {{global variables cannot have __a
 
 extern id __autoreleasing X1; // expected-error {{global variables cannot have __autoreleasing ownership}}
 
-void func(void)
+void func()
 {
     id X;
     static id __autoreleasing X1; // expected-error {{global variables cannot have __autoreleasing ownership}}

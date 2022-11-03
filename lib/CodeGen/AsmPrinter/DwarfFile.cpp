@@ -12,7 +12,9 @@
 #include "DwarfUnit.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/MC/MCStreamer.h"
+#include <algorithm>
 #include <cstdint>
 
 using namespace llvm;
@@ -45,7 +47,7 @@ void DwarfFile::emitUnit(DwarfUnit *TheU, bool UseOffsets) {
   if (llvm::empty(TheU->getUnitDie().values()))
     return;
 
-  Asm->OutStreamer->switchSection(S);
+  Asm->OutStreamer->SwitchSection(S);
   TheU->emitHeader(UseOffsets);
   Asm->emitDwarfDIE(TheU->getUnitDie());
 

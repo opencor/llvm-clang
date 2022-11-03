@@ -15,7 +15,6 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/MSVCErrorWorkarounds.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include <cctype>
 #include <memory>
@@ -893,7 +892,7 @@ RuntimeDyldChecker::RuntimeDyldChecker(
           std::move(GetGOTInfo), Endianness, Disassembler, InstPrinter,
           ErrStream)) {}
 
-RuntimeDyldChecker::~RuntimeDyldChecker() = default;
+RuntimeDyldChecker::~RuntimeDyldChecker() {}
 
 bool RuntimeDyldChecker::check(StringRef CheckExpr) const {
   return Impl->check(CheckExpr);

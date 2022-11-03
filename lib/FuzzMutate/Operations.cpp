@@ -169,21 +169,14 @@ OpDescriptor llvm::fuzzerop::splitBlockDescriptor(unsigned Weight) {
 
 OpDescriptor llvm::fuzzerop::gepDescriptor(unsigned Weight) {
   auto buildGEP = [](ArrayRef<Value *> Srcs, Instruction *Inst) {
-    // TODO: It would be better to generate a random type here, rather than
-    // generating a random value and picking its type.
-    Type *Ty = Srcs[0]->getType()->isOpaquePointerTy()
-                   ? Srcs[1]->getType()
-                   : Srcs[0]->getType()->getNonOpaquePointerElementType();
-    auto Indices = makeArrayRef(Srcs).drop_front(2);
+    Type *Ty = Srcs[0]->getType()->getPointerElementType();
+    auto Indices = makeArrayRef(Srcs).drop_front(1);
     return GetElementPtrInst::Create(Ty, Srcs[0], Indices, "G", Inst);
   };
   // TODO: Handle aggregates and vectors
   // TODO: Support multiple indices.
   // TODO: Try to avoid meaningless accesses.
-  SourcePred sizedType(
-      [](ArrayRef<Value *>, const Value *V) { return V->getType()->isSized(); },
-      None);
-  return {Weight, {sizedPtrType(), sizedType, anyIntType()}, buildGEP};
+  return {Weight, {sizedPtrType(), anyIntType()}, buildGEP};
 }
 
 static uint64_t getAggregateNumElements(Type *T) {
@@ -309,12 +302,12 @@ static SourcePred validShuffleVectorIndex() {
     return ShuffleVectorInst::isValidOperands(Cur[0], Cur[1], V);
   };
   auto Make = [](ArrayRef<Value *> Cur, ArrayRef<Type *> Ts) {
-    auto *FirstTy = cast<VectorType>(Cur[0]->getType());
+    auto *FirstTy = cast<FixedVectorType>(Cur[0]->getType());
     auto *Int32Ty = Type::getInt32Ty(Cur[0]->getContext());
     // TODO: It's straighforward to make up reasonable values, but listing them
     // exhaustively would be insane. Come up with a couple of sensible ones.
     return std::vector<Constant *>{UndefValue::get(
-        VectorType::get(Int32Ty, FirstTy->getElementCount()))};
+        FixedVectorType::get(Int32Ty, FirstTy->getNumElements()))};
   };
   return {Pred, Make};
 }

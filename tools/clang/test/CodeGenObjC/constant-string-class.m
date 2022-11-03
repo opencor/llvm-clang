@@ -25,7 +25,7 @@ id _FooClassReference[20];
 - (char *)customString { return cString ; }
 @end
 
-int main (void) {
+int main () {
   Foo *string = @"bla";
   return 0;
 }

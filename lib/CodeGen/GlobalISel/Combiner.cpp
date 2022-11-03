@@ -13,13 +13,14 @@
 #include "llvm/CodeGen/GlobalISel/Combiner.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/GlobalISel/CSEInfo.h"
-#include "llvm/CodeGen/GlobalISel/CSEMIRBuilder.h"
 #include "llvm/CodeGen/GlobalISel/CombinerInfo.h"
+#include "llvm/CodeGen/GlobalISel/CSEMIRBuilder.h"
 #include "llvm/CodeGen/GlobalISel/GISelChangeObserver.h"
 #include "llvm/CodeGen/GlobalISel/GISelWorkList.h"
 #include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
 #include "llvm/CodeGen/GlobalISel/Utils.h"
 #include "llvm/CodeGen/MachineOptimizationRemarkEmitter.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "gi-combiner"
@@ -56,7 +57,8 @@ class WorkListMaintainer : public GISelChangeObserver {
 
 public:
   WorkListMaintainer(WorkListTy &WorkList) : WorkList(WorkList) {}
-  virtual ~WorkListMaintainer() = default;
+  virtual ~WorkListMaintainer() {
+  }
 
   void erasingInstr(MachineInstr &MI) override {
     LLVM_DEBUG(dbgs() << "Erasing: " << MI << "\n");
@@ -113,7 +115,7 @@ bool Combiner::combineMachineInstrs(MachineFunction &MF,
 
   bool MFChanged = false;
   bool Changed;
-  MachineIRBuilder &B = *Builder;
+  MachineIRBuilder &B = *Builder.get();
 
   do {
     // Collect all instructions. Do a post order traversal for basic blocks and

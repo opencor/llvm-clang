@@ -167,7 +167,12 @@ Syntax
 
 Syntax of generic operands is described :doc:`in this document<AMDGPUOperandSyntax>`.
 
-For detailed information about operands follow *operand links* in GPU-specific documents.
+For detailed information about operands follow *operand links* in GPU-specific documents:
+
+* :doc:`GFX7<AMDGPU/AMDGPUAsmGFX7>`
+* :doc:`GFX8<AMDGPU/AMDGPUAsmGFX8>`
+* :doc:`GFX9<AMDGPU/AMDGPUAsmGFX9>`
+* :doc:`GFX10<AMDGPU/AMDGPUAsmGFX10>`
 
 Modifiers
 =========
@@ -177,4 +182,10 @@ Syntax
 
 Syntax of modifiers is described :doc:`in this document<AMDGPUModifierSyntax>`.
 
-Information about modifiers supported for individual instructions may be found in GPU-specific documents.
+Information about modifiers supported for individual instructions may be found in GPU-specific documents:
+
+* :doc:`GFX7<AMDGPU/AMDGPUAsmGFX7>`
+* :doc:`GFX8<AMDGPU/AMDGPUAsmGFX8>`
+* :doc:`GFX9<AMDGPU/AMDGPUAsmGFX9>`
+* :doc:`GFX10<AMDGPU/AMDGPUAsmGFX10>`
+

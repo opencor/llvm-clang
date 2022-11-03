@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-int main(void) {
+int main() {
   // CHECK-C: store i8 97
   // CHECK-CPP0X: store i8 97
   char a = 'a';

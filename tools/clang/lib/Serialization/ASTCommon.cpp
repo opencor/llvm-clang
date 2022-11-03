@@ -391,7 +391,6 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   case Decl::Field:
   case Decl::MSProperty:
   case Decl::MSGuid:
-  case Decl::UnnamedGlobalConstant:
   case Decl::TemplateParamObject:
   case Decl::ObjCIvar:
   case Decl::ObjCAtDefsField:
@@ -478,9 +477,7 @@ bool serialization::needsAnonymousDeclarationNumber(const NamedDecl *D) {
   // Otherwise, we only care about anonymous class members / block-scope decls.
   // FIXME: We need to handle lambdas and blocks within inline / templated
   // variables too.
-  if (D->getDeclName())
-    return false;
-  if (!isa<RecordDecl, ObjCInterfaceDecl>(D->getLexicalDeclContext()))
+  if (D->getDeclName() || !isa<RecordDecl>(D->getLexicalDeclContext()))
     return false;
   return isa<TagDecl>(D) || isa<FieldDecl>(D);
 }

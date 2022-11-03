@@ -25,8 +25,8 @@ typedef const struct __CFString * CFStringRef;
 @end
 
 // rdar://9544832
-CFStringRef SomeOtherFunc(void) __attribute__((cf_returns_retained));
-id MMM(void)
+CFStringRef SomeOtherFunc() __attribute__((cf_returns_retained));
+id MMM()
 {
   id obj = (id)((CFStringRef) __builtin___CFStringMakeConstantString ("" "Some CF String" ""));
   return 0;

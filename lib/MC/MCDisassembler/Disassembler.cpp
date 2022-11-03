@@ -30,6 +30,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 
 using namespace llvm;

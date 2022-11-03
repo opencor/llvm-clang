@@ -77,7 +77,9 @@ static cl::opt<DebugCompressionType> CompressDebugSections(
     cl::desc("Choose DWARF debug sections compression:"),
     cl::values(clEnumValN(DebugCompressionType::None, "none", "No compression"),
                clEnumValN(DebugCompressionType::Z, "zlib",
-                          "Use zlib compression")),
+                          "Use zlib compression"),
+               clEnumValN(DebugCompressionType::GNU, "zlib-gnu",
+                          "Use zlib-gnu compression (deprecated)")),
     cl::cat(MCCategory));
 
 static cl::opt<bool>
@@ -401,7 +403,7 @@ int main(int argc, char **argv) {
   MAI->setRelaxELFRelocations(RelaxELFRel);
 
   if (CompressDebugSections != DebugCompressionType::None) {
-    if (!compression::zlib::isAvailable()) {
+    if (!zlib::isAvailable()) {
       WithColor::error(errs(), ProgName)
           << "build tools with zlib to enable -compress-debug-sections";
       return 1;
@@ -539,7 +541,7 @@ int main(int argc, char **argv) {
     // Set up the AsmStreamer.
     std::unique_ptr<MCCodeEmitter> CE;
     if (ShowEncoding)
-      CE.reset(TheTarget->createMCCodeEmitter(*MCII, Ctx));
+      CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
 
     std::unique_ptr<MCAsmBackend> MAB(
         TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
@@ -559,7 +561,7 @@ int main(int argc, char **argv) {
       OS = BOS.get();
     }
 
-    MCCodeEmitter *CE = TheTarget->createMCCodeEmitter(*MCII, Ctx);
+    MCCodeEmitter *CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
     MCAsmBackend *MAB = TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions);
     Str.reset(TheTarget->createMCObjectStreamer(
         TheTriple, Ctx, std::unique_ptr<MCAsmBackend>(MAB),

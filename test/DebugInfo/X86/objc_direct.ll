@@ -1,4 +1,5 @@
-; RUN: llc < %s -mtriple=x86_64 -filetype=obj -o %t
+; UNSUPPORTED: -zos, -aix
+; RUN: llc < %s -filetype=obj -o %t
 ; RUN: llvm-dwarfdump -v %t | FileCheck %s
 
 ; Source code to regenerate:

@@ -8,7 +8,7 @@
 
 ; .debug_frame is not emitted for targeting Windows x64, arm64, or AIX.
 ; REQUIRES: debug_frame
-; REQUIRES: object-emission
+; REQUIRES: default_triple
 
 ; Function Attrs: nounwind
 define i32 @foo() #0 !dbg !4 {

@@ -16,7 +16,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/CaptureTracking.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -45,15 +44,15 @@ STATISTIC(NumNotCapturedBefore, "Number of pointers not captured before");
 /// use it where possible. The caching version can use much higher limit or
 /// don't have this cap at all.
 static cl::opt<unsigned>
-    DefaultMaxUsesToExplore("capture-tracking-max-uses-to-explore", cl::Hidden,
-                            cl::desc("Maximal number of uses to explore."),
-                            cl::init(100));
+DefaultMaxUsesToExplore("capture-tracking-max-uses-to-explore", cl::Hidden,
+                        cl::desc("Maximal number of uses to explore."),
+                        cl::init(20));
 
 unsigned llvm::getDefaultMaxUsesToExploreForCaptureTracking() {
   return DefaultMaxUsesToExplore;
 }
 
-CaptureTracker::~CaptureTracker() = default;
+CaptureTracker::~CaptureTracker() {}
 
 bool CaptureTracker::shouldExplore(const Use *U) { return true; }
 
@@ -75,10 +74,8 @@ bool CaptureTracker::isDereferenceableOrNull(Value *O, const DataLayout &DL) {
 
 namespace {
   struct SimpleCaptureTracker : public CaptureTracker {
-    explicit SimpleCaptureTracker(
-
-        const SmallPtrSetImpl<const Value *> &EphValues, bool ReturnCaptures)
-        : EphValues(EphValues), ReturnCaptures(ReturnCaptures) {}
+    explicit SimpleCaptureTracker(bool ReturnCaptures)
+        : ReturnCaptures(ReturnCaptures) {}
 
     void tooManyUses() override { Captured = true; }
 
@@ -86,14 +83,9 @@ namespace {
       if (isa<ReturnInst>(U->getUser()) && !ReturnCaptures)
         return false;
 
-      if (EphValues.contains(U->getUser()))
-        return false;
-
       Captured = true;
       return true;
     }
-
-    const SmallPtrSetImpl<const Value *> &EphValues;
 
     bool ReturnCaptures;
 
@@ -162,9 +154,8 @@ namespace {
   // escape are not in a cycle.
   struct EarliestCaptures : public CaptureTracker {
 
-    EarliestCaptures(bool ReturnCaptures, Function &F, const DominatorTree &DT,
-                     const SmallPtrSetImpl<const Value *> &EphValues)
-        : EphValues(EphValues), DT(DT), ReturnCaptures(ReturnCaptures), F(F) {}
+    EarliestCaptures(bool ReturnCaptures, Function &F, const DominatorTree &DT)
+        : DT(DT), ReturnCaptures(ReturnCaptures), F(F) {}
 
     void tooManyUses() override {
       Captured = true;
@@ -174,9 +165,6 @@ namespace {
     bool captured(const Use *U) override {
       Instruction *I = cast<Instruction>(U->getUser());
       if (isa<ReturnInst>(I) && !ReturnCaptures)
-        return false;
-
-      if (EphValues.contains(I))
         return false;
 
       if (!EarliestCapture) {
@@ -205,8 +193,6 @@ namespace {
       return false;
     }
 
-    const SmallPtrSetImpl<const Value *> &EphValues;
-
     Instruction *EarliestCapture = nullptr;
 
     const DominatorTree &DT;
@@ -226,18 +212,8 @@ namespace {
 /// counts as capturing it or not.  The boolean StoreCaptures specified whether
 /// storing the value (or part of it) into memory anywhere automatically
 /// counts as capturing it or not.
-bool llvm::PointerMayBeCaptured(const Value *V, bool ReturnCaptures,
-                                bool StoreCaptures, unsigned MaxUsesToExplore) {
-  SmallPtrSet<const Value *, 1> Empty;
-  return PointerMayBeCaptured(V, ReturnCaptures, StoreCaptures, Empty,
-                              MaxUsesToExplore);
-}
-
-/// Variant of the above function which accepts a set of Values that are
-/// ephemeral and cannot cause pointers to escape.
-bool llvm::PointerMayBeCaptured(const Value *V, bool ReturnCaptures,
-                                bool StoreCaptures,
-                                const SmallPtrSetImpl<const Value *> &EphValues,
+bool llvm::PointerMayBeCaptured(const Value *V,
+                                bool ReturnCaptures, bool StoreCaptures,
                                 unsigned MaxUsesToExplore) {
   assert(!isa<GlobalValue>(V) &&
          "It doesn't make sense to ask whether a global is captured.");
@@ -248,7 +224,7 @@ bool llvm::PointerMayBeCaptured(const Value *V, bool ReturnCaptures,
   // take advantage of this.
   (void)StoreCaptures;
 
-  SimpleCaptureTracker SCT(EphValues, ReturnCaptures);
+  SimpleCaptureTracker SCT(ReturnCaptures);
   PointerMayBeCaptured(V, &SCT, MaxUsesToExplore);
   if (SCT.Captured)
     ++NumCaptured;
@@ -290,148 +266,20 @@ bool llvm::PointerMayBeCapturedBefore(const Value *V, bool ReturnCaptures,
   return CB.Captured;
 }
 
-Instruction *
-llvm::FindEarliestCapture(const Value *V, Function &F, bool ReturnCaptures,
-                          bool StoreCaptures, const DominatorTree &DT,
-
-                          const SmallPtrSetImpl<const Value *> &EphValues,
-                          unsigned MaxUsesToExplore) {
+Instruction *llvm::FindEarliestCapture(const Value *V, Function &F,
+                                       bool ReturnCaptures, bool StoreCaptures,
+                                       const DominatorTree &DT,
+                                       unsigned MaxUsesToExplore) {
   assert(!isa<GlobalValue>(V) &&
          "It doesn't make sense to ask whether a global is captured.");
 
-  EarliestCaptures CB(ReturnCaptures, F, DT, EphValues);
+  EarliestCaptures CB(ReturnCaptures, F, DT);
   PointerMayBeCaptured(V, &CB, MaxUsesToExplore);
   if (CB.Captured)
     ++NumCapturedBefore;
   else
     ++NumNotCapturedBefore;
   return CB.EarliestCapture;
-}
-
-UseCaptureKind llvm::DetermineUseCaptureKind(
-    const Use &U,
-    function_ref<bool(Value *, const DataLayout &)> IsDereferenceableOrNull) {
-  Instruction *I = cast<Instruction>(U.getUser());
-
-  switch (I->getOpcode()) {
-  case Instruction::Call:
-  case Instruction::Invoke: {
-    auto *Call = cast<CallBase>(I);
-    // Not captured if the callee is readonly, doesn't return a copy through
-    // its return value and doesn't unwind (a readonly function can leak bits
-    // by throwing an exception or not depending on the input value).
-    if (Call->onlyReadsMemory() && Call->doesNotThrow() &&
-        Call->getType()->isVoidTy())
-      return UseCaptureKind::NO_CAPTURE;
-
-    // The pointer is not captured if returned pointer is not captured.
-    // NOTE: CaptureTracking users should not assume that only functions
-    // marked with nocapture do not capture. This means that places like
-    // getUnderlyingObject in ValueTracking or DecomposeGEPExpression
-    // in BasicAA also need to know about this property.
-    if (isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(Call, true))
-      return UseCaptureKind::PASSTHROUGH;
-
-    // Volatile operations effectively capture the memory location that they
-    // load and store to.
-    if (auto *MI = dyn_cast<MemIntrinsic>(Call))
-      if (MI->isVolatile())
-        return UseCaptureKind::MAY_CAPTURE;
-
-    // Calling a function pointer does not in itself cause the pointer to
-    // be captured.  This is a subtle point considering that (for example)
-    // the callee might return its own address.  It is analogous to saying
-    // that loading a value from a pointer does not cause the pointer to be
-    // captured, even though the loaded value might be the pointer itself
-    // (think of self-referential objects).
-    if (Call->isCallee(&U))
-      return UseCaptureKind::NO_CAPTURE;
-
-    // Not captured if only passed via 'nocapture' arguments.
-    if (Call->isDataOperand(&U) &&
-        !Call->doesNotCapture(Call->getDataOperandNo(&U))) {
-      // The parameter is not marked 'nocapture' - captured.
-      return UseCaptureKind::MAY_CAPTURE;
-    }
-    return UseCaptureKind::NO_CAPTURE;
-  }
-  case Instruction::Load:
-    // Volatile loads make the address observable.
-    if (cast<LoadInst>(I)->isVolatile())
-      return UseCaptureKind::MAY_CAPTURE;
-    return UseCaptureKind::NO_CAPTURE;
-  case Instruction::VAArg:
-    // "va-arg" from a pointer does not cause it to be captured.
-    return UseCaptureKind::NO_CAPTURE;
-  case Instruction::Store:
-    // Stored the pointer - conservatively assume it may be captured.
-    // Volatile stores make the address observable.
-    if (U.getOperandNo() == 0 || cast<StoreInst>(I)->isVolatile())
-      return UseCaptureKind::MAY_CAPTURE;
-    return UseCaptureKind::NO_CAPTURE;
-  case Instruction::AtomicRMW: {
-    // atomicrmw conceptually includes both a load and store from
-    // the same location.
-    // As with a store, the location being accessed is not captured,
-    // but the value being stored is.
-    // Volatile stores make the address observable.
-    auto *ARMWI = cast<AtomicRMWInst>(I);
-    if (U.getOperandNo() == 1 || ARMWI->isVolatile())
-      return UseCaptureKind::MAY_CAPTURE;
-    return UseCaptureKind::NO_CAPTURE;
-  }
-  case Instruction::AtomicCmpXchg: {
-    // cmpxchg conceptually includes both a load and store from
-    // the same location.
-    // As with a store, the location being accessed is not captured,
-    // but the value being stored is.
-    // Volatile stores make the address observable.
-    auto *ACXI = cast<AtomicCmpXchgInst>(I);
-    if (U.getOperandNo() == 1 || U.getOperandNo() == 2 || ACXI->isVolatile())
-      return UseCaptureKind::MAY_CAPTURE;
-    return UseCaptureKind::NO_CAPTURE;
-  }
-  case Instruction::BitCast:
-  case Instruction::GetElementPtr:
-  case Instruction::PHI:
-  case Instruction::Select:
-  case Instruction::AddrSpaceCast:
-    // The original value is not captured via this if the new value isn't.
-    return UseCaptureKind::PASSTHROUGH;
-  case Instruction::ICmp: {
-    unsigned Idx = U.getOperandNo();
-    unsigned OtherIdx = 1 - Idx;
-    if (auto *CPN = dyn_cast<ConstantPointerNull>(I->getOperand(OtherIdx))) {
-      // Don't count comparisons of a no-alias return value against null as
-      // captures. This allows us to ignore comparisons of malloc results
-      // with null, for example.
-      if (CPN->getType()->getAddressSpace() == 0)
-        if (isNoAliasCall(U.get()->stripPointerCasts()))
-          return UseCaptureKind::NO_CAPTURE;
-      if (!I->getFunction()->nullPointerIsDefined()) {
-        auto *O = I->getOperand(Idx)->stripPointerCastsSameRepresentation();
-        // Comparing a dereferenceable_or_null pointer against null cannot
-        // lead to pointer escapes, because if it is not null it must be a
-        // valid (in-bounds) pointer.
-        const DataLayout &DL = I->getModule()->getDataLayout();
-        if (IsDereferenceableOrNull && IsDereferenceableOrNull(O, DL))
-          return UseCaptureKind::NO_CAPTURE;
-      }
-    }
-    // Comparison against value stored in global variable. Given the pointer
-    // does not escape, its value cannot be guessed and stored separately in a
-    // global variable.
-    auto *LI = dyn_cast<LoadInst>(I->getOperand(OtherIdx));
-    if (LI && isa<GlobalVariable>(LI->getPointerOperand()))
-      return UseCaptureKind::NO_CAPTURE;
-    // Otherwise, be conservative. There are crazy ways to capture pointers
-    // using comparisons.
-    return UseCaptureKind::MAY_CAPTURE;
-  }
-  default:
-    // Something else - be conservative and say it is captured.
-    return UseCaptureKind::MAY_CAPTURE;
-  }
 }
 
 void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker,
@@ -445,10 +293,11 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker,
   SmallSet<const Use *, 20> Visited;
 
   auto AddUses = [&](const Value *V) {
+    unsigned Count = 0;
     for (const Use &U : V->uses()) {
       // If there are lots of uses, conservatively say that the value
       // is captured to avoid taking too much compile time.
-      if (Visited.size()  >= MaxUsesToExplore) {
+      if (Count++ >= MaxUsesToExplore) {
         Tracker->tooManyUses();
         return false;
       }
@@ -463,22 +312,144 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker,
   if (!AddUses(V))
     return;
 
-  auto IsDereferenceableOrNull = [Tracker](Value *V, const DataLayout &DL) {
-    return Tracker->isDereferenceableOrNull(V, DL);
-  };
   while (!Worklist.empty()) {
     const Use *U = Worklist.pop_back_val();
-    switch (DetermineUseCaptureKind(*U, IsDereferenceableOrNull)) {
-    case UseCaptureKind::NO_CAPTURE:
-      continue;
-    case UseCaptureKind::MAY_CAPTURE:
+    Instruction *I = cast<Instruction>(U->getUser());
+
+    switch (I->getOpcode()) {
+    case Instruction::Call:
+    case Instruction::Invoke: {
+      auto *Call = cast<CallBase>(I);
+      // Not captured if the callee is readonly, doesn't return a copy through
+      // its return value and doesn't unwind (a readonly function can leak bits
+      // by throwing an exception or not depending on the input value).
+      if (Call->onlyReadsMemory() && Call->doesNotThrow() &&
+          Call->getType()->isVoidTy())
+        break;
+
+      // The pointer is not captured if returned pointer is not captured.
+      // NOTE: CaptureTracking users should not assume that only functions
+      // marked with nocapture do not capture. This means that places like
+      // getUnderlyingObject in ValueTracking or DecomposeGEPExpression
+      // in BasicAA also need to know about this property.
+      if (isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(Call,
+                                                                      true)) {
+        if (!AddUses(Call))
+          return;
+        break;
+      }
+
+      // Volatile operations effectively capture the memory location that they
+      // load and store to.
+      if (auto *MI = dyn_cast<MemIntrinsic>(Call))
+        if (MI->isVolatile())
+          if (Tracker->captured(U))
+            return;
+
+      // Calling a function pointer does not in itself cause the pointer to
+      // be captured.  This is a subtle point considering that (for example)
+      // the callee might return its own address.  It is analogous to saying
+      // that loading a value from a pointer does not cause the pointer to be
+      // captured, even though the loaded value might be the pointer itself
+      // (think of self-referential objects).
+      if (Call->isCallee(U))
+        break;
+
+      // Not captured if only passed via 'nocapture' arguments.
+      if (Call->isDataOperand(U) &&
+          !Call->doesNotCapture(Call->getDataOperandNo(U))) {
+        // The parameter is not marked 'nocapture' - captured.
+        if (Tracker->captured(U))
+          return;
+      }
+      break;
+    }
+    case Instruction::Load:
+      // Volatile loads make the address observable.
+      if (cast<LoadInst>(I)->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    case Instruction::VAArg:
+      // "va-arg" from a pointer does not cause it to be captured.
+      break;
+    case Instruction::Store:
+      // Stored the pointer - conservatively assume it may be captured.
+      // Volatile stores make the address observable.
+      if (U->getOperandNo() == 0 || cast<StoreInst>(I)->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    case Instruction::AtomicRMW: {
+      // atomicrmw conceptually includes both a load and store from
+      // the same location.
+      // As with a store, the location being accessed is not captured,
+      // but the value being stored is.
+      // Volatile stores make the address observable.
+      auto *ARMWI = cast<AtomicRMWInst>(I);
+      if (U->getOperandNo() == 1 || ARMWI->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    }
+    case Instruction::AtomicCmpXchg: {
+      // cmpxchg conceptually includes both a load and store from
+      // the same location.
+      // As with a store, the location being accessed is not captured,
+      // but the value being stored is.
+      // Volatile stores make the address observable.
+      auto *ACXI = cast<AtomicCmpXchgInst>(I);
+      if (U->getOperandNo() == 1 || U->getOperandNo() == 2 ||
+          ACXI->isVolatile())
+        if (Tracker->captured(U))
+          return;
+      break;
+    }
+    case Instruction::BitCast:
+    case Instruction::GetElementPtr:
+    case Instruction::PHI:
+    case Instruction::Select:
+    case Instruction::AddrSpaceCast:
+      // The original value is not captured via this if the new value isn't.
+      if (!AddUses(I))
+        return;
+      break;
+    case Instruction::ICmp: {
+      unsigned Idx = U->getOperandNo();
+      unsigned OtherIdx = 1 - Idx;
+      if (auto *CPN = dyn_cast<ConstantPointerNull>(I->getOperand(OtherIdx))) {
+        // Don't count comparisons of a no-alias return value against null as
+        // captures. This allows us to ignore comparisons of malloc results
+        // with null, for example.
+        if (CPN->getType()->getAddressSpace() == 0)
+          if (isNoAliasCall(U->get()->stripPointerCasts()))
+            break;
+        if (!I->getFunction()->nullPointerIsDefined()) {
+          auto *O = I->getOperand(Idx)->stripPointerCastsSameRepresentation();
+          // Comparing a dereferenceable_or_null pointer against null cannot
+          // lead to pointer escapes, because if it is not null it must be a
+          // valid (in-bounds) pointer.
+          if (Tracker->isDereferenceableOrNull(O, I->getModule()->getDataLayout()))
+            break;
+        }
+      }
+      // Comparison against value stored in global variable. Given the pointer
+      // does not escape, its value cannot be guessed and stored separately in a
+      // global variable.
+      auto *LI = dyn_cast<LoadInst>(I->getOperand(OtherIdx));
+      if (LI && isa<GlobalVariable>(LI->getPointerOperand()))
+        break;
+      // Otherwise, be conservative. There are crazy ways to capture pointers
+      // using comparisons.
       if (Tracker->captured(U))
         return;
-      continue;
-    case UseCaptureKind::PASSTHROUGH:
-      if (!AddUses(U->getUser()))
+      break;
+    }
+    default:
+      // Something else - be conservative and say it is captured.
+      if (Tracker->captured(U))
         return;
-      continue;
+      break;
     }
   }
 

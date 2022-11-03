@@ -63,6 +63,7 @@ bool InOrderIssueStage::isAvailable(const InstRef &IR) const {
 
   const Instruction &Inst = *IR.getInstruction();
   unsigned NumMicroOps = Inst.getNumMicroOps();
+  const InstrDesc &Desc = Inst.getDesc();
 
   bool ShouldCarryOver = NumMicroOps > getIssueWidth();
   if (Bandwidth < NumMicroOps && !ShouldCarryOver)
@@ -70,7 +71,7 @@ bool InOrderIssueStage::isAvailable(const InstRef &IR) const {
 
   // Instruction with BeginGroup must be the first instruction to be issued in a
   // cycle.
-  if (Inst.getBeginGroup() && NumIssued != 0)
+  if (Desc.BeginGroup && NumIssued != 0)
     return false;
 
   return true;
@@ -139,7 +140,7 @@ bool InOrderIssueStage::canExecute(const InstRef &IR) {
   }
 
   if (LastWriteBackCycle) {
-    if (!IR.getInstruction()->getRetireOOO()) {
+    if (!IR.getInstruction()->getDesc().RetireOOO) {
       unsigned NextWriteBackCycle = findFirstWriteBackCycle(IR);
       // Delay the instruction to ensure that writes happen in program order.
       if (NextWriteBackCycle < LastWriteBackCycle) {
@@ -253,7 +254,7 @@ llvm::Error InOrderIssueStage::tryIssue(InstRef &IR) {
     LLVM_DEBUG(dbgs() << "[N] Carry over #" << IR << " \n");
   } else {
     NumIssued += NumMicroOps;
-    Bandwidth = IS.getEndGroup() ? 0 : Bandwidth - NumMicroOps;
+    Bandwidth = Desc.EndGroup ? 0 : Bandwidth - NumMicroOps;
   }
 
   // If the instruction has a latency of 0, we need to handle
@@ -271,7 +272,7 @@ llvm::Error InOrderIssueStage::tryIssue(InstRef &IR) {
 
   IssuedInst.push_back(IR);
 
-  if (!IR.getInstruction()->getRetireOOO())
+  if (!IR.getInstruction()->getDesc().RetireOOO)
     LastWriteBackCycle = IS.getCyclesLeft();
 
   return llvm::ErrorSuccess();
@@ -324,7 +325,7 @@ void InOrderIssueStage::updateCarriedOver() {
 
   LLVM_DEBUG(dbgs() << "[N] Carry over (complete) #" << CarriedOver << " \n");
 
-  if (CarriedOver.getInstruction()->getEndGroup())
+  if (CarriedOver.getInstruction()->getDesc().EndGroup)
     Bandwidth = 0;
   else
     Bandwidth -= CarryOver;

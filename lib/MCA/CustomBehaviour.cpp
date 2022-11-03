@@ -16,7 +16,7 @@
 namespace llvm {
 namespace mca {
 
-CustomBehaviour::~CustomBehaviour() = default;
+CustomBehaviour::~CustomBehaviour() {}
 
 unsigned CustomBehaviour::checkCustomHazard(ArrayRef<InstRef> IssuedInst,
                                             const InstRef &IR) {

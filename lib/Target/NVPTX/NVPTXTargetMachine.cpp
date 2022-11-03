@@ -237,7 +237,7 @@ void NVPTXTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
 }
 
 TargetTransformInfo
-NVPTXTargetMachine::getTargetTransformInfo(const Function &F) const {
+NVPTXTargetMachine::getTargetTransformInfo(const Function &F) {
   return TargetTransformInfo(NVPTXTTIImpl(this, F));
 }
 
@@ -329,8 +329,6 @@ void NVPTXPassConfig::addIRPasses() {
     addAddressSpaceInferencePasses();
     addStraightLineScalarOptimizationPasses();
   }
-
-  addPass(createAtomicExpandPass());
 
   // === LSR and other generic IR passes ===
   TargetPassConfig::addIRPasses();

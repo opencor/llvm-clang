@@ -245,8 +245,8 @@ demanglePointerCVQualifiers(StringView &MangledName) {
 }
 
 StringView Demangler::copyString(StringView Borrowed) {
-  char *Stable = Arena.allocUnalignedBuffer(Borrowed.size());
-  std::memcpy(Stable, Borrowed.begin(), Borrowed.size());
+  char *Stable = Arena.allocUnalignedBuffer(Borrowed.size() + 1);
+  std::strcpy(Stable, Borrowed.begin());
 
   return {Stable, Borrowed.size()};
 }
@@ -823,15 +823,11 @@ SymbolNode *Demangler::parse(StringView &MangledName) {
 }
 
 TagTypeNode *Demangler::parseTagUniqueName(StringView &MangledName) {
-  if (!MangledName.consumeFront(".?A")) {
-    Error = true;
+  if (!MangledName.consumeFront(".?A"))
     return nullptr;
-  }
   MangledName.consumeFront(".?A");
-  if (MangledName.empty()) {
-    Error = true;
+  if (MangledName.empty())
     return nullptr;
-  }
 
   return demangleClassType(MangledName);
 }
@@ -974,9 +970,12 @@ void Demangler::memorizeIdentifier(IdentifierNode *Identifier) {
     // FIXME: Propagate out-of-memory as an error?
     std::terminate();
   Identifier->output(OB, OF_Default);
-  StringView Owned = copyString(OB);
+  OB << '\0';
+  char *Name = OB.getBuffer();
+
+  StringView Owned = copyString(Name);
   memorizeString(Owned);
-  std::free(OB.getBuffer());
+  std::free(Name);
 }
 
 IdentifierNode *
@@ -1280,6 +1279,7 @@ Demangler::demangleStringLiteral(StringView &MangledName) {
   bool IsWcharT = false;
   bool IsNegative = false;
   size_t CrcEndPos = 0;
+  char *ResultBuffer = nullptr;
 
   EncodedStringLiteralNode *Result = Arena.alloc<EncodedStringLiteralNode>();
 
@@ -1375,8 +1375,10 @@ Demangler::demangleStringLiteral(StringView &MangledName) {
     }
   }
 
-  Result->DecodedString = copyString(OB);
-  std::free(OB.getBuffer());
+  OB << '\0';
+  ResultBuffer = OB.getBuffer();
+  Result->DecodedString = copyString(ResultBuffer);
+  std::free(ResultBuffer);
   return Result;
 
 StringLiteralError:
@@ -1453,9 +1455,10 @@ Demangler::demangleLocallyScopedNamePiece(StringView &MangledName) {
   Scope->output(OB, OF_Default);
   OB << '\'';
   OB << "::`" << Number << "'";
-
-  Identifier->Name = copyString(OB);
-  std::free(OB.getBuffer());
+  OB << '\0';
+  char *Result = OB.getBuffer();
+  Identifier->Name = copyString(Result);
+  std::free(Result);
   return Identifier;
 }
 
@@ -2319,8 +2322,8 @@ void Demangler::dumpBackReferences() {
     TypeNode *T = Backrefs.FunctionParams[I];
     T->output(OB, OF_Default);
 
-    StringView B = OB;
-    std::printf("  [%d] - %.*s\n", (int)I, (int)B.size(), B.begin());
+    std::printf("  [%d] - %.*s\n", (int)I, (int)OB.getCurrentPosition(),
+                OB.getBuffer());
   }
   std::free(OB.getBuffer());
 

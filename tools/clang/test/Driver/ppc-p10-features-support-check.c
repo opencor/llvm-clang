@@ -38,7 +38,7 @@
 // RUN:   -mpcrel -mprefixed %s 2>&1 | FileCheck %s \
 // RUN:   --check-prefix=NOPCREL-PREFIX
 
-int test_p10_features(void) {
+int test_p10_features() {
   return 0;
 }
 

@@ -18,11 +18,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/LowerMatrixIntrinsics.h"
+#include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/DomTreeUpdater.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -338,9 +338,6 @@ class LowerMatrixIntrinsics {
     Value *extractVector(unsigned I, unsigned J, unsigned NumElts,
                          IRBuilder<> &Builder) const {
       Value *Vec = isColumnMajor() ? getColumn(J) : getRow(I);
-      assert(cast<FixedVectorType>(Vec->getType())->getNumElements() >=
-                 NumElts &&
-             "Extracted vector will contain poison values");
       return Builder.CreateShuffleVector(
           Vec, createSequentialMask(isColumnMajor() ? I : J, NumElts, 0),
           "block");
@@ -707,10 +704,10 @@ public:
         // We may remove II.  By default continue on the next/prev instruction.
         ++II;
         // If we were to erase II, move again.
-        auto EraseFromParent = [&II, &BB](Value *V) {
+        auto EraseFromParent = [&II](Value *V) {
           auto *Inst = cast<Instruction>(V);
           if (Inst->use_empty()) {
-            if (II != BB.rend() && Inst == &*II) {
+            if (Inst == &*II) {
               ++II;
             }
             Inst->eraseFromParent();
@@ -721,7 +718,7 @@ public:
         Instruction *NewInst = nullptr;
 
         IRBuilder<> IB(&I);
-        MatrixBuilder Builder(IB);
+        MatrixBuilder<IRBuilder<>> Builder(IB);
 
         Value *TA, *TAMA, *TAMB;
         ConstantInt *R, *K, *C;
@@ -769,25 +766,28 @@ public:
     // If we have a TT matmul, lift the transpose.  We may be able to fold into
     // consuming multiply.
     for (BasicBlock &BB : Func) {
-      for (Instruction &I : llvm::make_early_inc_range(BB)) {
+      for (BasicBlock::iterator II = BB.begin(); II != BB.end();) {
+        Instruction *I = &*II;
+        // We may remove I.
+        ++II;
         Value *A, *B, *AT, *BT;
         ConstantInt *R, *K, *C;
         // A^t * B ^t -> (B * A)^t
-        if (match(&I, m_Intrinsic<Intrinsic::matrix_multiply>(
-                          m_Value(A), m_Value(B), m_ConstantInt(R),
-                          m_ConstantInt(K), m_ConstantInt(C))) &&
+        if (match(&*I, m_Intrinsic<Intrinsic::matrix_multiply>(
+                           m_Value(A), m_Value(B), m_ConstantInt(R),
+                           m_ConstantInt(K), m_ConstantInt(C))) &&
             match(A, m_Intrinsic<Intrinsic::matrix_transpose>(m_Value(AT))) &&
             match(B, m_Intrinsic<Intrinsic::matrix_transpose>(m_Value((BT))))) {
-          IRBuilder<> IB(&I);
-          MatrixBuilder Builder(IB);
+          IRBuilder<> IB(&*I);
+          MatrixBuilder<IRBuilder<>> Builder(IB);
           Value *M = Builder.CreateMatrixMultiply(
               BT, AT, C->getZExtValue(), K->getZExtValue(), R->getZExtValue());
           setShapeInfo(M, {C, R});
           Instruction *NewInst = Builder.CreateMatrixTranspose(
               M, C->getZExtValue(), R->getZExtValue());
-          ReplaceAllUsesWith(I, NewInst);
-          if (I.use_empty())
-            I.eraseFromParent();
+          ReplaceAllUsesWith(*I, NewInst);
+          if (I->use_empty())
+            I->eraseFromParent();
           if (A->use_empty())
             cast<Instruction>(A)->eraseFromParent();
           if (A != B && B->use_empty())
@@ -891,27 +891,27 @@ public:
     // having to update as many def-use and use-def chains.
     //
     // Because we add to ToRemove during fusion we can't guarantee that defs
-    // are before uses.  Change uses to poison temporarily as these should get
+    // are before uses.  Change uses to undef temporarily as these should get
     // removed as well.
     //
-    // For verification, we keep track of where we changed uses to poison in
-    // PoisonedInsts and then check that we in fact remove them.
-    SmallSet<Instruction *, 16> PoisonedInsts;
+    // For verification, we keep track of where we changed uses to undefs in
+    // UndefedInsts and then check that we in fact remove them.
+    SmallSet<Instruction *, 16> UndefedInsts;
     for (auto *Inst : reverse(ToRemove)) {
       for (Use &U : llvm::make_early_inc_range(Inst->uses())) {
-        if (auto *Poisoned = dyn_cast<Instruction>(U.getUser()))
-          PoisonedInsts.insert(Poisoned);
-        U.set(PoisonValue::get(Inst->getType()));
+        if (auto *Undefed = dyn_cast<Instruction>(U.getUser()))
+          UndefedInsts.insert(Undefed);
+        U.set(UndefValue::get(Inst->getType()));
       }
       Inst->eraseFromParent();
-      PoisonedInsts.erase(Inst);
+      UndefedInsts.erase(Inst);
     }
-    if (!PoisonedInsts.empty()) {
-      // If we didn't remove all poisoned instructions, it's a hard error.
-      dbgs() << "Poisoned but present instructions:\n";
-      for (auto *I : PoisonedInsts)
+    if (!UndefedInsts.empty()) {
+      // If we didn't remove all undefed instructions, it's a hard error.
+      dbgs() << "Undefed but present instructions:\n";
+      for (auto *I : UndefedInsts)
         dbgs() << *I << "\n";
-      llvm_unreachable("Poisoned but instruction not removed");
+      llvm_unreachable("Undefed but instruction not removed");
     }
 
     return Changed;
@@ -1426,13 +1426,13 @@ public:
         FixedVectorType::get(MatMul->getType()->getScalarType(), TileSize);
     MatrixTy TileResult;
     // Insert in the inner loop header.
-    Builder.SetInsertPoint(TI.KLoop.Header->getTerminator());
+    Builder.SetInsertPoint(TI.InnerLoopHeader->getTerminator());
     // Create PHI nodes for the result columns to accumulate across iterations.
     SmallVector<PHINode *, 4> ColumnPhis;
     for (unsigned I = 0; I < TileSize; I++) {
       auto *Phi = Builder.CreatePHI(TileVecTy, 2, "result.vec." + Twine(I));
       Phi->addIncoming(ConstantAggregateZero::get(TileVecTy),
-                       TI.RowLoop.Header->getSingleSuccessor());
+                       TI.RowLoopHeader->getSingleSuccessor());
       TileResult.addVector(Phi);
       ColumnPhis.push_back(Phi);
     }
@@ -1441,29 +1441,27 @@ public:
     //   Res += Load(CurrentRow, K) * Load(K, CurrentColumn)
     Builder.SetInsertPoint(InnerBody->getTerminator());
     // Load tiles of the operands.
-    MatrixTy A =
-        loadMatrix(LPtr, {}, false, LShape, TI.RowLoop.Index, TI.KLoop.Index,
-                   {TileSize, TileSize}, EltType, Builder);
-    MatrixTy B =
-        loadMatrix(RPtr, {}, false, RShape, TI.KLoop.Index, TI.ColumnLoop.Index,
-                   {TileSize, TileSize}, EltType, Builder);
+    MatrixTy A = loadMatrix(LPtr, {}, false, LShape, TI.CurrentRow, TI.CurrentK,
+                            {TileSize, TileSize}, EltType, Builder);
+    MatrixTy B = loadMatrix(RPtr, {}, false, RShape, TI.CurrentK, TI.CurrentCol,
+                            {TileSize, TileSize}, EltType, Builder);
     emitMatrixMultiply(TileResult, A, B, Builder, true, false,
                        getFastMathFlags(MatMul));
     // Store result after the inner loop is done.
-    Builder.SetInsertPoint(TI.RowLoop.Latch->getTerminator());
+    Builder.SetInsertPoint(TI.RowLoopLatch->getTerminator());
     storeMatrix(TileResult, Store->getPointerOperand(), Store->getAlign(),
                 Store->isVolatile(), {LShape.NumRows, RShape.NumColumns},
-                TI.RowLoop.Index, TI.ColumnLoop.Index, EltType, Builder);
+                TI.CurrentRow, TI.CurrentCol, EltType, Builder);
 
     for (unsigned I = 0; I < TileResult.getNumVectors(); I++)
-      ColumnPhis[I]->addIncoming(TileResult.getVector(I), TI.KLoop.Latch);
+      ColumnPhis[I]->addIncoming(TileResult.getVector(I), TI.InnerLoopLatch);
 
     // Force unrolling of a few iterations of the inner loop, to make sure there
     // is enough work per iteration.
     // FIXME: The unroller should make this decision directly instead, but
     // currently the cost-model is not up to the task.
     unsigned InnerLoopUnrollCount = std::min(10u, LShape.NumColumns / TileSize);
-    addStringMetadataToLoop(LI->getLoopFor(TI.KLoop.Header),
+    addStringMetadataToLoop(LI->getLoopFor(TI.InnerLoopHeader),
                             "llvm.loop.unroll.count", InnerLoopUnrollCount);
   }
 
@@ -1672,7 +1670,7 @@ public:
 
     for (unsigned I = 0; I < NewNumVecs; ++I) {
       // Build a single result vector. First initialize it.
-      Value *ResultVector = PoisonValue::get(
+      Value *ResultVector = UndefValue::get(
           FixedVectorType::get(VectorTy->getElementType(), NewNumElts));
       // Go through the old elements and insert it into the resulting vector.
       for (auto J : enumerate(InputMatrix.vectors())) {

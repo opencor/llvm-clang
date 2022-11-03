@@ -259,38 +259,49 @@ TEST_F(CommandLineTest, BoolOptionDefaultFalsePresentNegReset) {
 // The flag with positive spelling can set the keypath to true.
 // The flag with negative spelling can set the keypath to false.
 
+static constexpr unsigned PassManagerDefault =
+    !static_cast<unsigned>(LLVM_ENABLE_NEW_PASS_MANAGER);
+
+static constexpr const char *PassManagerResetByFlag =
+    LLVM_ENABLE_NEW_PASS_MANAGER ? "-fno-legacy-pass-manager"
+                                 : "-flegacy-pass-manager";
+
+static constexpr const char *PassManagerChangedByFlag =
+    LLVM_ENABLE_NEW_PASS_MANAGER ? "-flegacy-pass-manager"
+                                 : "-fno-legacy-pass-manager";
+
 TEST_F(CommandLineTest, BoolOptionDefaultArbitraryTwoFlagsPresentNone) {
   const char *Args = {""};
 
   ASSERT_TRUE(CompilerInvocation::CreateFromArgs(Invocation, Args, *Diags));
-  ASSERT_EQ(Invocation.getCodeGenOpts().ClearASTBeforeBackend, false);
+  ASSERT_EQ(Invocation.getCodeGenOpts().LegacyPassManager, PassManagerDefault);
 
   Invocation.generateCC1CommandLine(GeneratedArgs, *this);
 
-  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq("-no-clear-ast-before-backend"))));
-  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq("-clear-ast-before-backend"))));
+  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq(PassManagerResetByFlag))));
+  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq(PassManagerChangedByFlag))));
 }
 
 TEST_F(CommandLineTest, BoolOptionDefaultArbitraryTwoFlagsPresentChange) {
-  const char *Args[] = {"-clear-ast-before-backend"};
+  const char *Args[] = {PassManagerChangedByFlag};
 
   ASSERT_TRUE(CompilerInvocation::CreateFromArgs(Invocation, Args, *Diags));
-  ASSERT_EQ(Invocation.getCodeGenOpts().ClearASTBeforeBackend, true);
+  ASSERT_EQ(Invocation.getCodeGenOpts().LegacyPassManager, !PassManagerDefault);
 
   Invocation.generateCC1CommandLine(GeneratedArgs, *this);
-  ASSERT_THAT(GeneratedArgs, Contains(StrEq("-clear-ast-before-backend")));
-  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq("-no-clear-ast-before-backend"))));
+  ASSERT_THAT(GeneratedArgs, Contains(StrEq(PassManagerChangedByFlag)));
+  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq(PassManagerResetByFlag))));
 }
 
 TEST_F(CommandLineTest, BoolOptionDefaultArbitraryTwoFlagsPresentReset) {
-  const char *Args[] = {"-no-clear-ast-before-backend"};
+  const char *Args[] = {PassManagerResetByFlag};
 
   ASSERT_TRUE(CompilerInvocation::CreateFromArgs(Invocation, Args, *Diags));
-  ASSERT_EQ(Invocation.getCodeGenOpts().ClearASTBeforeBackend, false);
+  ASSERT_EQ(Invocation.getCodeGenOpts().LegacyPassManager, PassManagerDefault);
 
   Invocation.generateCC1CommandLine(GeneratedArgs, *this);
-  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq("-no-clear-ast-before-backend"))));
-  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq("-clear-ast-before-backend"))));
+  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq(PassManagerResetByFlag))));
+  ASSERT_THAT(GeneratedArgs, Not(Contains(StrEq(PassManagerChangedByFlag))));
 }
 
 // Boolean option that gets the CC1Option flag from a let statement (which

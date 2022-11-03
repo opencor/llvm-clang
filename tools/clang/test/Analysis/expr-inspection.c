@@ -6,16 +6,12 @@
 
 void clang_analyzer_dump(int x);
 void clang_analyzer_dump_pointer(int *p);
-void clang_analyzer_dumpSvalType(int x);
-void clang_analyzer_dumpSvalType_pointer(int *p);
-void clang_analyzer_printState(void);
-void clang_analyzer_numTimesReached(void);
+void clang_analyzer_printState();
+void clang_analyzer_numTimesReached();
 
 void foo(int x) {
   clang_analyzer_dump(x); // expected-warning{{reg_$0<int x>}}
-  clang_analyzer_dump(x + (-1)); // expected-warning{{(reg_$0<int x>) - 1}}
-  clang_analyzer_dumpSvalType(x); // expected-warning {{int}}
-
+  clang_analyzer_dump(x + (-1)); // expected-warning{{(reg_$0<int x>) + -1}}
   int y = 1;
   for (; y < 3; ++y) {
     clang_analyzer_numTimesReached(); // expected-warning{{2}}
@@ -31,7 +27,7 @@ void foo(int x) {
 // CHECK:      "program_state": {
 // CHECK-NEXT:   "store": { "pointer": "{{0x[0-9a-f]+}}", "items": [
 // CHECK-NEXT:     { "cluster": "y", "pointer": "{{0x[0-9a-f]+}}", "items": [
-// CHECK-NEXT:       { "kind": "Direct", "offset": {{[0-9]+}}, "value": "2 S32b" }
+// CHECK-NEXT:       { "kind": "Direct", "offset": 0, "value": "2 S32b" }
 // CHECK-NEXT:     ]}
 // CHECK-NEXT:   ]},
 // CHECK-NEXT:   "environment": { "pointer": "{{0x[0-9a-f]+}}", "items": [
@@ -47,7 +43,6 @@ void foo(int x) {
 // CHECK-NEXT:   "dynamic_types": null,
 // CHECK-NEXT:   "dynamic_casts": null,
 // CHECK-NEXT:   "constructing_objects": null,
-// CHECK-NEXT:   "index_of_element": null,
 // CHECK-NEXT:   "checker_messages": null
 // CHECK-NEXT: }
 
@@ -58,5 +53,4 @@ struct S {
 void test_field_dumps(struct S s, struct S *p) {
   clang_analyzer_dump_pointer(&s.x); // expected-warning{{&s.x}}
   clang_analyzer_dump_pointer(&p->x); // expected-warning{{&SymRegion{reg_$1<struct S * p>}.x}}
-  clang_analyzer_dumpSvalType_pointer(&s.x); // expected-warning {{int *}}
 }

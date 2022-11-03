@@ -8,6 +8,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
@@ -29,6 +30,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <system_error>
 
 #define DEBUG_TYPE "wasm-object"
 
@@ -164,25 +166,23 @@ static uint8_t readOpcode(WasmObjectFile::ReadContext &Ctx) {
 
 static Error readInitExpr(wasm::WasmInitExpr &Expr,
                           WasmObjectFile::ReadContext &Ctx) {
-  auto Start = Ctx.Ptr;
+  Expr.Opcode = readOpcode(Ctx);
 
-  Expr.Extended = false;
-  Expr.Inst.Opcode = readOpcode(Ctx);
-  switch (Expr.Inst.Opcode) {
+  switch (Expr.Opcode) {
   case wasm::WASM_OPCODE_I32_CONST:
-    Expr.Inst.Value.Int32 = readVarint32(Ctx);
+    Expr.Value.Int32 = readVarint32(Ctx);
     break;
   case wasm::WASM_OPCODE_I64_CONST:
-    Expr.Inst.Value.Int64 = readVarint64(Ctx);
+    Expr.Value.Int64 = readVarint64(Ctx);
     break;
   case wasm::WASM_OPCODE_F32_CONST:
-    Expr.Inst.Value.Float32 = readFloat32(Ctx);
+    Expr.Value.Float32 = readFloat32(Ctx);
     break;
   case wasm::WASM_OPCODE_F64_CONST:
-    Expr.Inst.Value.Float64 = readFloat64(Ctx);
+    Expr.Value.Float64 = readFloat64(Ctx);
     break;
   case wasm::WASM_OPCODE_GLOBAL_GET:
-    Expr.Inst.Value.Global = readULEB128(Ctx);
+    Expr.Value.Global = readULEB128(Ctx);
     break;
   case wasm::WASM_OPCODE_REF_NULL: {
     wasm::ValType Ty = static_cast<wasm::ValType>(readULEB128(Ctx));
@@ -193,46 +193,15 @@ static Error readInitExpr(wasm::WasmInitExpr &Expr,
     break;
   }
   default:
-    Expr.Extended = true;
+    return make_error<GenericBinaryError>("invalid opcode in init_expr",
+                                          object_error::parse_failed);
   }
 
-  if (!Expr.Extended) {
-    uint8_t EndOpcode = readOpcode(Ctx);
-    if (EndOpcode != wasm::WASM_OPCODE_END)
-      Expr.Extended = true;
+  uint8_t EndOpcode = readOpcode(Ctx);
+  if (EndOpcode != wasm::WASM_OPCODE_END) {
+    return make_error<GenericBinaryError>("invalid init_expr",
+                                          object_error::parse_failed);
   }
-
-  if (Expr.Extended) {
-    Ctx.Ptr = Start;
-    while (true) {
-      uint8_t Opcode = readOpcode(Ctx);
-      switch (Opcode) {
-      case wasm::WASM_OPCODE_I32_CONST:
-      case wasm::WASM_OPCODE_GLOBAL_GET:
-      case wasm::WASM_OPCODE_REF_NULL:
-      case wasm::WASM_OPCODE_I64_CONST:
-      case wasm::WASM_OPCODE_F32_CONST:
-      case wasm::WASM_OPCODE_F64_CONST:
-        readULEB128(Ctx);
-        break;
-      case wasm::WASM_OPCODE_I32_ADD:
-      case wasm::WASM_OPCODE_I32_SUB:
-      case wasm::WASM_OPCODE_I32_MUL:
-      case wasm::WASM_OPCODE_I64_ADD:
-      case wasm::WASM_OPCODE_I64_SUB:
-      case wasm::WASM_OPCODE_I64_MUL:
-        break;
-      case wasm::WASM_OPCODE_END:
-        Expr.Body = ArrayRef<uint8_t>(Start, Ctx.Ptr - Start);
-        return Error::success();
-      default:
-        return make_error<GenericBinaryError>(
-            Twine("invalid opcode in init_expr: ") + Twine(unsigned(Opcode)),
-            object_error::parse_failed);
-      }
-    }
-  }
-
   return Error::success();
 }
 
@@ -451,6 +420,10 @@ Error WasmObjectFile::parseNameSection(ReadContext &Ctx) {
   llvm::DenseSet<uint64_t> SeenFunctions;
   llvm::DenseSet<uint64_t> SeenGlobals;
   llvm::DenseSet<uint64_t> SeenSegments;
+  if (Functions.size() && !SeenCodeSection) {
+    return make_error<GenericBinaryError>("names must come after code section",
+                                          object_error::parse_failed);
+  }
 
   while (Ctx.Ptr < Ctx.End) {
     uint8_t Type = readUint8(Ctx);
@@ -470,7 +443,7 @@ Error WasmObjectFile::parseNameSection(ReadContext &Ctx) {
             return make_error<GenericBinaryError>(
                 "function named more than once", object_error::parse_failed);
           if (!isValidFunctionIndex(Index) || Name.empty())
-            return make_error<GenericBinaryError>("invalid function name entry",
+            return make_error<GenericBinaryError>("invalid name entry",
                                                   object_error::parse_failed);
 
           if (isDefinedFunctionIndex(Index))
@@ -481,7 +454,7 @@ Error WasmObjectFile::parseNameSection(ReadContext &Ctx) {
             return make_error<GenericBinaryError>("global named more than once",
                                                   object_error::parse_failed);
           if (!isValidGlobalIndex(Index) || Name.empty())
-            return make_error<GenericBinaryError>("invalid global name entry",
+            return make_error<GenericBinaryError>("invalid name entry",
                                                   object_error::parse_failed);
         } else {
           nameType = wasm::NameType::DATA_SEGMENT;
@@ -489,7 +462,7 @@ Error WasmObjectFile::parseNameSection(ReadContext &Ctx) {
             return make_error<GenericBinaryError>(
                 "segment named more than once", object_error::parse_failed);
           if (Index > DataSegments.size())
-            return make_error<GenericBinaryError>("invalid data segment name entry",
+            return make_error<GenericBinaryError>("invalid named data segment",
                                                   object_error::parse_failed);
         }
         DebugNames.push_back(wasm::WasmDebugName{nameType, Index, Name});
@@ -515,6 +488,11 @@ Error WasmObjectFile::parseNameSection(ReadContext &Ctx) {
 
 Error WasmObjectFile::parseLinkingSection(ReadContext &Ctx) {
   HasLinkingSection = true;
+  if (Functions.size() && !SeenCodeSection) {
+    return make_error<GenericBinaryError>(
+        "linking data must come after code section",
+        object_error::parse_failed);
+  }
 
   LinkingData.Version = readVaruint32(Ctx);
   if (LinkingData.Version != wasm::WasmMetadataVersion) {
@@ -1401,6 +1379,7 @@ Error WasmObjectFile::parseStartSection(ReadContext &Ctx) {
 }
 
 Error WasmObjectFile::parseCodeSection(ReadContext &Ctx) {
+  SeenCodeSection = true;
   CodeSection = Sections.size();
   uint32_t FunctionCount = readVaruint32(Ctx);
   if (FunctionCount != Functions.size()) {
@@ -1464,9 +1443,8 @@ Error WasmObjectFile::parseElemSection(ReadContext &Ctx) {
                                             object_error::parse_failed);
 
     if (Segment.Flags & wasm::WASM_ELEM_SEGMENT_IS_PASSIVE) {
-      Segment.Offset.Extended = false;
-      Segment.Offset.Inst.Opcode = wasm::WASM_OPCODE_I32_CONST;
-      Segment.Offset.Inst.Value.Int32 = 0;
+      Segment.Offset.Opcode = wasm::WASM_OPCODE_I32_CONST;
+      Segment.Offset.Value.Int32 = 0;
     } else {
       if (Error Err = readInitExpr(Segment.Offset, Ctx))
         return Err;
@@ -1510,7 +1488,7 @@ Error WasmObjectFile::parseElemSection(ReadContext &Ctx) {
 Error WasmObjectFile::parseDataSection(ReadContext &Ctx) {
   DataSection = Sections.size();
   uint32_t Count = readVaruint32(Ctx);
-  if (DataCount && Count != *DataCount)
+  if (DataCount && Count != DataCount.getValue())
     return make_error<GenericBinaryError>(
         "number of data segments does not match DataCount section");
   DataSegments.reserve(Count);
@@ -1525,9 +1503,8 @@ Error WasmObjectFile::parseDataSection(ReadContext &Ctx) {
       if (Error Err = readInitExpr(Segment.Data.Offset, Ctx))
         return Err;
     } else {
-      Segment.Data.Offset.Extended = false;
-      Segment.Data.Offset.Inst.Opcode = wasm::WASM_OPCODE_I32_CONST;
-      Segment.Data.Offset.Inst.Value.Int32 = 0;
+      Segment.Data.Offset.Opcode = wasm::WASM_OPCODE_I32_CONST;
+      Segment.Data.Offset.Value.Int32 = 0;
     }
     uint32_t Size = readVaruint32(Ctx);
     if (Size > (size_t)(Ctx.End - Ctx.Ptr))
@@ -1625,12 +1602,10 @@ uint64_t WasmObjectFile::getWasmSymbolValue(const WasmSymbol &Sym) const {
     // offset within the segment.
     uint32_t SegmentIndex = Sym.Info.DataRef.Segment;
     const wasm::WasmDataSegment &Segment = DataSegments[SegmentIndex].Data;
-    if (Segment.Offset.Extended) {
-      llvm_unreachable("extended init exprs not supported");
-    } else if (Segment.Offset.Inst.Opcode == wasm::WASM_OPCODE_I32_CONST) {
-      return Segment.Offset.Inst.Value.Int32 + Sym.Info.DataRef.Offset;
-    } else if (Segment.Offset.Inst.Opcode == wasm::WASM_OPCODE_I64_CONST) {
-      return Segment.Offset.Inst.Value.Int64 + Sym.Info.DataRef.Offset;
+    if (Segment.Offset.Opcode == wasm::WASM_OPCODE_I32_CONST) {
+      return Segment.Offset.Value.Int32 + Sym.Info.DataRef.Offset;
+    } else if (Segment.Offset.Opcode == wasm::WASM_OPCODE_I64_CONST) {
+      return Segment.Offset.Value.Int64 + Sym.Info.DataRef.Offset;
     } else {
       llvm_unreachable("unknown init expr opcode");
     }
@@ -1717,11 +1692,29 @@ void WasmObjectFile::moveSectionNext(DataRefImpl &Sec) const { Sec.d.a++; }
 
 Expected<StringRef> WasmObjectFile::getSectionName(DataRefImpl Sec) const {
   const WasmSection &S = Sections[Sec.d.a];
-  if (S.Type == wasm::WASM_SEC_CUSTOM)
+#define ECase(X)                                                               \
+  case wasm::WASM_SEC_##X:                                                     \
+    return #X;
+  switch (S.Type) {
+    ECase(TYPE);
+    ECase(IMPORT);
+    ECase(FUNCTION);
+    ECase(TABLE);
+    ECase(MEMORY);
+    ECase(GLOBAL);
+    ECase(TAG);
+    ECase(EXPORT);
+    ECase(START);
+    ECase(ELEM);
+    ECase(CODE);
+    ECase(DATA);
+    ECase(DATACOUNT);
+  case wasm::WASM_SEC_CUSTOM:
     return S.Name;
-  if (S.Type > wasm::WASM_SEC_LAST_KNOWN)
+  default:
     return createStringError(object_error::invalid_section_index, "");
-  return wasm::sectionTypeToString(S.Type);
+  }
+#undef ECase
 }
 
 uint64_t WasmObjectFile::getSectionAddress(DataRefImpl Sec) const { return 0; }

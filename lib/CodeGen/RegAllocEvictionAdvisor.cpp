@@ -11,14 +11,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "RegAllocEvictionAdvisor.h"
-#include "AllocationOrder.h"
 #include "RegAllocGreedy.h"
-#include "llvm/CodeGen/LiveRegMatrix.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/PassRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetMachine.h"
@@ -26,7 +25,7 @@
 using namespace llvm;
 
 static cl::opt<RegAllocEvictionAdvisorAnalysis::AdvisorMode> Mode(
-    "regalloc-enable-advisor", cl::Hidden,
+    "regalloc-enable-advisor", cl::Hidden, cl::ZeroOrMore,
     cl::init(RegAllocEvictionAdvisorAnalysis::AdvisorMode::Default),
     cl::desc("Enable regalloc advisor mode"),
     cl::values(
@@ -42,14 +41,6 @@ static cl::opt<bool> EnableLocalReassignment(
     cl::desc("Local reassignment can yield better allocation decisions, but "
              "may be compile time intensive"),
     cl::init(false));
-
-cl::opt<unsigned> EvictInterferenceCutoff(
-    "regalloc-eviction-max-interference-cutoff", cl::Hidden,
-    cl::desc("Number of interferences after which we declare "
-             "an interference unevictable and bail out. This "
-             "is a compilation cost-saving consideration. To "
-             "disable, pass a very large number."),
-    cl::init(10));
 
 #define DEBUG_TYPE "regalloc"
 #ifdef LLVM_HAVE_TF_AOT_REGALLOCEVICTMODEL
@@ -75,7 +66,7 @@ public:
 
 private:
   std::unique_ptr<RegAllocEvictionAdvisor>
-  getAdvisor(const MachineFunction &MF, const RAGreedy &RA) override {
+  getAdvisor(MachineFunction &MF, const RAGreedy &RA) override {
     return std::make_unique<DefaultEvictionAdvisor>(MF, RA);
   }
   bool doInitialization(Module &M) override {
@@ -122,7 +113,7 @@ StringRef RegAllocEvictionAdvisorAnalysis::getPassName() const {
   llvm_unreachable("Unknown advisor kind");
 }
 
-RegAllocEvictionAdvisor::RegAllocEvictionAdvisor(const MachineFunction &MF,
+RegAllocEvictionAdvisor::RegAllocEvictionAdvisor(MachineFunction &MF,
                                                  const RAGreedy &RA)
     : MF(MF), RA(RA), Matrix(RA.getInterferenceMatrix()),
       LIS(RA.getLiveIntervals()), VRM(RA.getVirtRegMap()),
@@ -145,8 +136,8 @@ RegAllocEvictionAdvisor::RegAllocEvictionAdvisor(const MachineFunction &MF,
 ///                   register.
 /// @param B          The live range to be evicted.
 /// @param BreaksHint True when B is already assigned to its preferred register.
-bool DefaultEvictionAdvisor::shouldEvict(const LiveInterval &A, bool IsHint,
-                                         const LiveInterval &B,
+bool DefaultEvictionAdvisor::shouldEvict(LiveInterval &A, bool IsHint,
+                                         LiveInterval &B,
                                          bool BreaksHint) const {
   bool CanSplit = RA.getExtraInfo().getStage(B) < RS_Spill;
 
@@ -165,7 +156,7 @@ bool DefaultEvictionAdvisor::shouldEvict(const LiveInterval &A, bool IsHint,
 /// canEvictHintInterference - return true if the interference for VirtReg
 /// on the PhysReg, which is VirtReg's hint, can be evicted in favor of VirtReg.
 bool DefaultEvictionAdvisor::canEvictHintInterference(
-    const LiveInterval &VirtReg, MCRegister PhysReg,
+    LiveInterval &VirtReg, MCRegister PhysReg,
     const SmallVirtRegSet &FixedRegisters) const {
   EvictionCost MaxCost;
   MaxCost.setBrokenHints(1);
@@ -183,7 +174,7 @@ bool DefaultEvictionAdvisor::canEvictHintInterference(
 ///                when returning true.
 /// @returns True when interference can be evicted cheaper than MaxCost.
 bool DefaultEvictionAdvisor::canEvictInterferenceBasedOnCost(
-    const LiveInterval &VirtReg, MCRegister PhysReg, bool IsHint,
+    LiveInterval &VirtReg, MCRegister PhysReg, bool IsHint,
     EvictionCost &MaxCost, const SmallVirtRegSet &FixedRegisters) const {
   // It is only possible to evict virtual register interference.
   if (Matrix->checkInterference(VirtReg, PhysReg) > LiveRegMatrix::IK_VirtReg)
@@ -204,12 +195,12 @@ bool DefaultEvictionAdvisor::canEvictInterferenceBasedOnCost(
   for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
     LiveIntervalUnion::Query &Q = Matrix->query(VirtReg, *Units);
     // If there is 10 or more interferences, chances are one is heavier.
-    const auto &Interferences = Q.interferingVRegs(EvictInterferenceCutoff);
-    if (Interferences.size() >= EvictInterferenceCutoff)
+    const auto &Interferences = Q.interferingVRegs(10);
+    if (Interferences.size() >= 10)
       return false;
 
     // Check if any interfering live range is heavier than MaxWeight.
-    for (const LiveInterval *Intf : reverse(Interferences)) {
+    for (LiveInterval *Intf : reverse(Interferences)) {
       assert(Register::isVirtualRegister(Intf->reg()) &&
              "Only expecting virtual register interference from query");
 
@@ -236,10 +227,7 @@ bool DefaultEvictionAdvisor::canEvictInterferenceBasedOnCost(
                    MRI->getRegClass(Intf->reg())));
       // Only evict older cascades or live ranges without a cascade.
       unsigned IntfCascade = RA.getExtraInfo().getCascade(Intf->reg());
-      if (Cascade == IntfCascade)
-        return false;
-
-      if (Cascade < IntfCascade) {
+      if (Cascade <= IntfCascade) {
         if (!Urgent)
           return false;
         // We permit breaking cascades for urgent evictions. It should be the
@@ -273,7 +261,7 @@ bool DefaultEvictionAdvisor::canEvictInterferenceBasedOnCost(
 }
 
 MCRegister DefaultEvictionAdvisor::tryFindEvictionCandidate(
-    const LiveInterval &VirtReg, const AllocationOrder &Order,
+    LiveInterval &VirtReg, const AllocationOrder &Order,
     uint8_t CostPerUseLimit, const SmallVirtRegSet &FixedRegisters) const {
   // Keep track of the cheapest interference seen so far.
   EvictionCost BestCost;

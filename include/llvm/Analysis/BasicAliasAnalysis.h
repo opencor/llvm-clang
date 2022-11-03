@@ -18,6 +18,8 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <utility>
 

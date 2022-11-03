@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 %s -fsyntax-only -verify
-int main (void)
+int main ()
 {
 	int i,j;
 	struct S *p;

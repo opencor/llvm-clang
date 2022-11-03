@@ -146,7 +146,7 @@ void RISCVInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
   if ((FenceArg & RISCVFenceField::W) != 0)
     O << 'w';
   if (FenceArg == 0)
-    O << "0";
+    O << "unknown";
 }
 
 void RISCVInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
@@ -156,12 +156,12 @@ void RISCVInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
   O << RISCVFPRndMode::roundingModeToString(FRMArg);
 }
 
-void RISCVInstPrinter::printZeroOffsetMemOp(const MCInst *MI, unsigned OpNo,
-                                            const MCSubtargetInfo &STI,
-                                            raw_ostream &O) {
+void RISCVInstPrinter::printAtomicMemOp(const MCInst *MI, unsigned OpNo,
+                                        const MCSubtargetInfo &STI,
+                                        raw_ostream &O) {
   const MCOperand &MO = MI->getOperand(OpNo);
 
-  assert(MO.isReg() && "printZeroOffsetMemOp can only print register operands");
+  assert(MO.isReg() && "printAtomicMemOp can only print register operands");
   O << "(";
   printRegName(O, MO.getReg());
   O << ")";

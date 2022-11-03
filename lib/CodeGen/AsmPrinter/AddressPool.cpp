@@ -17,7 +17,7 @@
 using namespace llvm;
 
 unsigned AddressPool::getIndex(const MCSymbol *Sym, bool TLS) {
-  resetUsedFlag(true);
+  HasBeenUsed = true;
   auto IterBool =
       Pool.insert(std::make_pair(Sym, AddressPoolEntry(Pool.size(), TLS)));
   return IterBool.first->second.Number;
@@ -44,7 +44,7 @@ void AddressPool::emit(AsmPrinter &Asm, MCSection *AddrSection) {
     return;
 
   // Start the dwarf addr section.
-  Asm.OutStreamer->switchSection(AddrSection);
+  Asm.OutStreamer->SwitchSection(AddrSection);
 
   MCSymbol *EndLabel = nullptr;
 

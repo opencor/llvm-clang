@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// The AMDGPU TargetMachine interface definition for hw codegen targets.
+/// The AMDGPU TargetMachine interface definition for hw codgen targets.
 //
 //===----------------------------------------------------------------------===//
 
@@ -64,8 +64,6 @@ public:
 
   std::pair<const Value *, unsigned>
   getPredicatedAddrSpace(const Value *V) const override;
-
-  unsigned getAddressSpaceForPseudoSourceKind(unsigned Kind) const override;
 };
 
 //===----------------------------------------------------------------------===//
@@ -86,7 +84,7 @@ public:
 
   const TargetSubtargetInfo *getSubtargetImpl(const Function &) const override;
 
-  TargetTransformInfo getTargetTransformInfo(const Function &F) const override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   bool useIPRA() const override {
     return true;

@@ -9,7 +9,7 @@ typedef unsigned int NSUInteger;
 typedef int NSInteger;
 #endif
 
-void checkNSNumberUnavailableDiagnostic(void) {
+void checkNSNumberUnavailableDiagnostic() {
   id num = @1000; // expected-error {{definition of class NSNumber must be available to use Objective-C numeric literals}}
 
   int x = 1000;
@@ -19,7 +19,7 @@ void checkNSNumberUnavailableDiagnostic(void) {
 
 @class NSNumber; // expected-note 2 {{forward declaration of class here}}
 
-void checkNSNumberFDDiagnostic(void) {
+void checkNSNumberFDDiagnostic() {
   id num = @1000; // expected-error {{definition of class NSNumber must be available to use Objective-C numeric literals}}
 
   int x = 1000;
@@ -50,7 +50,7 @@ void checkNSNumberFDDiagnostic(void) {
 // rdar://16417427
 int big = 1391126400;
 int thousand = 1000;
-int main(void) {
+int main() {
   NSNumber * N = @3.1415926535;  // expected-error {{declaration of 'numberWithDouble:' is missing in NSNumber class}}
   NSNumber *noNumber = @__objc_yes; // expected-error {{declaration of 'numberWithBool:' is missing in NSNumber class}}
   NSNumber * NInt = @1000;
@@ -73,7 +73,7 @@ int main(void) {
 // Dictionary test
 @class NSDictionary;  // expected-note {{forward declaration of class here}}
 
-NSDictionary *err(void) {
+NSDictionary *err() {
   return @{@"name" : @"value"}; // expected-error {{definition of class NSDictionary must be available to use Objective-C dictionary literals}}
 }
 
@@ -92,15 +92,15 @@ NSDictionary *err(void) {
 @interface NSString<NSCopying>
 @end
 
-id NSUserName(void);
+id NSUserName();
 
-int Int(void);
+int Int();
 
-NSDictionary * blocks(void) {
+NSDictionary * blocks() {
   return @{ @"task" : ^ { return 17; } };
 }
 
-NSDictionary * warn(void) {
+NSDictionary * warn() {
   NSDictionary *dictionary = @{@"name" : NSUserName(),
                                @"date" : [NSDate date],
                                @"name2" : @"other",
@@ -116,7 +116,7 @@ NSDictionary * warn(void) {
 // rdar:// 11231426
 typedef float BOOL;
 
-BOOL radar11231426(void) {
+BOOL radar11231426() {
         return __objc_yes;
 }
 

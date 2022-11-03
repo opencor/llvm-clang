@@ -48,7 +48,7 @@ struct Redecl {
   };
 
   int z; // expected-error{{duplicate member 'z'}}
-  void zz(void); // expected-error{{duplicate member 'zz'}} 
+  void zz(); // expected-error{{duplicate member 'zz'}} 
 };
 
 union { // expected-warning{{declaration does not declare anything}}
@@ -61,12 +61,12 @@ static union { // expected-warning{{declaration does not declare anything}}
   float float_val2;
 };
 
-void f(void) {
+void f() {
   int_val2 = 0; // expected-error{{use of undeclared identifier}}
   float_val2 = 0.0; // expected-error{{use of undeclared identifier}}
 }
 
-void g(void) {
+void g() {
   union { // expected-warning{{declaration does not declare anything}}
     int i;
     float f2;

@@ -139,7 +139,6 @@ syn keyword llvmKeyword
       \ nosync
       \ noundef
       \ nounwind
-      \ nosanitize_bounds
       \ nosanitize_coverage
       \ null_pointer_is_valid
       \ optforfuzzing

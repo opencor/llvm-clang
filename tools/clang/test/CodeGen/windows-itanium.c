@@ -4,7 +4,7 @@
 // RUN: %clang_cc1 -triple i686-windows-itanium -emit-llvm -x c++ %s -o - \
 // RUN:    | FileCheck %s -check-prefix CHECK-CXX -check-prefix CHECK
 
-int function(void) {
+int function() {
   return 32;
 }
 

@@ -3,7 +3,7 @@
 
 typedef short SHORT;
 
-void f0(void) {
+void f0() {
   (void) ^{
     if (1)
       return (float)1.0;

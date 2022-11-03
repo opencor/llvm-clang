@@ -43,8 +43,8 @@ const char *DispatchFnName = "__llvm_orc_SimpleRemoteEPC_dispatch_fn";
 
 } // end namespace SimpleRemoteEPCDefaultBootstrapSymbolNames
 
-SimpleRemoteEPCTransportClient::~SimpleRemoteEPCTransportClient() = default;
-SimpleRemoteEPCTransport::~SimpleRemoteEPCTransport() = default;
+SimpleRemoteEPCTransportClient::~SimpleRemoteEPCTransportClient() {}
+SimpleRemoteEPCTransport::~SimpleRemoteEPCTransport() {}
 
 Expected<std::unique_ptr<FDSimpleRemoteEPCTransport>>
 FDSimpleRemoteEPCTransport::Create(SimpleRemoteEPCTransportClient &C, int InFD,

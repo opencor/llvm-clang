@@ -23,7 +23,7 @@
 - length;
 @end
 
-SEL func(void)
+SEL func()
 {
     return  @selector(length);  // expected-warning {{no method with selector 'length' is implemented in this translation unit}}
 }
@@ -130,7 +130,7 @@ extern SEL MySelector(SEL s);
 }
 @end
 
-void test16428638(void) {
+void test16428638() {
     SEL s = @selector(compare:);
     (void)s;
 }

@@ -62,26 +62,15 @@ static cl::opt<bool> Help("h", cl::desc("Alias for -help"), cl::Hidden);
 // and -help) will be hidden.
 static cl::OptionCategory
     ClangOffloadBundlerCategory("clang-offload-bundler options");
+
 static cl::list<std::string>
-    InputFileNames("input",
-                   cl::desc("Input file."
-                            " Can be specified multiple times "
-                            "for multiple input files."),
+    InputFileNames("inputs", cl::CommaSeparated, cl::OneOrMore,
+                   cl::desc("[<input file>,...]"),
                    cl::cat(ClangOffloadBundlerCategory));
 static cl::list<std::string>
-    InputFileNamesDeprecatedOpt("inputs", cl::CommaSeparated,
-                                cl::desc("[<input file>,...] (deprecated)"),
-                                cl::cat(ClangOffloadBundlerCategory));
-static cl::list<std::string>
-    OutputFileNames("output",
-                    cl::desc("Output file."
-                             " Can be specified multiple times "
-                             "for multiple output files."),
+    OutputFileNames("outputs", cl::CommaSeparated,
+                    cl::desc("[<output file>,...]"),
                     cl::cat(ClangOffloadBundlerCategory));
-static cl::list<std::string>
-    OutputFileNamesDeprecatedOpt("outputs", cl::CommaSeparated,
-                                 cl::desc("[<output file>,...] (deprecated)"),
-                                 cl::cat(ClangOffloadBundlerCategory));
 static cl::list<std::string>
     TargetNames("targets", cl::CommaSeparated,
                 cl::desc("[<offload kind>-<target triple>,...]"),
@@ -127,12 +116,6 @@ static cl::opt<unsigned>
     BundleAlignment("bundle-align",
                     cl::desc("Alignment of bundle for binary files"),
                     cl::init(1), cl::cat(ClangOffloadBundlerCategory));
-
-static cl::opt<bool> HipOpenmpCompatible(
-    "hip-openmp-compatible",
-    cl::desc("Treat hip and hipv4 offload kinds as "
-             "compatible with openmp kind, and vice versa.\n"),
-    cl::init(false), cl::cat(ClangOffloadBundlerCategory));
 
 /// Magic string that marks the existence of offloading data.
 #define OFFLOAD_BUNDLER_MAGIC_STR "__CLANG_OFFLOAD_BUNDLE__"
@@ -181,21 +164,6 @@ struct OffloadTargetInfo {
   bool isOffloadKindValid() const {
     return OffloadKind == "host" || OffloadKind == "openmp" ||
            OffloadKind == "hip" || OffloadKind == "hipv4";
-  }
-
-  bool isOffloadKindCompatible(const StringRef TargetOffloadKind) const {
-    if (OffloadKind == TargetOffloadKind)
-      return true;
-    if (HipOpenmpCompatible) {
-      bool HIPCompatibleWithOpenMP =
-          OffloadKind.startswith_insensitive("hip") &&
-          TargetOffloadKind == "openmp";
-      bool OpenMPCompatibleWithHIP =
-          OffloadKind == "openmp" &&
-          TargetOffloadKind.startswith_insensitive("hip");
-      return HIPCompatibleWithOpenMP || OpenMPCompatibleWithHIP;
-    }
-    return false;
   }
 
   bool isTripleValid() const {
@@ -1129,7 +1097,7 @@ bool isCodeObjectCompatible(OffloadTargetInfo &CodeObjectInfo,
   }
 
   // Incompatible if Kinds or Triples mismatch.
-  if (!CodeObjectInfo.isOffloadKindCompatible(TargetInfo.OffloadKind) ||
+  if (CodeObjectInfo.OffloadKind != TargetInfo.OffloadKind ||
       !CodeObjectInfo.Triple.isCompatibleWith(TargetInfo.Triple)) {
     DEBUG_WITH_TYPE(
         "CodeObjectCompatibility",
@@ -1255,7 +1223,7 @@ static Error UnbundleArchive() {
 
     Optional<StringRef> OptionalCurBundleID = *CurBundleIDOrErr;
     // No device code in this child, skip.
-    if (!OptionalCurBundleID)
+    if (!OptionalCurBundleID.hasValue())
       continue;
     StringRef CodeObject = *OptionalCurBundleID;
 
@@ -1318,11 +1286,11 @@ static Error UnbundleArchive() {
       if (!NextTripleOrErr)
         return NextTripleOrErr.takeError();
 
-      CodeObject = NextTripleOrErr->value_or("");
+      CodeObject = ((*NextTripleOrErr).hasValue()) ? **NextTripleOrErr : "";
     } // End of processing of all bundle entries of this child of input archive.
   }   // End of while over children of input archive.
 
-  assert(!ArchiveErr && "Error occurred while reading archive!");
+  assert(!ArchiveErr && "Error occured while reading archive!");
 
   /// Write out an archive for each target
   for (auto &Target : TargetNames) {
@@ -1395,38 +1363,6 @@ int main(int argc, const char **argv) {
     }
   };
 
-  auto warningOS = [argv]() -> raw_ostream & {
-    return WithColor::warning(errs(), StringRef(argv[0]));
-  };
-
-  if (InputFileNames.getNumOccurrences() != 0 &&
-      InputFileNamesDeprecatedOpt.getNumOccurrences() != 0) {
-    reportError(createStringError(
-        errc::invalid_argument,
-        "-inputs and -input cannot be used together, use only -input instead"));
-  }
-  if (InputFileNamesDeprecatedOpt.size()) {
-    warningOS() << "-inputs is deprecated, use -input instead\n";
-    // temporary hack to support -inputs
-    std::vector<std::string> &s = InputFileNames;
-    s.insert(s.end(), InputFileNamesDeprecatedOpt.begin(),
-             InputFileNamesDeprecatedOpt.end());
-  }
-
-  if (OutputFileNames.getNumOccurrences() != 0 &&
-      OutputFileNamesDeprecatedOpt.getNumOccurrences() != 0) {
-    reportError(createStringError(errc::invalid_argument,
-                                  "-outputs and -output cannot be used "
-                                  "together, use only -output instead"));
-  }
-  if (OutputFileNamesDeprecatedOpt.size()) {
-    warningOS() << "-outputs is deprecated, use -output instead\n";
-    // temporary hack to support -outputs
-    std::vector<std::string> &s = OutputFileNames;
-    s.insert(s.end(), OutputFileNamesDeprecatedOpt.begin(),
-             OutputFileNamesDeprecatedOpt.end());
-  }
-
   if (ListBundleIDs) {
     if (Unbundle) {
       reportError(
@@ -1450,9 +1386,10 @@ int main(int argc, const char **argv) {
     return 0;
   }
 
-  if (OutputFileNames.size() == 0) {
-    reportError(
-        createStringError(errc::invalid_argument, "no output file specified!"));
+  if (OutputFileNames.getNumOccurrences() == 0) {
+    reportError(createStringError(
+        errc::invalid_argument,
+        "for the --outputs option: must be specified at least once!"));
   }
   if (TargetNames.getNumOccurrences() == 0) {
     reportError(createStringError(

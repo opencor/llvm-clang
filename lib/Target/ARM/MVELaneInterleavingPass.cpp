@@ -45,7 +45,6 @@
 #include "ARM.h"
 #include "ARMBaseInstrInfo.h"
 #include "ARMSubtarget.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -177,8 +176,9 @@ static bool tryInterleave(Instruction *Start,
     // Truncs
     case Instruction::Trunc:
     case Instruction::FPTrunc:
-      if (!Truncs.insert(I))
+      if (Truncs.count(I))
         continue;
+      Truncs.insert(I);
       Visited.insert(I);
       break;
 
@@ -235,8 +235,9 @@ static bool tryInterleave(Instruction *Start,
     case Instruction::FAdd:
     case Instruction::FMul:
     case Instruction::Select:
-      if (!Ops.insert(I))
+      if (Ops.count(I))
         continue;
+      Ops.insert(I);
 
       for (Use &Op : I->operands()) {
         if (!isa<FixedVectorType>(Op->getType()))

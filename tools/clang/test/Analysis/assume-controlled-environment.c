@@ -16,7 +16,7 @@
 
 char *getenv(const char *name);
 
-void foo(void) {
+void foo() {
   char *p = getenv("FOO"); // untrusted-env-warning {{tainted}}
   (void)p;                 // untrusted-env-warning {{tainted}}
 }

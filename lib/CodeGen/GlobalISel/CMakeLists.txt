@@ -22,6 +22,8 @@ add_llvm_component_library(LLVMGlobalISel
   LostDebugLocObserver.cpp
   MachineIRBuilder.cpp
   RegBankSelect.cpp
+  RegisterBank.cpp
+  RegisterBankInfo.cpp
   Utils.cpp
 
   ADDITIONAL_HEADER_DIRS

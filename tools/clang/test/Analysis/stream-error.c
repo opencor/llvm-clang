@@ -7,11 +7,11 @@
 #include "Inputs/system-header-simulator.h"
 
 void clang_analyzer_eval(int);
-void clang_analyzer_warnIfReached(void);
+void clang_analyzer_warnIfReached();
 void StreamTesterChecker_make_feof_stream(FILE *);
 void StreamTesterChecker_make_ferror_stream(FILE *);
 
-void error_fopen(void) {
+void error_fopen() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -20,7 +20,7 @@ void error_fopen(void) {
   fclose(F);
 }
 
-void error_freopen(void) {
+void error_freopen() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -32,7 +32,7 @@ void error_freopen(void) {
   fclose(F);
 }
 
-void stream_error_feof(void) {
+void stream_error_feof() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -45,7 +45,7 @@ void stream_error_feof(void) {
   fclose(F);
 }
 
-void stream_error_ferror(void) {
+void stream_error_ferror() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -58,7 +58,7 @@ void stream_error_ferror(void) {
   fclose(F);
 }
 
-void error_fread(void) {
+void error_fread() {
   FILE *F = tmpfile();
   if (!F)
     return;
@@ -83,7 +83,7 @@ void error_fread(void) {
   Ret = fread(Buf, 1, 10, F); // expected-warning {{Stream might be already closed}}
 }
 
-void error_fwrite(void) {
+void error_fwrite() {
   FILE *F = tmpfile();
   if (!F)
     return;
@@ -114,7 +114,7 @@ void freadwrite_zerosize_eofstate(FILE *F) {
   fread(0, 0, 1, F); // expected-warning {{Read function called when stream is in EOF state}}
 }
 
-void error_fread_fwrite_zerosize(void) {
+void error_fread_fwrite_zerosize() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -136,7 +136,7 @@ void error_fread_fwrite_zerosize(void) {
   fclose(F);
 }
 
-void error_fseek(void) {
+void error_fseek() {
   FILE *F = fopen("file", "r");
   if (!F)
     return;
@@ -167,7 +167,7 @@ void error_fseek(void) {
   fclose(F);
 }
 
-void error_indeterminate(void) {
+void error_indeterminate() {
   FILE *F = fopen("file", "r+");
   if (!F)
     return;
@@ -185,7 +185,7 @@ void error_indeterminate(void) {
   fclose(F);
 }
 
-void error_indeterminate_clearerr(void) {
+void error_indeterminate_clearerr() {
   FILE *F = fopen("file", "r+");
   if (!F)
     return;
@@ -206,7 +206,7 @@ void error_indeterminate_clearerr(void) {
   fclose(F);
 }
 
-void error_indeterminate_feof1(void) {
+void error_indeterminate_feof1() {
   FILE *F = fopen("file", "r+");
   if (!F)
     return;
@@ -220,7 +220,7 @@ void error_indeterminate_feof1(void) {
   fclose(F);
 }
 
-void error_indeterminate_feof2(void) {
+void error_indeterminate_feof2() {
   FILE *F = fopen("file", "r+");
   if (!F)
     return;

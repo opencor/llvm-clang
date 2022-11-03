@@ -16,6 +16,7 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
 
 using namespace llvm;
@@ -75,9 +76,7 @@ void llvm::findDevirtualizableCallsForTypeTest(
     SmallVectorImpl<DevirtCallSite> &DevirtCalls,
     SmallVectorImpl<CallInst *> &Assumes, const CallInst *CI,
     DominatorTree &DT) {
-  assert(CI->getCalledFunction()->getIntrinsicID() == Intrinsic::type_test ||
-         CI->getCalledFunction()->getIntrinsicID() ==
-             Intrinsic::public_type_test);
+  assert(CI->getCalledFunction()->getIntrinsicID() == Intrinsic::type_test);
 
   const Module *M = CI->getParent()->getParent()->getParent();
 

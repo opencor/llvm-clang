@@ -131,10 +131,11 @@ define i100 @test_signed_i100_f32(float %f) nounwind {
 ; CHECK-NEXT:    str x30, [sp, #8] // 8-byte Folded Spill
 ; CHECK-NEXT:    fmov s8, s0
 ; CHECK-NEXT:    bl __fixsfti
-; CHECK-NEXT:    movi v0.2s, #241, lsl #24
-; CHECK-NEXT:    mov w8, #1895825407
+; CHECK-NEXT:    mov w8, #-251658240
 ; CHECK-NEXT:    mov x10, #34359738367
 ; CHECK-NEXT:    ldr x30, [sp, #8] // 8-byte Folded Reload
+; CHECK-NEXT:    fmov s0, w8
+; CHECK-NEXT:    mov w8, #1895825407
 ; CHECK-NEXT:    fcmp s8, s0
 ; CHECK-NEXT:    fmov s0, w8
 ; CHECK-NEXT:    mov x8, #-34359738368
@@ -159,10 +160,11 @@ define i128 @test_signed_i128_f32(float %f) nounwind {
 ; CHECK-NEXT:    str x30, [sp, #8] // 8-byte Folded Spill
 ; CHECK-NEXT:    fmov s8, s0
 ; CHECK-NEXT:    bl __fixsfti
-; CHECK-NEXT:    movi v0.2s, #255, lsl #24
-; CHECK-NEXT:    mov w8, #2130706431
+; CHECK-NEXT:    mov w8, #-16777216
 ; CHECK-NEXT:    mov x10, #9223372036854775807
 ; CHECK-NEXT:    ldr x30, [sp, #8] // 8-byte Folded Reload
+; CHECK-NEXT:    fmov s0, w8
+; CHECK-NEXT:    mov w8, #2130706431
 ; CHECK-NEXT:    fcmp s8, s0
 ; CHECK-NEXT:    fmov s0, w8
 ; CHECK-NEXT:    mov x8, #-9223372036854775808
@@ -573,10 +575,11 @@ define i100 @test_signed_i100_f16(half %f) nounwind {
 ; CHECK-NEXT:    str x30, [sp, #8] // 8-byte Folded Spill
 ; CHECK-NEXT:    fmov s0, s8
 ; CHECK-NEXT:    bl __fixsfti
-; CHECK-NEXT:    movi v0.2s, #241, lsl #24
-; CHECK-NEXT:    mov w8, #1895825407
+; CHECK-NEXT:    mov w8, #-251658240
 ; CHECK-NEXT:    mov x10, #34359738367
 ; CHECK-NEXT:    ldr x30, [sp, #8] // 8-byte Folded Reload
+; CHECK-NEXT:    fmov s0, w8
+; CHECK-NEXT:    mov w8, #1895825407
 ; CHECK-NEXT:    fcmp s8, s0
 ; CHECK-NEXT:    fmov s0, w8
 ; CHECK-NEXT:    mov x8, #-34359738368
@@ -602,10 +605,11 @@ define i128 @test_signed_i128_f16(half %f) nounwind {
 ; CHECK-NEXT:    str x30, [sp, #8] // 8-byte Folded Spill
 ; CHECK-NEXT:    fmov s0, s8
 ; CHECK-NEXT:    bl __fixsfti
-; CHECK-NEXT:    movi v0.2s, #255, lsl #24
-; CHECK-NEXT:    mov w8, #2130706431
+; CHECK-NEXT:    mov w8, #-16777216
 ; CHECK-NEXT:    mov x10, #9223372036854775807
 ; CHECK-NEXT:    ldr x30, [sp, #8] // 8-byte Folded Reload
+; CHECK-NEXT:    fmov s0, w8
+; CHECK-NEXT:    mov w8, #2130706431
 ; CHECK-NEXT:    fcmp s8, s0
 ; CHECK-NEXT:    fmov s0, w8
 ; CHECK-NEXT:    mov x8, #-9223372036854775808

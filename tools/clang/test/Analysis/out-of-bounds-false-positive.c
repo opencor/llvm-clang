@@ -2,7 +2,7 @@
 // RUN:   -analyzer-config eagerly-assume=false -verify %s
 
 void clang_analyzer_eval(int);
-void clang_analyzer_printState(void);
+void clang_analyzer_printState();
 
 typedef unsigned long long size_t;
 const char a[] = "abcd"; // extent: 5 bytes

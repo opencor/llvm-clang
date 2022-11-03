@@ -36,20 +36,15 @@ AVRRegisterInfo::AVRRegisterInfo() : AVRGenRegisterInfo(0) {}
 const uint16_t *
 AVRRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   const AVRMachineFunctionInfo *AFI = MF->getInfo<AVRMachineFunctionInfo>();
-  const AVRSubtarget &STI = MF->getSubtarget<AVRSubtarget>();
-  if (STI.hasTinyEncoding())
-    return AFI->isInterruptOrSignalHandler() ? CSR_InterruptsTiny_SaveList
-                                             : CSR_NormalTiny_SaveList;
-  else
-    return AFI->isInterruptOrSignalHandler() ? CSR_Interrupts_SaveList
-                                             : CSR_Normal_SaveList;
+
+  return AFI->isInterruptOrSignalHandler() ? CSR_Interrupts_SaveList
+                                           : CSR_Normal_SaveList;
 }
 
 const uint32_t *
 AVRRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                       CallingConv::ID CC) const {
-  const AVRSubtarget &STI = MF.getSubtarget<AVRSubtarget>();
-  return STI.hasTinyEncoding() ? CSR_NormalTiny_RegMask : CSR_Normal_RegMask;
+  return CSR_Normal_RegMask;
 }
 
 BitVector AVRRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
@@ -57,25 +52,14 @@ BitVector AVRRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   // Reserve the intermediate result registers r1 and r2
   // The result of instructions like 'mul' is always stored here.
-  // R0/R1/R1R0 are always reserved on both avr and avrtiny.
   Reserved.set(AVR::R0);
   Reserved.set(AVR::R1);
   Reserved.set(AVR::R1R0);
 
-  // Reserve the stack pointer.
+  //  Reserve the stack pointer.
   Reserved.set(AVR::SPL);
   Reserved.set(AVR::SPH);
   Reserved.set(AVR::SP);
-
-  // Reserve R2~R17 only on avrtiny.
-  if (MF.getSubtarget<AVRSubtarget>().hasTinyEncoding()) {
-    // Reserve 8-bit registers R2~R15, Rtmp(R16) and Zero(R17).
-    for (unsigned Reg = AVR::R2; Reg <= AVR::R17; Reg++)
-      Reserved.set(Reg);
-    // Reserve 16-bit registers R3R2~R18R17.
-    for (unsigned Reg = AVR::R3R2; Reg <= AVR::R18R17; Reg++)
-      Reserved.set(Reg);
-  }
 
   // We tenatively reserve the frame pointer register r29:r28 because the
   // function may require one, but we cannot tell until register allocation
@@ -153,7 +137,6 @@ void AVRRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   const TargetInstrInfo &TII = *TM.getSubtargetImpl()->getInstrInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetFrameLowering *TFI = TM.getSubtargetImpl()->getFrameLowering();
-  const AVRSubtarget &STI = MF.getSubtarget<AVRSubtarget>();
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   int Offset = MFI.getObjectOffset(FrameIndex);
 
@@ -168,7 +151,7 @@ void AVRRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   if (MI.getOpcode() == AVR::FRMIDX) {
     MI.setDesc(TII.get(AVR::MOVWRdRr));
     MI.getOperand(FIOperandNum).ChangeToRegister(AVR::R29R28, false);
-    MI.removeOperand(2);
+    MI.RemoveOperand(2);
 
     assert(Offset > 0 && "Invalid offset");
 
@@ -236,8 +219,7 @@ void AVRRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     // a compare and branch, invalidating the contents of SREG set by the
     // compare instruction because of the add/sub pairs. Conservatively save and
     // restore SREG before and after each add/sub pair.
-    BuildMI(MBB, II, dl, TII.get(AVR::INRdA), AVR::R0)
-        .addImm(STI.getIORegSREG());
+    BuildMI(MBB, II, dl, TII.get(AVR::INRdA), AVR::R0).addImm(0x3f);
 
     MachineInstr *New = BuildMI(MBB, II, dl, TII.get(AddOpc), AVR::R29R28)
                             .addReg(AVR::R29R28, RegState::Kill)
@@ -246,7 +228,7 @@ void AVRRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
     // Restore SREG.
     BuildMI(MBB, std::next(II), dl, TII.get(AVR::OUTARr))
-        .addImm(STI.getIORegSREG())
+        .addImm(0x3f)
         .addReg(AVR::R0, RegState::Kill);
 
     // No need to set SREG as dead here otherwise if the next instruction is a

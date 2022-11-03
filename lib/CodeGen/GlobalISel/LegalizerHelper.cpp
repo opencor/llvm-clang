@@ -15,13 +15,10 @@
 #include "llvm/CodeGen/GlobalISel/LegalizerHelper.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/GISelChangeObserver.h"
-#include "llvm/CodeGen/GlobalISel/GenericMachineInstrs.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 #include "llvm/CodeGen/GlobalISel/LostDebugLocObserver.h"
 #include "llvm/CodeGen/GlobalISel/MIPatternMatch.h"
-#include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
 #include "llvm/CodeGen/GlobalISel/Utils.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -1614,6 +1611,40 @@ LegalizerHelper::widenScalarMergeValues(MachineInstr &MI, unsigned TypeIdx,
   return Legalized;
 }
 
+Register LegalizerHelper::widenWithUnmerge(LLT WideTy, Register OrigReg) {
+  Register WideReg = MRI.createGenericVirtualRegister(WideTy);
+  LLT OrigTy = MRI.getType(OrigReg);
+  LLT LCMTy = getLCMType(WideTy, OrigTy);
+
+  const int NumMergeParts = LCMTy.getSizeInBits() / WideTy.getSizeInBits();
+  const int NumUnmergeParts = LCMTy.getSizeInBits() / OrigTy.getSizeInBits();
+
+  Register UnmergeSrc = WideReg;
+
+  // Create a merge to the LCM type, padding with undef
+  // %0:_(<3 x s32>) = G_FOO => <4 x s32>
+  // =>
+  // %1:_(<4 x s32>) = G_FOO
+  // %2:_(<4 x s32>) = G_IMPLICIT_DEF
+  // %3:_(<12 x s32>) = G_CONCAT_VECTORS %1, %2, %2
+  // %0:_(<3 x s32>), %4:_, %5:_, %6:_ = G_UNMERGE_VALUES %3
+  if (NumMergeParts > 1) {
+    Register Undef = MIRBuilder.buildUndef(WideTy).getReg(0);
+    SmallVector<Register, 8> MergeParts(NumMergeParts, Undef);
+    MergeParts[0] = WideReg;
+    UnmergeSrc = MIRBuilder.buildMerge(LCMTy, MergeParts).getReg(0);
+  }
+
+  // Unmerge to the original register and pad with dead defs.
+  SmallVector<Register, 8> UnmergeResults(NumUnmergeParts);
+  UnmergeResults[0] = OrigReg;
+  for (int I = 1; I != NumUnmergeParts; ++I)
+    UnmergeResults[I] = MRI.createGenericVirtualRegister(OrigTy);
+
+  MIRBuilder.buildUnmerge(UnmergeResults, UnmergeSrc);
+  return WideReg;
+}
+
 LegalizerHelper::LegalizeResult
 LegalizerHelper::widenScalarUnmergeValues(MachineInstr &MI, unsigned TypeIdx,
                                           LLT WideTy) {
@@ -1836,6 +1867,9 @@ LegalizerHelper::widenScalarInsert(MachineInstr &MI, unsigned TypeIdx,
 LegalizerHelper::LegalizeResult
 LegalizerHelper::widenScalarAddSubOverflow(MachineInstr &MI, unsigned TypeIdx,
                                            LLT WideTy) {
+  if (TypeIdx == 1)
+    return UnableToLegalize; // TODO
+
   unsigned Opcode;
   unsigned ExtOpcode;
   Optional<Register> CarryIn = None;
@@ -1878,18 +1912,6 @@ LegalizerHelper::widenScalarAddSubOverflow(MachineInstr &MI, unsigned TypeIdx,
     ExtOpcode = TargetOpcode::G_ZEXT;
     CarryIn = MI.getOperand(4).getReg();
     break;
-  }
-
-  if (TypeIdx == 1) {
-    unsigned BoolExtOp = MIRBuilder.getBoolExtOp(WideTy.isVector(), false);
-
-    Observer.changingInstr(MI);
-    widenScalarDst(MI, WideTy, 1);
-    if (CarryIn)
-      widenScalarSrc(MI, WideTy, 4, BoolExtOp);
-
-    Observer.changedInstr(MI);
-    return Legalized;
   }
 
   auto LHSExt = MIRBuilder.buildInstr(ExtOpcode, {WideTy}, {MI.getOperand(2)});
@@ -1963,12 +1985,8 @@ LegalizerHelper::widenScalarAddSubShlSat(MachineInstr &MI, unsigned TypeIdx,
 LegalizerHelper::LegalizeResult
 LegalizerHelper::widenScalarMulo(MachineInstr &MI, unsigned TypeIdx,
                                  LLT WideTy) {
-  if (TypeIdx == 1) {
-    Observer.changingInstr(MI);
-    widenScalarDst(MI, WideTy, 1);
-    Observer.changedInstr(MI);
-    return Legalized;
-  }
+  if (TypeIdx == 1)
+    return UnableToLegalize;
 
   bool IsSigned = MI.getOpcode() == TargetOpcode::G_SMULO;
   Register Result = MI.getOperand(0).getReg();
@@ -2393,14 +2411,30 @@ LegalizerHelper::widenScalar(MachineInstr &MI, unsigned TypeIdx, LLT WideTy) {
     return Legalized;
   }
   case TargetOpcode::G_FCONSTANT: {
-    // To avoid changing the bits of the constant due to extension to a larger
-    // type and then using G_FPTRUNC, we simply convert to a G_CONSTANT.
     MachineOperand &SrcMO = MI.getOperand(1);
-    APInt Val = SrcMO.getFPImm()->getValueAPF().bitcastToAPInt();
-    MIRBuilder.setInstrAndDebugLoc(MI);
-    auto IntCst = MIRBuilder.buildConstant(MI.getOperand(0).getReg(), Val);
-    widenScalarDst(*IntCst, WideTy, 0, TargetOpcode::G_TRUNC);
-    MI.eraseFromParent();
+    LLVMContext &Ctx = MIRBuilder.getMF().getFunction().getContext();
+    APFloat Val = SrcMO.getFPImm()->getValueAPF();
+    bool LosesInfo;
+    switch (WideTy.getSizeInBits()) {
+    case 32:
+      Val.convert(APFloat::IEEEsingle(), APFloat::rmNearestTiesToEven,
+                  &LosesInfo);
+      break;
+    case 64:
+      Val.convert(APFloat::IEEEdouble(), APFloat::rmNearestTiesToEven,
+                  &LosesInfo);
+      break;
+    default:
+      return UnableToLegalize;
+    }
+
+    assert(!LosesInfo && "extend should always be lossless");
+
+    Observer.changingInstr(MI);
+    SrcMO.setFPImm(ConstantFP::get(Ctx, Val));
+
+    widenScalarDst(MI, WideTy, 0, TargetOpcode::G_FPTRUNC);
+    Observer.changedInstr(MI);
     return Legalized;
   }
   case TargetOpcode::G_IMPLICIT_DEF: {
@@ -2958,7 +2992,7 @@ LegalizerHelper::LegalizeResult LegalizerHelper::lowerLoad(GAnyLoad &LoadMI) {
     if (isa<GSExtLoad>(LoadMI)) {
       auto NewLoad = MIRBuilder.buildLoad(LoadTy, PtrReg, *NewMMO);
       MIRBuilder.buildSExtInReg(LoadReg, NewLoad, MemSizeInBits);
-    } else if (isa<GZExtLoad>(LoadMI) || WideMemTy == LoadTy) {
+    } else if (isa<GZExtLoad>(LoadMI) || WideMemTy == DstTy) {
       auto NewLoad = MIRBuilder.buildLoad(LoadTy, PtrReg, *NewMMO);
       // The extra bits are guaranteed to be zero, since we stored them that
       // way.  A zext load from Wide thus automatically gives zext from MemVT.
@@ -3280,7 +3314,7 @@ LegalizerHelper::lower(MachineInstr &MI, unsigned TypeIdx, LLT LowerHintTy) {
     Observer.changingInstr(MI);
     const auto &TII = MIRBuilder.getTII();
     MI.setDesc(TII.get(TargetOpcode::G_MUL));
-    MI.removeOperand(1);
+    MI.RemoveOperand(1);
     Observer.changedInstr(MI);
 
     auto HiPart = MIRBuilder.buildInstr(Opcode, {Ty}, {LHS, RHS});
@@ -4062,14 +4096,13 @@ LegalizerHelper::reduceLoadStoreWidth(GLoadStore &LdStMI, unsigned TypeIdx,
   // is a load, return the new registers in ValRegs. For a store, each elements
   // of ValRegs should be PartTy. Returns the next offset that needs to be
   // handled.
-  bool isBigEndian = MIRBuilder.getDataLayout().isBigEndian();
   auto MMO = LdStMI.getMMO();
   auto splitTypePieces = [=](LLT PartTy, SmallVectorImpl<Register> &ValRegs,
-                             unsigned NumParts, unsigned Offset) -> unsigned {
+                             unsigned Offset) -> unsigned {
     MachineFunction &MF = MIRBuilder.getMF();
     unsigned PartSize = PartTy.getSizeInBits();
     for (unsigned Idx = 0, E = NumParts; Idx != E && Offset < TotalSize;
-         ++Idx) {
+         Offset += PartSize, ++Idx) {
       unsigned ByteOffset = Offset / 8;
       Register NewAddrReg;
 
@@ -4085,19 +4118,16 @@ LegalizerHelper::reduceLoadStoreWidth(GLoadStore &LdStMI, unsigned TypeIdx,
       } else {
         MIRBuilder.buildStore(ValRegs[Idx], NewAddrReg, *NewMMO);
       }
-      Offset = isBigEndian ? Offset - PartSize : Offset + PartSize;
     }
 
     return Offset;
   };
 
-  unsigned Offset = isBigEndian ? TotalSize - NarrowTy.getSizeInBits() : 0;
-  unsigned HandledOffset =
-      splitTypePieces(NarrowTy, NarrowRegs, NumParts, Offset);
+  unsigned HandledOffset = splitTypePieces(NarrowTy, NarrowRegs, 0);
 
   // Handle the rest of the register if this isn't an even type breakdown.
   if (LeftoverTy.isValid())
-    splitTypePieces(LeftoverTy, NarrowLeftoverRegs, NumLeftover, HandledOffset);
+    splitTypePieces(LeftoverTy, NarrowLeftoverRegs, HandledOffset);
 
   if (IsLoad) {
     insertParts(ValReg, ValTy, NarrowTy, NarrowRegs,
@@ -4206,14 +4236,6 @@ LegalizerHelper::fewerElementsVector(MachineInstr &MI, unsigned TypeIdx,
   case G_INTTOPTR:
   case G_PTRTOINT:
   case G_ADDRSPACE_CAST:
-  case G_UADDO:
-  case G_USUBO:
-  case G_UADDE:
-  case G_USUBE:
-  case G_SADDO:
-  case G_SSUBO:
-  case G_SADDE:
-  case G_SSUBE:
     return fewerElementsVectorMultiEltType(GMI, NumElts);
   case G_ICMP:
   case G_FCMP:
@@ -4860,26 +4882,10 @@ LegalizerHelper::moreElementsVector(MachineInstr &MI, unsigned TypeIdx,
     moreElementsVectorDst(MI, MoreTy, 0);
     Observer.changedInstr(MI);
     return Legalized;
-  case TargetOpcode::G_SELECT: {
-    Register DstReg = MI.getOperand(0).getReg();
-    Register CondReg = MI.getOperand(1).getReg();
-    LLT DstTy = MRI.getType(DstReg);
-    LLT CondTy = MRI.getType(CondReg);
-    if (TypeIdx == 1) {
-      if (!CondTy.isScalar() ||
-          DstTy.getElementCount() != MoreTy.getElementCount())
-        return UnableToLegalize;
-
-      // This is turning a scalar select of vectors into a vector
-      // select. Broadcast the select condition.
-      auto ShufSplat = MIRBuilder.buildShuffleSplat(MoreTy, CondReg);
-      Observer.changingInstr(MI);
-      MI.getOperand(1).setReg(ShufSplat.getReg(0));
-      Observer.changedInstr(MI);
-      return Legalized;
-    }
-
-    if (CondTy.isVector())
+  case TargetOpcode::G_SELECT:
+    if (TypeIdx != 0)
+      return UnableToLegalize;
+    if (MRI.getType(MI.getOperand(1).getReg()).isVector())
       return UnableToLegalize;
 
     Observer.changingInstr(MI);
@@ -4888,7 +4894,6 @@ LegalizerHelper::moreElementsVector(MachineInstr &MI, unsigned TypeIdx,
     moreElementsVectorDst(MI, MoreTy, 0);
     Observer.changedInstr(MI);
     return Legalized;
-  }
   case TargetOpcode::G_UNMERGE_VALUES:
     return UnableToLegalize;
   case TargetOpcode::G_PHI:
@@ -7224,32 +7229,25 @@ LegalizerHelper::LegalizeResult LegalizerHelper::lowerSelect(MachineInstr &MI) {
   Register Op2Reg = MI.getOperand(3).getReg();
   LLT DstTy = MRI.getType(DstReg);
   LLT MaskTy = MRI.getType(MaskReg);
+  LLT Op1Ty = MRI.getType(Op1Reg);
   if (!DstTy.isVector())
     return UnableToLegalize;
 
+  // Vector selects can have a scalar predicate. If so, splat into a vector and
+  // finish for later legalization attempts to try again.
   if (MaskTy.isScalar()) {
-    // Turn the scalar condition into a vector condition mask.
-
     Register MaskElt = MaskReg;
-
-    // The condition was potentially zero extended before, but we want a sign
-    // extended boolean.
-    if (MaskTy.getSizeInBits() <= DstTy.getScalarSizeInBits() &&
-        MaskTy != LLT::scalar(1)) {
-      MaskElt = MIRBuilder.buildSExtInReg(MaskTy, MaskElt, 1).getReg(0);
-    }
-
-    // Continue the sign extension (or truncate) to match the data type.
-    MaskElt = MIRBuilder.buildSExtOrTrunc(DstTy.getElementType(),
-                                          MaskElt).getReg(0);
-
-    // Generate a vector splat idiom.
+    if (MaskTy.getSizeInBits() < DstTy.getScalarSizeInBits())
+      MaskElt = MIRBuilder.buildSExt(DstTy.getElementType(), MaskElt).getReg(0);
+    // Generate a vector splat idiom to be pattern matched later.
     auto ShufSplat = MIRBuilder.buildShuffleSplat(DstTy, MaskElt);
-    MaskReg = ShufSplat.getReg(0);
-    MaskTy = DstTy;
+    Observer.changingInstr(MI);
+    MI.getOperand(1).setReg(ShufSplat.getReg(0));
+    Observer.changedInstr(MI);
+    return Legalized;
   }
 
-  if (MaskTy.getSizeInBits() != DstTy.getSizeInBits()) {
+  if (MaskTy.getSizeInBits() != Op1Ty.getSizeInBits()) {
     return UnableToLegalize;
   }
 
@@ -7416,7 +7414,7 @@ static Register getMemsetValue(Register Val, LLT Ty, MachineIRBuilder &MIB) {
   unsigned NumBits = Ty.getScalarSizeInBits();
   auto ValVRegAndVal = getIConstantVRegValWithLookThrough(Val, MRI);
   if (!Ty.isVector() && ValVRegAndVal) {
-    APInt Scalar = ValVRegAndVal->Value.trunc(8);
+    APInt Scalar = ValVRegAndVal->Value.truncOrSelf(8);
     APInt SplatVal = APInt::getSplat(NumBits, Scalar);
     return MIB.buildConstant(Ty, SplatVal).getReg(0);
   }
@@ -7571,7 +7569,7 @@ LegalizerHelper::lowerMemcpyInline(MachineInstr &MI) {
   // See if this is a constant length copy
   auto LenVRegAndVal = getIConstantVRegValWithLookThrough(Len, MRI);
   // FIXME: support dynamically sized G_MEMCPY_INLINE
-  assert(LenVRegAndVal &&
+  assert(LenVRegAndVal.hasValue() &&
          "inline memcpy with dynamic size is not yet supported");
   uint64_t KnownLen = LenVRegAndVal->Value.getZExtValue();
   if (KnownLen == 0) {
@@ -7611,7 +7609,7 @@ LegalizerHelper::lowerMemcpy(MachineInstr &MI, Register Dst, Register Src,
 
   bool DstAlignCanChange = false;
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  Align Alignment = std::min(DstAlign, SrcAlign);
+  Align Alignment = commonAlignment(DstAlign, SrcAlign);
 
   MachineInstr *FIDef = getOpcodeDef(TargetOpcode::G_FRAME_INDEX, Dst, MRI);
   if (FIDef && !MFI.isFixedObjectIndex(FIDef->getOperand(1).getIndex()))
@@ -7646,7 +7644,7 @@ LegalizerHelper::lowerMemcpy(MachineInstr &MI, Register Dst, Register Src,
     const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
     if (!TRI->hasStackRealignment(MF))
       while (NewAlign > Alignment && DL.exceedsNaturalStackAlignment(NewAlign))
-        NewAlign = NewAlign.previous();
+        NewAlign = NewAlign / 2;
 
     if (NewAlign > Alignment) {
       Alignment = NewAlign;
@@ -7719,7 +7717,7 @@ LegalizerHelper::lowerMemmove(MachineInstr &MI, Register Dst, Register Src,
   bool DstAlignCanChange = false;
   MachineFrameInfo &MFI = MF.getFrameInfo();
   bool OptSize = shouldLowerMemFuncForSize(MF);
-  Align Alignment = std::min(DstAlign, SrcAlign);
+  Align Alignment = commonAlignment(DstAlign, SrcAlign);
 
   MachineInstr *FIDef = getOpcodeDef(TargetOpcode::G_FRAME_INDEX, Dst, MRI);
   if (FIDef && !MFI.isFixedObjectIndex(FIDef->getOperand(1).getIndex()))
@@ -7754,7 +7752,7 @@ LegalizerHelper::lowerMemmove(MachineInstr &MI, Register Dst, Register Src,
     const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
     if (!TRI->hasStackRealignment(MF))
       while (NewAlign > Alignment && DL.exceedsNaturalStackAlignment(NewAlign))
-        NewAlign = NewAlign.previous();
+        NewAlign = NewAlign / 2;
 
     if (NewAlign > Alignment) {
       Alignment = NewAlign;

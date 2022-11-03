@@ -211,7 +211,7 @@ SimpleSegmentAlloc::Create(JITLinkMemoryManager &MemMgr, const JITLinkDylib *JD,
 SimpleSegmentAlloc::SimpleSegmentAlloc(SimpleSegmentAlloc &&) = default;
 SimpleSegmentAlloc &
 SimpleSegmentAlloc::operator=(SimpleSegmentAlloc &&) = default;
-SimpleSegmentAlloc::~SimpleSegmentAlloc() = default;
+SimpleSegmentAlloc::~SimpleSegmentAlloc() {}
 
 SimpleSegmentAlloc::SegmentInfo SimpleSegmentAlloc::getSegInfo(AllocGroup AG) {
   auto I = ContentBlocks.find(AG);

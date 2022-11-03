@@ -29,7 +29,7 @@
 
 namespace llvm {
 
-RTDyldMemoryManager::~RTDyldMemoryManager() = default;
+RTDyldMemoryManager::~RTDyldMemoryManager() {}
 
 #if defined(HAVE_REGISTER_FRAME) && defined(HAVE_DEREGISTER_FRAME) &&          \
     !defined(__SEH__) && !defined(__USING_SJLJ_EXCEPTIONS__)
@@ -95,16 +95,18 @@ void RTDyldMemoryManager::registerEHFramesInProcess(uint8_t *Addr,
   // and projects/libunwind/src/UnwindLevel1-gcc-ext.c.
   const char *P = (const char *)Addr;
   const char *End = P + Size;
-  while (P != End)
+  do  {
     P = processFDE(P, false);
+  } while(P != End);
 }
 
 void RTDyldMemoryManager::deregisterEHFramesInProcess(uint8_t *Addr,
                                                       size_t Size) {
   const char *P = (const char *)Addr;
   const char *End = P + Size;
-  while (P != End)
+  do  {
     P = processFDE(P, true);
+  } while(P != End);
 }
 
 #else

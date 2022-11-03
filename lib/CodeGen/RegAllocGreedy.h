@@ -12,7 +12,9 @@
 #ifndef LLVM_CODEGEN_REGALLOCGREEDY_H_
 #define LLVM_CODEGEN_REGALLOCGREEDY_H_
 
+#include "AllocationOrder.h"
 #include "InterferenceCache.h"
+#include "LiveDebugVariables.h"
 #include "RegAllocBase.h"
 #include "RegAllocEvictionAdvisor.h"
 #include "SpillPlacement.h"
@@ -21,42 +23,52 @@
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/IndexedMap.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
+#include "llvm/CodeGen/EdgeBundles.h"
 #include "llvm/CodeGen/LiveInterval.h"
+#include "llvm/CodeGen/LiveIntervalUnion.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRangeEdit.h"
+#include "llvm/CodeGen/LiveRegMatrix.h"
+#include "llvm/CodeGen/LiveStacks.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineBlockFrequencyInfo.h"
+#include "llvm/CodeGen/MachineDominators.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
+#include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/CodeGen/Spiller.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/VirtRegMap.h"
+#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/BranchProbability.h"
+#include "llvm/Target/TargetMachine.h"
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <queue>
+#include <tuple>
 #include <utility>
 
 namespace llvm {
-class AllocationOrder;
-class AnalysisUsage;
-class EdgeBundles;
-class LiveDebugVariables;
-class LiveIntervals;
-class LiveRegMatrix;
-class MachineBasicBlock;
-class MachineBlockFrequencyInfo;
-class MachineDominatorTree;
-class MachineLoop;
-class MachineLoopInfo;
-class MachineOptimizationRemarkEmitter;
-class MachineOptimizationRemarkMissed;
-class SlotIndexes;
-class TargetInstrInfo;
-class VirtRegMap;
-
 class LLVM_LIBRARY_VISIBILITY RAGreedy : public MachineFunctionPass,
                                          public RegAllocBase,
                                          private LiveRangeEdit::Delegate {
@@ -150,18 +162,15 @@ public:
 private:
   // Convenient shortcuts.
   using PQueue = std::priority_queue<std::pair<unsigned, unsigned>>;
-  using SmallLISet = SmallPtrSet<const LiveInterval *, 4>;
-
-  // We need to track all tentative recolorings so we can roll back any
-  // successful and unsuccessful recoloring attempts.
-  using RecoloringStack =
-      SmallVector<std::pair<const LiveInterval *, MCRegister>, 8>;
+  using SmallLISet = SmallPtrSet<LiveInterval *, 4>;
 
   // context
   MachineFunction *MF;
 
   // Shortcuts to some useful interface.
   const TargetInstrInfo *TII;
+  const TargetRegisterInfo *TRI;
+  RegisterClassInfo RCI;
 
   // analyses
   SlotIndexes *Indexes;
@@ -172,6 +181,7 @@ private:
   EdgeBundles *Bundles;
   SpillPlacement *SpillPlacer;
   LiveDebugVariables *DebugVars;
+  AliasAnalysis *AA;
 
   // state
   std::unique_ptr<Spiller> SpillerInstance;
@@ -199,6 +209,57 @@ private:
 #ifndef NDEBUG
   static const char *const StageName[];
 #endif
+
+  /// EvictionTrack - Keeps track of past evictions in order to optimize region
+  /// split decision.
+  class EvictionTrack {
+
+  public:
+    using EvictorInfo =
+        std::pair<Register /* evictor */, MCRegister /* physreg */>;
+    using EvicteeInfo = llvm::DenseMap<Register /* evictee */, EvictorInfo>;
+
+  private:
+    /// Each Vreg that has been evicted in the last stage of selectOrSplit will
+    /// be mapped to the evictor Vreg and the PhysReg it was evicted from.
+    EvicteeInfo Evictees;
+
+  public:
+    /// Clear all eviction information.
+    void clear() { Evictees.clear(); }
+
+    ///  Clear eviction information for the given evictee Vreg.
+    /// E.g. when Vreg get's a new allocation, the old eviction info is no
+    /// longer relevant.
+    /// \param Evictee The evictee Vreg for whom we want to clear collected
+    /// eviction info.
+    void clearEvicteeInfo(Register Evictee) { Evictees.erase(Evictee); }
+
+    /// Track new eviction.
+    /// The Evictor vreg has evicted the Evictee vreg from Physreg.
+    /// \param PhysReg The physical register Evictee was evicted from.
+    /// \param Evictor The evictor Vreg that evicted Evictee.
+    /// \param Evictee The evictee Vreg.
+    void addEviction(MCRegister PhysReg, Register Evictor, Register Evictee) {
+      Evictees[Evictee].first = Evictor;
+      Evictees[Evictee].second = PhysReg;
+    }
+
+    /// Return the Evictor Vreg which evicted Evictee Vreg from PhysReg.
+    /// \param Evictee The evictee vreg.
+    /// \return The Evictor vreg which evicted Evictee vreg from PhysReg. 0 if
+    /// nobody has evicted Evictee from PhysReg.
+    EvictorInfo getEvictor(Register Evictee) {
+      if (Evictees.count(Evictee)) {
+        return Evictees[Evictee];
+      }
+
+      return EvictorInfo(0, 0);
+    }
+  };
+
+  // Keeps track of past evictions in order to optimize region split decision.
+  EvictionTrack LastEvicted;
 
   // splitting state.
   std::unique_ptr<SplitAnalysis> SA;
@@ -259,18 +320,16 @@ private:
   /// Callee-save register cost, calculated once per machine function.
   BlockFrequency CSRCost;
 
+  /// Enable or not the consideration of the cost of local intervals created
+  /// by a split candidate when choosing the best split candidate.
+  bool EnableAdvancedRASplitCost;
+
   /// Set of broken hints that may be reconciled later because of eviction.
-  SmallSetVector<const LiveInterval *, 8> SetOfBrokenHints;
+  SmallSetVector<LiveInterval *, 8> SetOfBrokenHints;
 
   /// The register cost values. This list will be recreated for each Machine
   /// Function
   ArrayRef<uint8_t> RegCosts;
-
-  /// Flags for the live range priority calculation, determined once per
-  /// machine function.
-  bool RegClassPriorityTrumpsGlobalness;
-
-  bool ReverseLocalAssignment;
 
 public:
   RAGreedy(const RegClassFilterFunc F = allocateAllRegClasses);
@@ -282,11 +341,11 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override;
   void releaseMemory() override;
   Spiller &spiller() override { return *SpillerInstance; }
-  void enqueueImpl(const LiveInterval *LI) override;
-  const LiveInterval *dequeue() override;
-  MCRegister selectOrSplit(const LiveInterval &,
+  void enqueueImpl(LiveInterval *LI) override;
+  LiveInterval *dequeue() override;
+  MCRegister selectOrSplit(LiveInterval &,
                            SmallVectorImpl<Register> &) override;
-  void aboutToRemoveInterval(const LiveInterval &) override;
+  void aboutToRemoveInterval(LiveInterval &) override;
 
   /// Perform register allocation.
   bool runOnMachineFunction(MachineFunction &mf) override;
@@ -304,70 +363,81 @@ public:
   static char ID;
 
 private:
-  MCRegister selectOrSplitImpl(const LiveInterval &,
-                               SmallVectorImpl<Register> &, SmallVirtRegSet &,
-                               RecoloringStack &, unsigned = 0);
+  MCRegister selectOrSplitImpl(LiveInterval &, SmallVectorImpl<Register> &,
+                               SmallVirtRegSet &, unsigned = 0);
 
   bool LRE_CanEraseVirtReg(Register) override;
   void LRE_WillShrinkVirtReg(Register) override;
   void LRE_DidCloneVirtReg(Register, Register) override;
-  void enqueue(PQueue &CurQueue, const LiveInterval *LI);
-  const LiveInterval *dequeue(PQueue &CurQueue);
+  void enqueue(PQueue &CurQueue, LiveInterval *LI);
+  LiveInterval *dequeue(PQueue &CurQueue);
 
-  bool hasVirtRegAlloc();
   BlockFrequency calcSpillCost();
   bool addSplitConstraints(InterferenceCache::Cursor, BlockFrequency &);
   bool addThroughConstraints(InterferenceCache::Cursor, ArrayRef<unsigned>);
   bool growRegion(GlobalSplitCandidate &Cand);
+  bool splitCanCauseEvictionChain(Register Evictee, GlobalSplitCandidate &Cand,
+                                  unsigned BBNumber,
+                                  const AllocationOrder &Order);
+  bool splitCanCauseLocalSpill(unsigned VirtRegToSplit,
+                               GlobalSplitCandidate &Cand, unsigned BBNumber,
+                               const AllocationOrder &Order);
   BlockFrequency calcGlobalSplitCost(GlobalSplitCandidate &,
-                                     const AllocationOrder &Order);
+                                     const AllocationOrder &Order,
+                                     bool *CanCauseEvictionChain);
   bool calcCompactRegion(GlobalSplitCandidate &);
   void splitAroundRegion(LiveRangeEdit &, ArrayRef<unsigned>);
   void calcGapWeights(MCRegister, SmallVectorImpl<float> &);
-  void evictInterference(const LiveInterval &, MCRegister,
+  bool canEvictInterferenceInRange(const LiveInterval &VirtReg,
+                                   MCRegister PhysReg, SlotIndex Start,
+                                   SlotIndex End, EvictionCost &MaxCost) const;
+  MCRegister getCheapestEvicteeWeight(const AllocationOrder &Order,
+                                      const LiveInterval &VirtReg,
+                                      SlotIndex Start, SlotIndex End,
+                                      float *BestEvictWeight) const;
+  void evictInterference(LiveInterval &, MCRegister,
                          SmallVectorImpl<Register> &);
-  bool mayRecolorAllInterferences(MCRegister PhysReg,
-                                  const LiveInterval &VirtReg,
+  bool mayRecolorAllInterferences(MCRegister PhysReg, LiveInterval &VirtReg,
                                   SmallLISet &RecoloringCandidates,
                                   const SmallVirtRegSet &FixedRegisters);
 
-  MCRegister tryAssign(const LiveInterval &, AllocationOrder &,
+  MCRegister tryAssign(LiveInterval &, AllocationOrder &,
                        SmallVectorImpl<Register> &, const SmallVirtRegSet &);
-  MCRegister tryEvict(const LiveInterval &, AllocationOrder &,
+  MCRegister tryEvict(LiveInterval &, AllocationOrder &,
                       SmallVectorImpl<Register> &, uint8_t,
                       const SmallVirtRegSet &);
-  MCRegister tryRegionSplit(const LiveInterval &, AllocationOrder &,
+  MCRegister tryRegionSplit(LiveInterval &, AllocationOrder &,
                             SmallVectorImpl<Register> &);
   /// Calculate cost of region splitting.
-  unsigned calculateRegionSplitCost(const LiveInterval &VirtReg,
+  unsigned calculateRegionSplitCost(LiveInterval &VirtReg,
                                     AllocationOrder &Order,
                                     BlockFrequency &BestCost,
-                                    unsigned &NumCands, bool IgnoreCSR);
+                                    unsigned &NumCands, bool IgnoreCSR,
+                                    bool *CanCauseEvictionChain = nullptr);
   /// Perform region splitting.
-  unsigned doRegionSplit(const LiveInterval &VirtReg, unsigned BestCand,
+  unsigned doRegionSplit(LiveInterval &VirtReg, unsigned BestCand,
                          bool HasCompact, SmallVectorImpl<Register> &NewVRegs);
   /// Check other options before using a callee-saved register for the first
   /// time.
-  MCRegister tryAssignCSRFirstTime(const LiveInterval &VirtReg,
+  MCRegister tryAssignCSRFirstTime(LiveInterval &VirtReg,
                                    AllocationOrder &Order, MCRegister PhysReg,
                                    uint8_t &CostPerUseLimit,
                                    SmallVectorImpl<Register> &NewVRegs);
   void initializeCSRCost();
-  unsigned tryBlockSplit(const LiveInterval &, AllocationOrder &,
+  unsigned tryBlockSplit(LiveInterval &, AllocationOrder &,
                          SmallVectorImpl<Register> &);
-  unsigned tryInstructionSplit(const LiveInterval &, AllocationOrder &,
+  unsigned tryInstructionSplit(LiveInterval &, AllocationOrder &,
                                SmallVectorImpl<Register> &);
-  unsigned tryLocalSplit(const LiveInterval &, AllocationOrder &,
+  unsigned tryLocalSplit(LiveInterval &, AllocationOrder &,
                          SmallVectorImpl<Register> &);
-  unsigned trySplit(const LiveInterval &, AllocationOrder &,
+  unsigned trySplit(LiveInterval &, AllocationOrder &,
                     SmallVectorImpl<Register> &, const SmallVirtRegSet &);
-  unsigned tryLastChanceRecoloring(const LiveInterval &, AllocationOrder &,
+  unsigned tryLastChanceRecoloring(LiveInterval &, AllocationOrder &,
                                    SmallVectorImpl<Register> &,
-                                   SmallVirtRegSet &, RecoloringStack &,
-                                   unsigned);
+                                   SmallVirtRegSet &, unsigned);
   bool tryRecoloringCandidates(PQueue &, SmallVectorImpl<Register> &,
-                               SmallVirtRegSet &, RecoloringStack &, unsigned);
-  void tryHintRecoloring(const LiveInterval &);
+                               SmallVirtRegSet &, unsigned);
+  void tryHintRecoloring(LiveInterval &);
   void tryHintsRecoloring();
 
   /// Model the information carried by one end of a copy.

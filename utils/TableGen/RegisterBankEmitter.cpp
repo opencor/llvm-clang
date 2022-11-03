@@ -172,8 +172,9 @@ static void visitRegisterBankClasses(
     SmallPtrSetImpl<const CodeGenRegisterClass *> &VisitedRCs) {
 
   // Make sure we only visit each class once to avoid infinite loops.
-  if (!VisitedRCs.insert(RC).second)
+  if (VisitedRCs.count(RC))
     return;
+  VisitedRCs.insert(RC);
 
   // Visit each explicitly named class.
   VisitFn(RC, Kind.str());
@@ -265,8 +266,9 @@ void RegisterBankEmitter::emitBaseClassImplementation(
      << "::NumRegisterBanks) {\n"
      << "  // Assert that RegBank indices match their ID's\n"
      << "#ifndef NDEBUG\n"
-     << "  for (auto RB : enumerate(RegBanks))\n"
-     << "    assert(RB.index() == RB.value()->getID() && \"Index != ID\");\n"
+     << "  unsigned Index = 0;\n"
+     << "  for (const auto &RB : RegBanks)\n"
+     << "    assert(Index++ == RB->getID() && \"Index != ID\");\n"
      << "#endif // NDEBUG\n"
      << "}\n"
      << "} // end namespace llvm\n";

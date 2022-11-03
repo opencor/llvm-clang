@@ -24,7 +24,7 @@ extern int P;
 
 void bar(int);
 
-void foo(void) {
+void foo() {
   bar(I);
 }
 

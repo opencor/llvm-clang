@@ -24,7 +24,7 @@ public:
     : MCELFObjectTargetWriter(false, OSABI, ELF::EM_MSP430,
                               /*HasRelocationAddend*/ true) {}
 
-  ~MSP430ELFObjectWriter() override = default;
+  ~MSP430ELFObjectWriter() override {}
 
 protected:
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,

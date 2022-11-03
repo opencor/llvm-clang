@@ -3,7 +3,7 @@
 
 #include "Inputs/system-header-simulator.h"
 
-void foo(void);
+void foo();
 
 // Ensure that child process is properly checked.
 int f1(int x, int y) {
@@ -125,7 +125,7 @@ void f4(int x) {
 } //no-warning
 
 
-void f5(void) {
+void f5() {
   // See "libxtables: move some code to avoid cautions in vfork man page"
   // (http://lists.netfilter.org/pipermail/netfilter-buglog/2014-October/003280.html).
   if (vfork() == 0) { // expected-warning{{Call to function 'vfork' is insecure}}

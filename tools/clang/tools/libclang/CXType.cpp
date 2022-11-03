@@ -116,7 +116,6 @@ static CXTypeKind GetTypeKind(QualType T) {
     TKCASE(Elaborated);
     TKCASE(Pipe);
     TKCASE(Attributed);
-    TKCASE(BTFTagAttributed);
     TKCASE(Atomic);
     default:
       return CXType_Unexposed;
@@ -136,10 +135,6 @@ CXType cxtype::MakeCXType(QualType T, CXTranslationUnit TU) {
         // equivalent type.
         return MakeCXType(ATT->getEquivalentType(), TU);
       }
-    }
-    if (auto *ATT = T->getAs<BTFTagAttributedType>()) {
-      if (!(TU->ParsingOptions & CXTranslationUnit_IncludeAttributedTypes))
-        return MakeCXType(ATT->getWrappedType(), TU);
     }
     // Handle paren types as the original type
     if (auto *PTT = T->getAs<ParenType>()) {
@@ -615,7 +610,6 @@ CXString clang_getTypeKindSpelling(enum CXTypeKind K) {
     TKIND(Elaborated);
     TKIND(Pipe);
     TKIND(Attributed);
-    TKIND(BTFTagAttributed);
     TKIND(BFloat16);
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) TKIND(Id);
 #include "clang/Basic/OpenCLImageTypes.def"
@@ -666,7 +660,6 @@ CXCallingConv clang_getFunctionTypeCallingConv(CXType X) {
       TCALLINGCONV(X86RegCall);
       TCALLINGCONV(X86VectorCall);
       TCALLINGCONV(AArch64VectorCall);
-      TCALLINGCONV(AArch64SVEPCS);
       TCALLINGCONV(Win64);
       TCALLINGCONV(X86_64SysV);
       TCALLINGCONV(AAPCS);
@@ -677,7 +670,6 @@ CXCallingConv clang_getFunctionTypeCallingConv(CXType X) {
       TCALLINGCONV(PreserveMost);
       TCALLINGCONV(PreserveAll);
     case CC_SpirFunction: return CXCallingConv_Unexposed;
-    case CC_AMDGPUKernelCall: return CXCallingConv_Unexposed;
     case CC_OpenCLKernel: return CXCallingConv_Unexposed;
       break;
     }
@@ -1059,9 +1051,6 @@ CXType clang_Type_getModifiedType(CXType CT) {
   if (auto *ATT = T->getAs<AttributedType>())
     return MakeCXType(ATT->getModifiedType(), GetTU(CT));
 
-  if (auto *ATT = T->getAs<BTFTagAttributedType>())
-    return MakeCXType(ATT->getWrappedType(), GetTU(CT));
-
   return MakeCXType(QualType(), GetTU(CT));
 }
 
@@ -1155,7 +1144,7 @@ int clang_Type_getNumTemplateArguments(CXType CT) {
   if (!TA)
     return -1;
 
-  return GetTemplateArgumentArraySize(*TA);
+  return GetTemplateArgumentArraySize(TA.getValue());
 }
 
 CXType clang_Type_getTemplateArgumentAsType(CXType CT, unsigned index) {
@@ -1167,8 +1156,8 @@ CXType clang_Type_getTemplateArgumentAsType(CXType CT, unsigned index) {
   if (!TA)
     return MakeCXType(QualType(), GetTU(CT));
 
-  Optional<QualType> QT = FindTemplateArgumentTypeAt(*TA, index);
-  return MakeCXType(QT.value_or(QualType()), GetTU(CT));
+  Optional<QualType> QT = FindTemplateArgumentTypeAt(TA.getValue(), index);
+  return MakeCXType(QT.getValueOr(QualType()), GetTU(CT));
 }
 
 CXType clang_Type_getObjCObjectBaseType(CXType CT) {

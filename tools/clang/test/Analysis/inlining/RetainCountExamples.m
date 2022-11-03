@@ -28,7 +28,7 @@ typedef struct objc_object {
 }
 @end
 
-void selfStaysLive(void) {
+void selfStaysLive() {
     SelfStaysLive *foo = [[SelfStaysLive alloc] init]; 
     [foo release];
 }

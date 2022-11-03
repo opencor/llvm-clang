@@ -19,10 +19,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/IntrinsicsX86.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/IR/PatternMatch.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/KnownBits.h"
 
@@ -222,21 +220,16 @@ bool X86PartialReduction::trySADReplacement(Instruction *Op) {
   if (!cast<VectorType>(Op->getType())->getElementType()->isIntegerTy(32))
     return false;
 
-  Value *LHS;
-  if (match(Op, PatternMatch::m_Intrinsic<Intrinsic::abs>())) {
-    LHS = Op->getOperand(0);
-  } else {
-    // Operand should be a select.
-    auto *SI = dyn_cast<SelectInst>(Op);
-    if (!SI)
-      return false;
+  // Operand should be a select.
+  auto *SI = dyn_cast<SelectInst>(Op);
+  if (!SI)
+    return false;
 
-    Value *RHS;
-    // Select needs to implement absolute value.
-    auto SPR = matchSelectPattern(SI, LHS, RHS);
-    if (SPR.Flavor != SPF_ABS)
-      return false;
-  }
+  // Select needs to implement absolute value.
+  Value *LHS, *RHS;
+  auto SPR = matchSelectPattern(SI, LHS, RHS);
+  if (SPR.Flavor != SPF_ABS)
+    return false;
 
   // Need a subtract of two values.
   auto *Sub = dyn_cast<BinaryOperator>(LHS);
@@ -260,7 +253,7 @@ bool X86PartialReduction::trySADReplacement(Instruction *Op) {
   if (!Op0 || !Op1)
     return false;
 
-  IRBuilder<> Builder(Op);
+  IRBuilder<> Builder(SI);
 
   auto *OpTy = cast<FixedVectorType>(Op->getType());
   unsigned NumElts = OpTy->getNumElements();
@@ -278,7 +271,7 @@ bool X86PartialReduction::trySADReplacement(Instruction *Op) {
     IntrinsicNumElts = 16;
   }
 
-  Function *PSADBWFn = Intrinsic::getDeclaration(Op->getModule(), IID);
+  Function *PSADBWFn = Intrinsic::getDeclaration(SI->getModule(), IID);
 
   if (NumElts < 16) {
     // Pad input with zeroes.
@@ -343,8 +336,8 @@ bool X86PartialReduction::trySADReplacement(Instruction *Op) {
     Ops[0] = Builder.CreateShuffleVector(Ops[0], Zero, ConcatMask);
   }
 
-  Op->replaceAllUsesWith(Ops[0]);
-  Op->eraseFromParent();
+  SI->replaceAllUsesWith(Ops[0]);
+  SI->eraseFromParent();
 
   return true;
 }
@@ -439,8 +432,8 @@ static void collectLeaves(Value *Root, SmallVectorImpl<Instruction *> &Leaves) {
 
   while (!Worklist.empty()) {
     Value *V = Worklist.pop_back_val();
-    if (!Visited.insert(V).second)
-      continue;
+     if (!Visited.insert(V).second)
+       continue;
 
     if (auto *PN = dyn_cast<PHINode>(V)) {
       // PHI node should have single use unless it is the root node, then it
@@ -466,7 +459,7 @@ static void collectLeaves(Value *Root, SmallVectorImpl<Instruction *> &Leaves) {
         // gets us back to this node.
         if (BO->hasNUses(BO == Root ? 3 : 2)) {
           PHINode *PN = nullptr;
-          for (auto *U : BO->users())
+          for (auto *U : Root->users())
             if (auto *P = dyn_cast<PHINode>(U))
               if (!Visited.count(P))
                 PN = P;

@@ -68,7 +68,6 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/DivergenceAnalysis.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -393,14 +392,14 @@ void LegacyDivergenceAnalysis::print(raw_ostream &OS, const Module *) const {
     return;
 
   // Dumps all divergent values in F, arguments and then instructions.
-  for (const auto &Arg : F->args()) {
+  for (auto &Arg : F->args()) {
     OS << (isDivergent(&Arg) ? "DIVERGENT: " : "           ");
     OS << Arg << "\n";
   }
   // Iterate instructions using instructions() to ensure a deterministic order.
   for (const BasicBlock &BB : *F) {
     OS << "\n           " << BB.getName() << ":\n";
-    for (const auto &I : BB.instructionsWithoutDebug()) {
+    for (auto &I : BB.instructionsWithoutDebug()) {
       OS << (isDivergent(&I) ? "DIVERGENT:     " : "               ");
       OS << I << "\n";
     }

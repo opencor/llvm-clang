@@ -18,14 +18,12 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/LLVM.h"
-#include "clang/Basic/Module.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
 #include "clang/Serialization/PCHContainerOperations.h"
-#include "clang/Serialization/SourceLocationEncoding.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -104,8 +102,6 @@ private:
   /// Keys in the map never have const/volatile qualifiers.
   using TypeIdxMap = llvm::DenseMap<QualType, serialization::TypeIdx,
                                     serialization::UnsafeQualTypeDenseMapInfo>;
-
-  using LocSeq = SourceLocationSequence;
 
   /// The bitstream writer used to emit this precompiled header.
   llvm::BitstreamWriter &Stream;
@@ -480,6 +476,7 @@ private:
                                      bool isModule);
 
   unsigned TypeExtQualAbbrev = 0;
+  unsigned TypeFunctionProtoAbbrev = 0;
   void WriteTypeAbbrevs();
   void WriteType(QualType T);
 
@@ -584,12 +581,10 @@ public:
                         RecordDataImpl &Record);
 
   /// Emit a source location.
-  void AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record,
-                         LocSeq *Seq = nullptr);
+  void AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record);
 
   /// Emit a source range.
-  void AddSourceRange(SourceRange Range, RecordDataImpl &Record,
-                      LocSeq *Seq = nullptr);
+  void AddSourceRange(SourceRange Range, RecordDataImpl &Record);
 
   /// Emit a reference to an identifier.
   void AddIdentifierRef(const IdentifierInfo *II, RecordDataImpl &Record);
@@ -686,6 +681,10 @@ public:
     return TypeExtQualAbbrev;
   }
 
+  unsigned getTypeFunctionProtoAbbrev() const {
+    return TypeFunctionProtoAbbrev;
+  }
+
   unsigned getDeclParmVarAbbrev() const { return DeclParmVarAbbrev; }
   unsigned getDeclRecordAbbrev() const { return DeclRecordAbbrev; }
   unsigned getDeclTypedefAbbrev() const { return DeclTypedefAbbrev; }
@@ -702,10 +701,6 @@ public:
 
   bool hasChain() const { return Chain; }
   ASTReader *getChain() const { return Chain; }
-
-  bool isWritingNamedModules() const {
-    return WritingModule && WritingModule->isModulePurview();
-  }
 
 private:
   // ASTDeserializationListener implementation

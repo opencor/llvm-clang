@@ -11,7 +11,7 @@
 
 I* pi;
 
-I* foobar(void);
+I* foobar();
 
 @implementation I
 - (id) PrivInstMeth {

@@ -5,7 +5,7 @@
 @import import_decl;
 // CHECK: struct T
 
-int main(void) {
+int main() {
   return 0;
 }
 

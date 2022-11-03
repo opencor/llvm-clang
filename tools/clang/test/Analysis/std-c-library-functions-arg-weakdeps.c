@@ -26,14 +26,14 @@
 // CHECK: Loaded summary for: unsigned long fread(void *restrict, size_t, size_t, FILE *restrict) __attribute__((nonnull(1)))
 // CHECK: Loaded summary for: int fileno(FILE *stream)
 
-void initializeSummaryMap(void);
+void initializeSummaryMap();
 // We analyze this function first, and the call expression inside initializes
 // the summary map. This way we force the loading of the summaries. The
 // summaries would not be loaded without this because during the first bug
 // report in WeakDependency::checkPreCall we stop further evaluation. And
 // StdLibraryFunctionsChecker lazily initializes its summary map from its
 // checkPreCall.
-void analyzeThisFirst(void) {
+void analyzeThisFirst() {
   initializeSummaryMap();
 }
 
@@ -45,7 +45,7 @@ int isalnum(int);
 size_t fread(void *restrict, size_t, size_t, FILE *restrict) __attribute__((nonnull(1)));
 int fileno(FILE *stream);
 
-void test_uninit_arg(void) {
+void test_uninit_arg() {
   int v;
   int r = isalnum(v); // \
   // expected-warning{{1st function call argument is an uninitialized value [core.CallAndMessage]}}
@@ -58,7 +58,7 @@ void test_notnull_arg(FILE *F) {
   expected-warning{{Null pointer passed to 1st parameter expecting 'nonnull' [core.NonNullParamChecker]}}
 }
 
-void test_notnull_stream_arg(void) {
+void test_notnull_stream_arg() {
   fileno(0); // \
   // expected-warning{{Stream pointer might be NULL [alpha.unix.Stream]}}
 }

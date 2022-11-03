@@ -37,11 +37,13 @@
 ; CHECK: movl    %[[CSR]], %ecx
 ; CHECK: callq   g
 ; CHECK: movl    [[X_OFFS]](%rsp), %eax          # 4-byte Reload
-;; Variable value remains on stack, location left pointing there.
+; CHECK: #DEBUG_VALUE: f:x <- $eax
 ; CHECK: addl    %[[CSR]], %eax
 
 ; DWARF:      DW_TAG_variable
 ; DWARF-NEXT:   DW_AT_location        (
+; DWARF-NEXT:      [{{.*}}, {{.*}}): DW_OP_breg7 RSP+36
+; DWARF-NEXT:      [{{.*}}, {{.*}}): DW_OP_reg0 RAX
 ; DWARF-NEXT:      [{{.*}}, {{.*}}): DW_OP_breg7 RSP+36)
 ; DWARF-NEXT:   DW_AT_name    ("x")
 

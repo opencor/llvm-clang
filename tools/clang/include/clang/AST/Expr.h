@@ -1786,7 +1786,7 @@ class StringLiteral final
   /// * An array of getByteLength() char used to store the string data.
 
 public:
-  enum StringKind { Ordinary, Wide, UTF8, UTF16, UTF32 };
+  enum StringKind { Ascii, Wide, UTF8, UTF16, UTF32 };
 
 private:
   unsigned numTrailingObjects(OverloadToken<unsigned>) const { return 1; }
@@ -1883,7 +1883,7 @@ public:
     return static_cast<StringKind>(StringLiteralBits.Kind);
   }
 
-  bool isOrdinary() const { return getKind() == Ordinary; }
+  bool isAscii() const { return getKind() == Ascii; }
   bool isWide() const { return getKind() == Wide; }
   bool isUTF8() const { return getKind() == UTF8; }
   bool isUTF16() const { return getKind() == UTF16; }
@@ -3128,7 +3128,11 @@ public:
     setDependence(getDependence() | ExprDependence::TypeValueInstantiation);
   }
 
-  bool isCallToStdMove() const;
+  bool isCallToStdMove() const {
+    const FunctionDecl *FD = getDirectCallee();
+    return getNumArgs() == 1 && FD && FD->isInStdNamespace() &&
+           FD->getIdentifier() && FD->getIdentifier()->isStr("move");
+  }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() >= firstCallExprConstant &&
@@ -3493,6 +3497,7 @@ protected:
     CastExprBits.BasePathSize = BasePathSize;
     assert((CastExprBits.BasePathSize == BasePathSize) &&
            "BasePathSize overflow!");
+    setDependence(computeDependence(this));
     assert(CastConsistency());
     CastExprBits.HasFPFeatures = HasFPFeatures;
   }
@@ -3626,7 +3631,6 @@ class ImplicitCastExpr final
                    ExprValueKind VK)
       : CastExpr(ImplicitCastExprClass, ty, VK, kind, op, BasePathLength,
                  FPO.requiresTrailingStorage()) {
-    setDependence(computeDependence(this));
     if (hasStoredFPFeatures())
       *getTrailingFPFeatures() = FPO;
   }
@@ -3704,9 +3708,7 @@ protected:
                    CastKind kind, Expr *op, unsigned PathSize,
                    bool HasFPFeatures, TypeSourceInfo *writtenTy)
       : CastExpr(SC, exprTy, VK, kind, op, PathSize, HasFPFeatures),
-        TInfo(writtenTy) {
-    setDependence(computeDependence(this));
-  }
+        TInfo(writtenTy) {}
 
   /// Construct an empty explicit cast.
   ExplicitCastExpr(StmtClass SC, EmptyShell Shell, unsigned PathSize,
@@ -4678,17 +4680,16 @@ public:
 };
 
 /// Represents a function call to one of __builtin_LINE(), __builtin_COLUMN(),
-/// __builtin_FUNCTION(), __builtin_FILE(), or __builtin_source_location().
+/// __builtin_FUNCTION(), or __builtin_FILE().
 class SourceLocExpr final : public Expr {
   SourceLocation BuiltinLoc, RParenLoc;
   DeclContext *ParentContext;
 
 public:
-  enum IdentKind { Function, File, Line, Column, SourceLocStruct };
+  enum IdentKind { Function, File, Line, Column };
 
-  SourceLocExpr(const ASTContext &Ctx, IdentKind Type, QualType ResultTy,
-                SourceLocation BLoc, SourceLocation RParenLoc,
-                DeclContext *Context);
+  SourceLocExpr(const ASTContext &Ctx, IdentKind Type, SourceLocation BLoc,
+                SourceLocation RParenLoc, DeclContext *Context);
 
   /// Build an empty call expression.
   explicit SourceLocExpr(EmptyShell Empty) : Expr(SourceLocExprClass, Empty) {}
@@ -4705,18 +4706,18 @@ public:
     return static_cast<IdentKind>(SourceLocExprBits.Kind);
   }
 
-  bool isIntType() const {
+  bool isStringType() const {
     switch (getIdentKind()) {
     case File:
     case Function:
-    case SourceLocStruct:
-      return false;
+      return true;
     case Line:
     case Column:
-      return true;
+      return false;
     }
     llvm_unreachable("unknown source location expression kind");
   }
+  bool isIntType() const LLVM_READONLY { return !isStringType(); }
 
   /// If the SourceLocExpr has been resolved return the subexpression
   /// representing the resolved value. Otherwise return null.

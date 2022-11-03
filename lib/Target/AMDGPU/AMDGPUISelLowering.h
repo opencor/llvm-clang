@@ -320,9 +320,8 @@ public:
 
   enum ImplicitParameter {
     FIRST_IMPLICIT,
-    PRIVATE_BASE,
-    SHARED_BASE,
-    QUEUE_PTR,
+    GRID_DIM = FIRST_IMPLICIT,
+    GRID_OFFSET,
   };
 
   /// Helper function that returns the byte offset of the given
@@ -367,6 +366,9 @@ enum NodeType : unsigned {
 
   // Return with values from a non-entry function.
   RET_FLAG,
+
+  // Return with values from a non-entry function (AMDGPU_Gfx CC).
+  RET_GFX_FLAG,
 
   DWORDADDR,
   FRACT,
@@ -481,9 +483,6 @@ enum NodeType : unsigned {
   CONST_DATA_PTR,
   PC_ADD_REL_OFFSET,
   LDS,
-  FPTRUNC_ROUND_UPWARD,
-  FPTRUNC_ROUND_DOWNWARD,
-
   DUMMY_CHAIN,
   FIRST_MEM_OPCODE_NUMBER = ISD::FIRST_TARGET_MEMORY_OPCODE,
   LOAD_D16_HI,

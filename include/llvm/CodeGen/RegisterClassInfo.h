@@ -20,7 +20,8 @@
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/MC/MCRegister.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include <cassert>
 #include <cstdint>
 #include <memory>
 
@@ -59,10 +60,6 @@ class RegisterClassInfo {
 
   // Map register alias to the callee saved Register.
   SmallVector<MCPhysReg, 4> CalleeSavedAliases;
-
-  // Indicate if a specified callee saved register be in the allocation order
-  // exactly as written in the tablegen descriptions or listed later.
-  BitVector IgnoreCSRForAllocOrder;
 
   // Reserved registers in the current MF.
   BitVector Reserved;

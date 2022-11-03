@@ -13,13 +13,13 @@
 
 #define CFSTR __builtin___CFStringMakeConstantString
 
-void f(void) {
+void f() {
   CFSTR("Hello, World!");
 }
 
 // rdar://6248329
 void *G = CFSTR("yo joe");
 
-void h(void) {
+void h() {
   static void* h = CFSTR("Goodbye, World!");
 }

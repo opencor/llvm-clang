@@ -22,7 +22,6 @@ write_cmake_config("Config") {
     "LLDB_ENABLE_PYTHON=",
     "LLDB_ENABLE_FBSDVMCORE=",
     "LLDB_EMBED_PYTHON_HOME=",
-    "LLDB_GLOBAL_INIT_DIRECTORY=",
 
     "LLDB_PYTHON_HOME=",
 

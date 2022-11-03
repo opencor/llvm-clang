@@ -2,7 +2,7 @@
 
 typedef int TInt;
 
-static void test(void) {
+static void test() {
   int *pi;
 
   int typeof (int) aIntInt; // expected-error{{cannot combine with previous 'int' declaration specifier}}
@@ -19,7 +19,7 @@ static void test(void) {
 }
 
 // <rdar://problem/8237491>
-void test2(void) {
+void test2() {
     int a;
     short b;
     __typeof__(a) (*f)(__typeof__(b));    

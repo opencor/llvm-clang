@@ -40,7 +40,6 @@ do_lldb="yes"
 do_polly="yes"
 do_mlir="yes"
 do_flang="yes"
-do_silent_log="no"
 BuildDir="`pwd`"
 ExtraConfigureFlags=""
 ExportBranch=""
@@ -76,7 +75,6 @@ function usage() {
     echo " -no-polly            Disable check-out & build Polly"
     echo " -no-mlir             Disable check-out & build MLIR"
     echo " -no-flang            Disable check-out & build Flang"
-    echo " -silent-log          Don't output build logs to stdout"
 }
 
 while [ $# -gt 0 ]; do
@@ -181,9 +179,6 @@ while [ $# -gt 0 ]; do
         -no-flang )
             do_flang="no"
             ;;
-        -silent-log )
-            do_silent_log="yes"
-            ;;
         -help | --help | -h | --h | -\? )
             usage
             exit 0
@@ -249,17 +244,16 @@ projects="llvm clang"
 if [ $do_clang_tools = "yes" ]; then
   projects="$projects clang-tools-extra"
 fi
-runtimes=""
 if [ $do_rt = "yes" ]; then
-  runtimes="$runtimes compiler-rt"
+  projects="$projects compiler-rt"
 fi
 if [ $do_libs = "yes" ]; then
-  runtimes="$runtimes libcxx"
+  projects="$projects libcxx"
   if [ $do_libcxxabi = "yes" ]; then
-    runtimes="$runtimes libcxxabi"
+    projects="$projects libcxxabi"
   fi
   if [ $do_libunwind = "yes" ]; then
-    runtimes="$runtimes libunwind"
+    projects="$projects libunwind"
   fi
 fi
 if [ $do_openmp = "yes" ]; then
@@ -386,7 +380,6 @@ function configure_llvmCore() {
     esac
 
     project_list=${projects// /;}
-    runtime_list=${runtimes// /;}
     echo "# Using C compiler: $c_compiler"
     echo "# Using C++ compiler: $cxx_compiler"
 
@@ -399,7 +392,6 @@ function configure_llvmCore() {
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DLLVM_ENABLE_PROJECTS="$project_list" \
         -DLLVM_LIT_ARGS="-j $NumJobs" \
-        -DLLVM_ENABLE_RUNTIMES="$runtime_list" \
         $ExtraConfigureFlags $BuildDir/llvm-project/llvm \
         2>&1 | tee $LogDir/llvm.configure-Phase$Phase-$Flavor.log
     env CC="$c_compiler" CXX="$cxx_compiler" \
@@ -408,7 +400,6 @@ function configure_llvmCore() {
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DLLVM_ENABLE_PROJECTS="$project_list" \
         -DLLVM_LIT_ARGS="-j $NumJobs" \
-        -DLLVM_ENABLE_RUNTIMES="$runtime_list" \
         $ExtraConfigureFlags $BuildDir/llvm-project/llvm \
         2>&1 | tee $LogDir/llvm.configure-Phase$Phase-$Flavor.log
 
@@ -426,22 +417,16 @@ function build_llvmCore() {
       Verbose="-v"
     fi
 
-    redir="/dev/stdout"
-    if [ $do_silent_log == "yes" ]; then
-      echo "# Silencing build logs because of -silent-log flag..."
-      redir="/dev/null"
-    fi
-
     cd $ObjDir
     echo "# Compiling llvm $Release-$RC $Flavor"
     echo "# ${MAKE} -j $NumJobs $Verbose"
     ${MAKE} -j $NumJobs $Verbose \
-        2>&1 | tee $LogDir/llvm.make-Phase$Phase-$Flavor.log > $redir
+        2>&1 | tee $LogDir/llvm.make-Phase$Phase-$Flavor.log
 
     echo "# Installing llvm $Release-$RC $Flavor"
     echo "# ${MAKE} install"
     DESTDIR="${DestDir}" ${MAKE} install \
-        2>&1 | tee $LogDir/llvm.install-Phase$Phase-$Flavor.log > $redir
+        2>&1 | tee $LogDir/llvm.install-Phase$Phase-$Flavor.log
     cd $BuildDir
 }
 

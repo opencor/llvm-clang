@@ -69,7 +69,6 @@ public:
     memset(&DbgValueInst, 0, sizeof(DbgValueInst));
     DbgValueInst.Opcode = TargetOpcode::DBG_VALUE;
     DbgValueInst.Size = 1;
-    DbgValueInst.Flags = 1U << MCID::Meta;
 
     // Boilerplate that creates a MachineFunction and associated blocks.
     MF = createMachineFunction(Ctx, Mod);

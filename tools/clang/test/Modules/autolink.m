@@ -6,32 +6,32 @@
 
 @import autolink.sub2;
 
-int f(void) {
+int f() {
   return autolink_sub2();
 }
 
 @import autolink;
 
-int g(void) {
+int g() {
   return autolink;
 }
 
 @import Module.SubFramework;
-const char *get_module_subframework(void) {
+const char *get_module_subframework() {
   return module_subframework;
 }
 
 @import DependsOnModule.SubFramework;
-float *get_module_subframework_dep(void) {
+float *get_module_subframework_dep() {
   return sub_framework;
 }
 
 @import NoUmbrella;
-int use_no_umbrella(void) {
+int use_no_umbrella() {
   return no_umbrella_A;
 }
 
-int use_autolink_sub3(void) {
+int use_autolink_sub3() {
   return autolink_sub3();
 }
 

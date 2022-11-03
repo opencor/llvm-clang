@@ -11,10 +11,12 @@
 
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DIContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFCompileUnit.h"
+#include "llvm/DebugInfo/DWARF/DWARFDataExtractor.h"
 #include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
-#include "llvm/DebugInfo/DWARF/DWARFUnit.h"
+#include "llvm/DebugInfo/DWARF/DWARFRelocMap.h"
+#include "llvm/DebugInfo/DWARF/DWARFTypeUnit.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/Path.h"
 #include <cstdint>
@@ -24,6 +26,7 @@
 
 namespace llvm {
 
+class DWARFUnit;
 class raw_ostream;
 
 class DWARFDebugLine {
@@ -304,7 +307,6 @@ public:
   getOrParseLineTable(DWARFDataExtractor &DebugLineData, uint64_t Offset,
                       const DWARFContext &Ctx, const DWARFUnit *U,
                       function_ref<void(Error)> RecoverableErrorHandler);
-  void clearLineTable(uint64_t Offset);
 
   /// Helper to allow for parsing of an entire .debug_line section in sequence.
   class SectionParser {

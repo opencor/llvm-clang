@@ -4,16 +4,18 @@
 # RUN: llvm-mc -triple=riscv32 -filetype=obj \
 # RUN:     -o %t/elf_riscv32_branch.o %s
 # RUN: llvm-jitlink -noexec \
-# RUN:     -slab-allocate 100Kb -slab-address 0xfff00ff4 -slab-page-size 4096 \
-# RUN:     -abs external_func_positive_offset=0xfff00ffc -abs external_func_negative_offset=0xfff00000\
+# RUN:     -slab-allocate 100Kb -slab-address 0xfff00000 -slab-page-size 4096 \
+# RUN:     -define-abs external_func=0xfe \
 # RUN:     -check %s %t/elf_riscv64_branch.o
 # RUN: llvm-jitlink -noexec \
-# RUN:     -slab-allocate 100Kb -slab-address 0xfff00ff4 -slab-page-size 4096 \
-# RUN:     -abs external_func_positive_offset=0xfff00ffc -abs external_func_negative_offset=0xfff00000 \
+# RUN:     -slab-allocate 100Kb -slab-address 0xfff00000 -slab-page-size 4096 \
+# RUN:     -define-abs external_func=0xfe \
 # RUN:     -check %s %t/elf_riscv32_branch.o
 #
 
         .text
+        .file   "testcase.c"
+
 # Empty main entry point.
         .globl  main
         .p2align  1
@@ -25,13 +27,11 @@ main:
 
 # Test R_RISCV_BRANCH
 
-# jitlink-check: decode_operand(test_branch, 2)[12:0] = (external_func_positive_offset - test_branch)[12:0]
-# jitlink-check: decode_operand(test_branch+4, 2)[12:0] = (external_func_negative_offset - test_branch - 4)[12:0]
+# jitlink-check: decode_operand(test_branch, 2)[11:0] = (external_func - test_branch)[11:0]
   .globl  test_branch
   .p2align  1
   .type  test_branch,@function
 test_branch:
-  bge  a0, a1, external_func_positive_offset
-  bge  a0, a1, external_func_negative_offset
+  bge	a0, a1, external_func
 
   .size test_branch, .-test_branch

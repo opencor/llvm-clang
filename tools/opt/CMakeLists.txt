@@ -32,6 +32,7 @@ add_llvm_tool(opt
   BreakpointPrinter.cpp
   GraphPrinters.cpp
   NewPMDriver.cpp
+  PassPrinters.cpp
   PrintSCC.cpp
   opt.cpp
 

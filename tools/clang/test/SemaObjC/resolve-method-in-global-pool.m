@@ -57,7 +57,7 @@ extern id NSApp;
 @interface AppDelegate
 @end
 
-AppDelegate* GetDelegate(void)
+AppDelegate* GetDelegate()
 {
     return [NSApp delegate];
 }

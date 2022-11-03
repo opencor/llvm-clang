@@ -15,7 +15,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTMutationListener.h"
-#include "clang/AST/ASTStructuralEquivalence.h"
 #include "clang/AST/ASTUnresolvedSet.h"
 #include "clang/AST/AbstractTypeReader.h"
 #include "clang/AST/Decl.h"
@@ -43,7 +42,6 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticError.h"
 #include "clang/Basic/DiagnosticOptions.h"
-#include "clang/Basic/DiagnosticSema.h"
 #include "clang/Basic/ExceptionSpecificationType.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemOptions.h"
@@ -314,7 +312,7 @@ static bool checkLanguageOptions(const LangOptions &LangOpts,
 
 #define BENIGN_LANGOPT(Name, Bits, Default, Description)
 #define BENIGN_ENUM_LANGOPT(Name, Type, Bits, Default, Description)
-#define BENIGN_VALUE_LANGOPT(Name, Bits, Default, Description)
+#define BENIGN_VALUE_LANGOPT(Name, Type, Bits, Default, Description)
 #include "clang/Basic/LangOptions.def"
 
   if (ExistingLangOpts.ModuleFeatures != LangOpts.ModuleFeatures) {
@@ -624,28 +622,20 @@ collectMacroDefinitions(const PreprocessorOptions &PPOpts,
   }
 }
 
-enum OptionValidation {
-  OptionValidateNone,
-  OptionValidateContradictions,
-  OptionValidateStrictMatches,
-};
-
 /// Check the preprocessor options deserialized from the control block
 /// against the preprocessor options in an existing preprocessor.
 ///
 /// \param Diags If non-null, produce diagnostics for any mismatches incurred.
-/// \param Validation If set to OptionValidateNone, ignore differences in
-///        preprocessor options. If set to OptionValidateContradictions,
-///        require that options passed both in the AST file and on the command
-///        line (-D or -U) match, but tolerate options missing in one or the
-///        other. If set to OptionValidateContradictions, require that there
-///        are no differences in the options between the two.
-static bool checkPreprocessorOptions(
-    const PreprocessorOptions &PPOpts,
-    const PreprocessorOptions &ExistingPPOpts, DiagnosticsEngine *Diags,
-    FileManager &FileMgr, std::string &SuggestedPredefines,
-    const LangOptions &LangOpts,
-    OptionValidation Validation = OptionValidateContradictions) {
+/// \param Validate If true, validate preprocessor options. If false, allow
+///        macros defined by \p ExistingPPOpts to override those defined by
+///        \p PPOpts in SuggestedPredefines.
+static bool checkPreprocessorOptions(const PreprocessorOptions &PPOpts,
+                                     const PreprocessorOptions &ExistingPPOpts,
+                                     DiagnosticsEngine *Diags,
+                                     FileManager &FileMgr,
+                                     std::string &SuggestedPredefines,
+                                     const LangOptions &LangOpts,
+                                     bool Validate = true) {
   // Check macro definitions.
   MacroDefinitionsMap ASTFileMacros;
   collectMacroDefinitions(PPOpts, ASTFileMacros);
@@ -661,15 +651,7 @@ static bool checkPreprocessorOptions(
     // Check whether we know anything about this macro name or not.
     llvm::StringMap<std::pair<StringRef, bool /*IsUndef*/>>::iterator Known =
         ASTFileMacros.find(MacroName);
-    if (Validation == OptionValidateNone || Known == ASTFileMacros.end()) {
-      if (Validation == OptionValidateStrictMatches) {
-        // If strict matches are requested, don't tolerate any extra defines on
-        // the command line that are missing in the AST file.
-        if (Diags) {
-          Diags->Report(diag::err_pch_macro_def_undef) << MacroName << true;
-        }
-        return true;
-      }
+    if (!Validate || Known == ASTFileMacros.end()) {
       // FIXME: Check whether this identifier was referenced anywhere in the
       // AST file. If so, we should reject the AST file. Unfortunately, this
       // information isn't in the control block. What shall we do about it?
@@ -700,10 +682,8 @@ static bool checkPreprocessorOptions(
 
     // If the macro was #undef'd in both, or if the macro bodies are identical,
     // it's fine.
-    if (Existing.second || Existing.first == Known->second.first) {
-      ASTFileMacros.erase(Known);
+    if (Existing.second || Existing.first == Known->second.first)
       continue;
-    }
 
     // The macro bodies differ; complain.
     if (Diags) {
@@ -712,20 +692,9 @@ static bool checkPreprocessorOptions(
     }
     return true;
   }
-  if (Validation == OptionValidateStrictMatches) {
-    // If strict matches are requested, don't tolerate any extra defines in
-    // the AST file that are missing on the command line.
-    for (const auto &MacroName : ASTFileMacros.keys()) {
-      if (Diags) {
-        Diags->Report(diag::err_pch_macro_def_undef) << MacroName << false;
-      }
-      return true;
-    }
-  }
 
   // Check whether we're using predefines.
-  if (PPOpts.UsePredefines != ExistingPPOpts.UsePredefines &&
-      Validation != OptionValidateNone) {
+  if (PPOpts.UsePredefines != ExistingPPOpts.UsePredefines && Validate) {
     if (Diags) {
       Diags->Report(diag::err_pch_undef) << ExistingPPOpts.UsePredefines;
     }
@@ -734,8 +703,7 @@ static bool checkPreprocessorOptions(
 
   // Detailed record is important since it is used for the module cache hash.
   if (LangOpts.Modules &&
-      PPOpts.DetailedRecord != ExistingPPOpts.DetailedRecord &&
-      Validation != OptionValidateNone) {
+      PPOpts.DetailedRecord != ExistingPPOpts.DetailedRecord && Validate) {
     if (Diags) {
       Diags->Report(diag::err_pch_pp_detailed_record) << PPOpts.DetailedRecord;
     }
@@ -796,9 +764,13 @@ bool SimpleASTReaderListener::ReadPreprocessorOptions(
                                   const PreprocessorOptions &PPOpts,
                                   bool Complain,
                                   std::string &SuggestedPredefines) {
-  return checkPreprocessorOptions(PPOpts, PP.getPreprocessorOpts(), nullptr,
-                                  PP.getFileManager(), SuggestedPredefines,
-                                  PP.getLangOpts(), OptionValidateNone);
+  return checkPreprocessorOptions(PPOpts,
+                                  PP.getPreprocessorOpts(),
+                                  nullptr,
+                                  PP.getFileManager(),
+                                  SuggestedPredefines,
+                                  PP.getLangOpts(),
+                                  false);
 }
 
 /// Check the header search options deserialized from the control block
@@ -1488,19 +1460,18 @@ bool ASTReader::ReadSLocEntry(int ID) {
     unsigned RecCode = MaybeRecCode.get();
 
     if (RecCode == SM_SLOC_BUFFER_BLOB_COMPRESSED) {
-      if (!llvm::compression::zlib::isAvailable()) {
+      if (!llvm::zlib::isAvailable()) {
         Error("zlib is not available");
         return nullptr;
       }
-      SmallVector<uint8_t, 0> Uncompressed;
-      if (llvm::Error E = llvm::compression::zlib::uncompress(
-              llvm::arrayRefFromStringRef(Blob), Uncompressed, Record[0])) {
+      SmallString<0> Uncompressed;
+      if (llvm::Error E =
+              llvm::zlib::uncompress(Blob, Uncompressed, Record[0])) {
         Error("could not decompress embedded file contents: " +
               llvm::toString(std::move(E)));
         return nullptr;
       }
-      return llvm::MemoryBuffer::getMemBufferCopy(
-          llvm::toStringRef(Uncompressed), Name);
+      return llvm::MemoryBuffer::getMemBufferCopy(Uncompressed, Name);
     } else if (RecCode == SM_SLOC_BUFFER_BLOB) {
       return llvm::MemoryBuffer::getMemBuffer(Blob.drop_back(1), Name, true);
     } else {
@@ -1616,13 +1587,14 @@ bool ASTReader::ReadSLocEntry(int ID) {
   }
 
   case SM_SLOC_EXPANSION_ENTRY: {
-    LocSeq::State Seq;
-    SourceLocation SpellingLoc = ReadSourceLocation(*F, Record[1], Seq);
-    SourceLocation ExpansionBegin = ReadSourceLocation(*F, Record[2], Seq);
-    SourceLocation ExpansionEnd = ReadSourceLocation(*F, Record[3], Seq);
-    SourceMgr.createExpansionLoc(SpellingLoc, ExpansionBegin, ExpansionEnd,
-                                 Record[5], Record[4], ID,
-                                 BaseOffset + Record[0]);
+    SourceLocation SpellingLoc = ReadSourceLocation(*F, Record[1]);
+    SourceMgr.createExpansionLoc(SpellingLoc,
+                                     ReadSourceLocation(*F, Record[2]),
+                                     ReadSourceLocation(*F, Record[3]),
+                                     Record[5],
+                                     Record[4],
+                                     ID,
+                                     BaseOffset + Record[0]);
     break;
   }
   }
@@ -1722,7 +1694,6 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
   RecordData Record;
   SmallVector<IdentifierInfo*, 16> MacroParams;
   MacroInfo *Macro = nullptr;
-  llvm::MutableArrayRef<Token> MacroTokens;
 
   while (true) {
     // Advance to the next record, but if we get to the end of the block, don't
@@ -1777,8 +1748,7 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
       MI->setDefinitionEndLoc(ReadSourceLocation(F, Record, NextIndex));
       MI->setIsUsed(Record[NextIndex++]);
       MI->setUsedForHeaderGuard(Record[NextIndex++]);
-      MacroTokens = MI->allocateTokens(Record[NextIndex++],
-                                       PP.getPreprocessorAllocator());
+
       if (RecType == PP_MACRO_FUNCTION_LIKE) {
         // Decode function-like macro info.
         bool isC99VarArgs = Record[NextIndex++];
@@ -1823,14 +1793,10 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
       // If we see a TOKEN before a PP_MACRO_*, then the file is
       // erroneous, just pretend we didn't see this.
       if (!Macro) break;
-      if (MacroTokens.empty()) {
-        Error("unexpected number of macro tokens for a macro in AST file");
-        return Macro;
-      }
 
       unsigned Idx = 0;
-      MacroTokens[0] = ReadToken(F, Record, Idx);
-      MacroTokens = MacroTokens.drop_front();
+      Token Tok = ReadToken(F, Record, Idx);
+      Macro->AddTokenToBody(Tok);
       break;
     }
     }
@@ -2253,7 +2219,7 @@ bool ASTReader::shouldDisableValidationForFile(
 
   // If a PCH is loaded and validation is disabled for PCH then disable
   // validation for the PCH and the modules it loads.
-  ModuleKind K = CurrentDeserializingModuleKind.value_or(M.Kind);
+  ModuleKind K = CurrentDeserializingModuleKind.getValueOr(M.Kind);
 
   switch (K) {
   case MK_MainFile:
@@ -2467,8 +2433,8 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
           << Filename << moduleKindForDiagnostic(ImportStack.back()->Kind)
           << TopLevelPCHName << FileChange.Kind
           << (FileChange.Old && FileChange.New)
-          << llvm::itostr(FileChange.Old.value_or(0))
-          << llvm::itostr(FileChange.New.value_or(0));
+          << llvm::itostr(FileChange.Old.getValueOr(0))
+          << llvm::itostr(FileChange.New.getValueOr(0));
 
       // Print the import stack.
       if (ImportStack.size() > 1) {
@@ -2924,7 +2890,6 @@ ASTReader::ReadControlBlock(ModuleFile &F,
 
     case ORIGINAL_PCH_DIR:
       F.OriginalDir = std::string(Blob);
-      ResolveImportedPath(F, F.OriginalDir);
       break;
 
     case MODULE_NAME:
@@ -3138,7 +3103,6 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
       case IDENTIFIER_OFFSET:
       case INTERESTING_IDENTIFIERS:
       case STATISTICS:
-      case PP_ASSUME_NONNULL_LOC:
       case PP_CONDITIONAL_STACK:
       case PP_COUNTER_VALUE:
       case SOURCE_LOCATION_OFFSETS:
@@ -3337,7 +3301,7 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
       break;
 
     case WEAK_UNDECLARED_IDENTIFIERS:
-      if (Record.size() % 3 != 0)
+      if (Record.size() % 4 != 0)
         return llvm::createStringError(std::errc::illegal_byte_sequence,
                                        "invalid weak identifiers record");
 
@@ -3352,7 +3316,8 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
         WeakUndeclaredIdentifiers.push_back(
           getGlobalIdentifierID(F, Record[I++]));
         WeakUndeclaredIdentifiers.push_back(
-            ReadSourceLocation(F, Record, I).getRawEncoding());
+          ReadSourceLocation(F, Record, I).getRawEncoding());
+        WeakUndeclaredIdentifiers.push_back(Record[I++]);
       }
       break;
 
@@ -3399,14 +3364,6 @@ llvm::Error ASTReader::ReadASTBlock(ModuleFile &F,
         }
       }
       break;
-
-    case PP_ASSUME_NONNULL_LOC: {
-      unsigned Idx = 0;
-      if (!Record.empty())
-        PP.setPreambleRecordedPragmaAssumeNonNullLoc(
-            ReadSourceLocation(F, Record, Idx));
-      break;
-    }
 
     case PP_CONDITIONAL_STACK:
       if (!Record.empty()) {
@@ -5100,8 +5057,7 @@ std::string ASTReader::getOriginalSourceFile(
     const std::string &ASTFileName, FileManager &FileMgr,
     const PCHContainerReader &PCHContainerRdr, DiagnosticsEngine &Diags) {
   // Open the AST file.
-  auto Buffer = FileMgr.getBufferForFile(ASTFileName, /*IsVolatile=*/false,
-                                         /*RequiresNullTerminator=*/false);
+  auto Buffer = FileMgr.getBufferForFile(ASTFileName);
   if (!Buffer) {
     Diags.Report(diag::err_fe_unable_to_read_pch_file)
         << ASTFileName << Buffer.getError().message();
@@ -5164,19 +5120,16 @@ namespace {
     const PreprocessorOptions &ExistingPPOpts;
     std::string ExistingModuleCachePath;
     FileManager &FileMgr;
-    bool StrictOptionMatches;
 
   public:
     SimplePCHValidator(const LangOptions &ExistingLangOpts,
                        const TargetOptions &ExistingTargetOpts,
                        const PreprocessorOptions &ExistingPPOpts,
-                       StringRef ExistingModuleCachePath, FileManager &FileMgr,
-                       bool StrictOptionMatches)
+                       StringRef ExistingModuleCachePath, FileManager &FileMgr)
         : ExistingLangOpts(ExistingLangOpts),
           ExistingTargetOpts(ExistingTargetOpts),
           ExistingPPOpts(ExistingPPOpts),
-          ExistingModuleCachePath(ExistingModuleCachePath), FileMgr(FileMgr),
-          StrictOptionMatches(StrictOptionMatches) {}
+          ExistingModuleCachePath(ExistingModuleCachePath), FileMgr(FileMgr) {}
 
     bool ReadLanguageOptions(const LangOptions &LangOpts, bool Complain,
                              bool AllowCompatibleDifferences) override {
@@ -5201,11 +5154,8 @@ namespace {
     bool ReadPreprocessorOptions(const PreprocessorOptions &PPOpts,
                                  bool Complain,
                                  std::string &SuggestedPredefines) override {
-      return checkPreprocessorOptions(
-          PPOpts, ExistingPPOpts, /*Diags=*/nullptr, FileMgr,
-          SuggestedPredefines, ExistingLangOpts,
-          StrictOptionMatches ? OptionValidateStrictMatches
-                              : OptionValidateContradictions);
+      return checkPreprocessorOptions(ExistingPPOpts, PPOpts, nullptr, FileMgr,
+                                      SuggestedPredefines, ExistingLangOpts);
     }
   };
 
@@ -5482,11 +5432,9 @@ bool ASTReader::isAcceptableASTFile(StringRef Filename, FileManager &FileMgr,
                                     const LangOptions &LangOpts,
                                     const TargetOptions &TargetOpts,
                                     const PreprocessorOptions &PPOpts,
-                                    StringRef ExistingModuleCachePath,
-                                    bool RequireStrictOptionMatches) {
+                                    StringRef ExistingModuleCachePath) {
   SimplePCHValidator validator(LangOpts, TargetOpts, PPOpts,
-                               ExistingModuleCachePath, FileMgr,
-                               RequireStrictOptionMatches);
+                               ExistingModuleCachePath, FileMgr);
   return !readASTFileControlBlock(Filename, FileMgr, PCHContainerRdr,
                                   /*FindModuleFileExtensions=*/false,
                                   validator,
@@ -5672,12 +5620,9 @@ llvm::Error ASTReader::ReadSubmoduleBlock(ModuleFile &F,
       // them here.
       break;
 
-    case SUBMODULE_TOPHEADER: {
-      std::string HeaderName(Blob);
-      ResolveImportedPath(F, HeaderName);
-      CurrentModule->addTopHeaderFilename(HeaderName);
+    case SUBMODULE_TOPHEADER:
+      CurrentModule->addTopHeaderFilename(Blob);
       break;
-    }
 
     case SUBMODULE_UMBRELLA_DIR: {
       // See comments in SUBMODULE_UMBRELLA_HEADER
@@ -6084,9 +6029,10 @@ PreprocessedEntity *ASTReader::ReadPreprocessedEntity(unsigned Index) {
   case PPD_INCLUSION_DIRECTIVE: {
     const char *FullFileNameStart = Blob.data() + Record[0];
     StringRef FullFileName(FullFileNameStart, Blob.size() - Record[0]);
-    Optional<FileEntryRef> File;
+    const FileEntry *File = nullptr;
     if (!FullFileName.empty())
-      File = PP.getFileManager().getOptionalFileRef(FullFileName);
+      if (auto FE = PP.getFileManager().getFile(FullFileName))
+        File = *FE;
 
     // FIXME: Stable encoding
     InclusionDirective::InclusionKind Kind
@@ -6500,13 +6446,11 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
 namespace clang {
 
 class TypeLocReader : public TypeLocVisitor<TypeLocReader> {
-  using LocSeq = SourceLocationSequence;
-
   ASTRecordReader &Reader;
-  LocSeq *Seq;
 
-  SourceLocation readSourceLocation() { return Reader.readSourceLocation(Seq); }
-  SourceRange readSourceRange() { return Reader.readSourceRange(Seq); }
+  SourceLocation readSourceLocation() {
+    return Reader.readSourceLocation();
+  }
 
   TypeSourceInfo *GetTypeSourceInfo() {
     return Reader.readTypeSourceInfo();
@@ -6521,8 +6465,7 @@ class TypeLocReader : public TypeLocVisitor<TypeLocReader> {
   }
 
 public:
-  TypeLocReader(ASTRecordReader &Reader, LocSeq *Seq)
-      : Reader(Reader), Seq(Seq) {}
+  TypeLocReader(ASTRecordReader &Reader) : Reader(Reader) {}
 
   // We want compile-time assurance that we've enumerated all of
   // these, so unfortunately we have to declare them first, then
@@ -6619,7 +6562,7 @@ void TypeLocReader::VisitDependentAddressSpaceTypeLoc(
     DependentAddressSpaceTypeLoc TL) {
 
     TL.setAttrNameLoc(readSourceLocation());
-    TL.setAttrOperandParensRange(readSourceRange());
+    TL.setAttrOperandParensRange(Reader.readSourceRange());
     TL.setAttrExprOperand(Reader.readExpr());
 }
 
@@ -6643,7 +6586,7 @@ void TypeLocReader::VisitExtVectorTypeLoc(ExtVectorTypeLoc TL) {
 
 void TypeLocReader::VisitConstantMatrixTypeLoc(ConstantMatrixTypeLoc TL) {
   TL.setAttrNameLoc(readSourceLocation());
-  TL.setAttrOperandParensRange(readSourceRange());
+  TL.setAttrOperandParensRange(Reader.readSourceRange());
   TL.setAttrRowOperand(Reader.readExpr());
   TL.setAttrColumnOperand(Reader.readExpr());
 }
@@ -6651,7 +6594,7 @@ void TypeLocReader::VisitConstantMatrixTypeLoc(ConstantMatrixTypeLoc TL) {
 void TypeLocReader::VisitDependentSizedMatrixTypeLoc(
     DependentSizedMatrixTypeLoc TL) {
   TL.setAttrNameLoc(readSourceLocation());
-  TL.setAttrOperandParensRange(readSourceRange());
+  TL.setAttrOperandParensRange(Reader.readSourceRange());
   TL.setAttrRowOperand(Reader.readExpr());
   TL.setAttrColumnOperand(Reader.readExpr());
 }
@@ -6660,7 +6603,7 @@ void TypeLocReader::VisitFunctionTypeLoc(FunctionTypeLoc TL) {
   TL.setLocalRangeBegin(readSourceLocation());
   TL.setLParenLoc(readSourceLocation());
   TL.setRParenLoc(readSourceLocation());
-  TL.setExceptionSpecRange(readSourceRange());
+  TL.setExceptionSpecRange(Reader.readSourceRange());
   TL.setLocalRangeEnd(readSourceLocation());
   for (unsigned i = 0, e = TL.getNumParams(); i != e; ++i) {
     TL.setParam(i, Reader.readDeclAs<ParmVarDecl>());
@@ -6744,10 +6687,6 @@ void TypeLocReader::VisitEnumTypeLoc(EnumTypeLoc TL) {
 
 void TypeLocReader::VisitAttributedTypeLoc(AttributedTypeLoc TL) {
   TL.setAttr(ReadAttr());
-}
-
-void TypeLocReader::VisitBTFTagAttributedTypeLoc(BTFTagAttributedTypeLoc TL) {
-  // Nothing to do.
 }
 
 void TypeLocReader::VisitTemplateTypeParmTypeLoc(TemplateTypeParmTypeLoc TL) {
@@ -6863,9 +6802,9 @@ void TypeLocReader::VisitDependentBitIntTypeLoc(
   TL.setNameLoc(readSourceLocation());
 }
 
-void ASTRecordReader::readTypeLoc(TypeLoc TL, LocSeq *ParentSeq) {
-  LocSeq::State Seq(ParentSeq);
-  TypeLocReader TLR(*this, Seq);
+
+void ASTRecordReader::readTypeLoc(TypeLoc TL) {
+  TypeLocReader TLR(*this);
   for (; !TL.isNull(); TL = TL.getNextTypeLoc())
     TLR.Visit(TL);
 }
@@ -8447,9 +8386,11 @@ void ASTReader::ReadWeakUndeclaredIdentifiers(
       = DecodeIdentifierInfo(WeakUndeclaredIdentifiers[I++]);
     IdentifierInfo *AliasId
       = DecodeIdentifierInfo(WeakUndeclaredIdentifiers[I++]);
-    SourceLocation Loc =
-        SourceLocation::getFromRawEncoding(WeakUndeclaredIdentifiers[I++]);
+    SourceLocation Loc
+      = SourceLocation::getFromRawEncoding(WeakUndeclaredIdentifiers[I++]);
+    bool Used = WeakUndeclaredIdentifiers[I++];
     WeakInfo WI(AliasId, Loc);
+    WI.setUsed(Used);
     WeakIDs.push_back(std::make_pair(WeakId, WI));
   }
   WeakUndeclaredIdentifiers.clear();
@@ -9032,10 +8973,11 @@ ASTRecordReader::readNestedNameSpecifierLoc() {
   return Builder.getWithLocInContext(Context);
 }
 
-SourceRange ASTReader::ReadSourceRange(ModuleFile &F, const RecordData &Record,
-                                       unsigned &Idx, LocSeq *Seq) {
-  SourceLocation beg = ReadSourceLocation(F, Record, Idx, Seq);
-  SourceLocation end = ReadSourceLocation(F, Record, Idx, Seq);
+SourceRange
+ASTReader::ReadSourceRange(ModuleFile &F, const RecordData &Record,
+                           unsigned &Idx) {
+  SourceLocation beg = ReadSourceLocation(F, Record, Idx);
+  SourceLocation end = ReadSourceLocation(F, Record, Idx);
   return SourceRange(beg, end);
 }
 
@@ -9235,8 +9177,7 @@ void ASTReader::finishPendingActions() {
   while (!PendingIdentifierInfos.empty() || !PendingFunctionTypes.empty() ||
          !PendingIncompleteDeclChains.empty() || !PendingDeclChains.empty() ||
          !PendingMacroIDs.empty() || !PendingDeclContextInfos.empty() ||
-         !PendingUpdateRecords.empty() ||
-         !PendingObjCExtensionIvarRedeclarations.empty()) {
+         !PendingUpdateRecords.empty()) {
     // If any identifiers with corresponding top-level declarations have
     // been loaded, load those declarations now.
     using TopLevelDeclsMap =
@@ -9326,43 +9267,6 @@ void ASTReader::finishPendingActions() {
       auto Update = PendingUpdateRecords.pop_back_val();
       ReadingKindTracker ReadingKind(Read_Decl, *this);
       loadDeclUpdateRecords(Update);
-    }
-
-    while (!PendingObjCExtensionIvarRedeclarations.empty()) {
-      auto ExtensionsPair = PendingObjCExtensionIvarRedeclarations.back().first;
-      auto DuplicateIvars =
-          PendingObjCExtensionIvarRedeclarations.back().second;
-      llvm::DenseSet<std::pair<Decl *, Decl *>> NonEquivalentDecls;
-      StructuralEquivalenceContext Ctx(
-          ExtensionsPair.first->getASTContext(),
-          ExtensionsPair.second->getASTContext(), NonEquivalentDecls,
-          StructuralEquivalenceKind::Default, /*StrictTypeSpelling =*/false,
-          /*Complain =*/false,
-          /*ErrorOnTagTypeMismatch =*/true);
-      if (Ctx.IsEquivalent(ExtensionsPair.first, ExtensionsPair.second)) {
-        // Merge redeclared ivars with their predecessors.
-        for (auto IvarPair : DuplicateIvars) {
-          ObjCIvarDecl *Ivar = IvarPair.first, *PrevIvar = IvarPair.second;
-          // Change semantic DeclContext but keep the lexical one.
-          Ivar->setDeclContextsImpl(PrevIvar->getDeclContext(),
-                                    Ivar->getLexicalDeclContext(),
-                                    getContext());
-          getContext().setPrimaryMergedDecl(Ivar, PrevIvar->getCanonicalDecl());
-        }
-        // Invalidate duplicate extension and the cached ivar list.
-        ExtensionsPair.first->setInvalidDecl();
-        ExtensionsPair.second->getClassInterface()
-            ->getDefinition()
-            ->setIvarList(nullptr);
-      } else {
-        for (auto IvarPair : DuplicateIvars) {
-          Diag(IvarPair.first->getLocation(),
-               diag::err_duplicate_ivar_declaration)
-              << IvarPair.first->getIdentifier();
-          Diag(IvarPair.second->getLocation(), diag::note_previous_definition);
-        }
-      }
-      PendingObjCExtensionIvarRedeclarations.pop_back();
     }
   }
 
@@ -9476,31 +9380,6 @@ void ASTReader::finishPendingActions() {
   for (auto *ND : PendingMergedDefinitionsToDeduplicate)
     getContext().deduplicateMergedDefinitonsFor(ND);
   PendingMergedDefinitionsToDeduplicate.clear();
-}
-
-static unsigned computeODRHash(QualType Ty) {
-  ODRHash Hasher;
-  Hasher.AddQualType(Ty);
-  return Hasher.CalculateHash();
-}
-
-static unsigned computeODRHash(const Stmt *S) {
-  ODRHash Hasher;
-  Hasher.AddStmt(S);
-  return Hasher.CalculateHash();
-}
-
-static unsigned computeODRHash(const Decl *D) {
-  assert(D);
-  ODRHash Hasher;
-  Hasher.AddSubDecl(D);
-  return Hasher.CalculateHash();
-}
-
-static unsigned computeODRHash(const TemplateArgument &TA) {
-  ODRHash Hasher;
-  Hasher.AddTemplateArgument(TA);
-  return Hasher.CalculateHash();
 }
 
 void ASTReader::diagnoseOdrViolations() {
@@ -9642,6 +9521,42 @@ void ASTReader::diagnoseOdrViolations() {
   // we're producing our diagnostics.
   Deserializing RecursionGuard(this);
 
+  // Common code for hashing helpers.
+  ODRHash Hash;
+  auto ComputeQualTypeODRHash = [&Hash](QualType Ty) {
+    Hash.clear();
+    Hash.AddQualType(Ty);
+    return Hash.CalculateHash();
+  };
+
+  auto ComputeODRHash = [&Hash](const Stmt *S) {
+    assert(S);
+    Hash.clear();
+    Hash.AddStmt(S);
+    return Hash.CalculateHash();
+  };
+
+  auto ComputeSubDeclODRHash = [&Hash](const Decl *D) {
+    assert(D);
+    Hash.clear();
+    Hash.AddSubDecl(D);
+    return Hash.CalculateHash();
+  };
+
+  auto ComputeTemplateArgumentODRHash = [&Hash](const TemplateArgument &TA) {
+    Hash.clear();
+    Hash.AddTemplateArgument(TA);
+    return Hash.CalculateHash();
+  };
+
+  auto ComputeTemplateParameterListODRHash =
+      [&Hash](const TemplateParameterList *TPL) {
+        assert(TPL);
+        Hash.clear();
+        Hash.AddTemplateParameterList(TPL);
+        return Hash.CalculateHash();
+      };
+
   // Used with err_module_odr_violation_mismatch_decl and
   // note_module_odr_violation_mismatch_decl
   // This list should be the same Decl's as in ODRHash::isDeclToBeProcessed
@@ -9661,42 +9576,87 @@ void ASTReader::diagnoseOdrViolations() {
     Other
   };
 
+  // Used with err_module_odr_violation_mismatch_decl_diff and
+  // note_module_odr_violation_mismatch_decl_diff
+  enum ODRMismatchDeclDifference {
+    StaticAssertCondition,
+    StaticAssertMessage,
+    StaticAssertOnlyMessage,
+    FieldName,
+    FieldTypeName,
+    FieldSingleBitField,
+    FieldDifferentWidthBitField,
+    FieldSingleMutable,
+    FieldSingleInitializer,
+    FieldDifferentInitializers,
+    MethodName,
+    MethodDeleted,
+    MethodDefaulted,
+    MethodVirtual,
+    MethodStatic,
+    MethodVolatile,
+    MethodConst,
+    MethodInline,
+    MethodNumberParameters,
+    MethodParameterType,
+    MethodParameterName,
+    MethodParameterSingleDefaultArgument,
+    MethodParameterDifferentDefaultArgument,
+    MethodNoTemplateArguments,
+    MethodDifferentNumberTemplateArguments,
+    MethodDifferentTemplateArgument,
+    MethodSingleBody,
+    MethodDifferentBody,
+    TypedefName,
+    TypedefType,
+    VarName,
+    VarType,
+    VarSingleInitializer,
+    VarDifferentInitializer,
+    VarConstexpr,
+    FriendTypeFunction,
+    FriendType,
+    FriendFunction,
+    FunctionTemplateDifferentNumberParameters,
+    FunctionTemplateParameterDifferentKind,
+    FunctionTemplateParameterName,
+    FunctionTemplateParameterSingleDefaultArgument,
+    FunctionTemplateParameterDifferentDefaultArgument,
+    FunctionTemplateParameterDifferentType,
+    FunctionTemplatePackParameter,
+  };
+
   // These lambdas have the common portions of the ODR diagnostics.  This
   // has the same return as Diag(), so addition parameters can be passed
   // in with operator<<
-  auto ODRDiagField = [this](NamedDecl *FirstRecord, StringRef FirstModule,
-                             StringRef SecondModule,
-                             const FieldDecl *FirstField,
-                             const FieldDecl *SecondField) {
-    enum ODRFieldDifference {
-      FieldName,
-      FieldTypeName,
-      FieldSingleBitField,
-      FieldDifferentWidthBitField,
-      FieldSingleMutable,
-      FieldSingleInitializer,
-      FieldDifferentInitializers,
-    };
+  auto ODRDiagDeclError = [this](NamedDecl *FirstRecord, StringRef FirstModule,
+                                 SourceLocation Loc, SourceRange Range,
+                                 ODRMismatchDeclDifference DiffType) {
+    return Diag(Loc, diag::err_module_odr_violation_mismatch_decl_diff)
+           << FirstRecord << FirstModule.empty() << FirstModule << Range
+           << DiffType;
+  };
+  auto ODRDiagDeclNote = [this](StringRef SecondModule, SourceLocation Loc,
+                                SourceRange Range, ODRMismatchDeclDifference DiffType) {
+    return Diag(Loc, diag::note_module_odr_violation_mismatch_decl_diff)
+           << SecondModule << Range << DiffType;
+  };
 
-    auto DiagError = [FirstRecord, FirstField, FirstModule,
-                      this](ODRFieldDifference DiffType) {
-      return Diag(FirstField->getLocation(),
-                  diag::err_module_odr_violation_field)
-             << FirstRecord << FirstModule.empty() << FirstModule
-             << FirstField->getSourceRange() << DiffType;
-    };
-    auto DiagNote = [SecondField, SecondModule,
-                     this](ODRFieldDifference DiffType) {
-      return Diag(SecondField->getLocation(),
-                  diag::note_module_odr_violation_field)
-             << SecondModule << SecondField->getSourceRange() << DiffType;
-    };
-
+  auto ODRDiagField = [this, &ODRDiagDeclError, &ODRDiagDeclNote,
+                       &ComputeQualTypeODRHash, &ComputeODRHash](
+                          NamedDecl *FirstRecord, StringRef FirstModule,
+                          StringRef SecondModule, FieldDecl *FirstField,
+                          FieldDecl *SecondField) {
     IdentifierInfo *FirstII = FirstField->getIdentifier();
     IdentifierInfo *SecondII = SecondField->getIdentifier();
     if (FirstII->getName() != SecondII->getName()) {
-      DiagError(FieldName) << FirstII;
-      DiagNote(FieldName) << SecondII;
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                       FirstField->getSourceRange(), FieldName)
+          << FirstII;
+      ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                      SecondField->getSourceRange(), FieldName)
+          << SecondII;
+
       return true;
     }
 
@@ -9705,27 +9665,43 @@ void ASTReader::diagnoseOdrViolations() {
 
     QualType FirstType = FirstField->getType();
     QualType SecondType = SecondField->getType();
-    if (computeODRHash(FirstType) != computeODRHash(SecondType)) {
-      DiagError(FieldTypeName) << FirstII << FirstType;
-      DiagNote(FieldTypeName) << SecondII << SecondType;
+    if (ComputeQualTypeODRHash(FirstType) !=
+        ComputeQualTypeODRHash(SecondType)) {
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                       FirstField->getSourceRange(), FieldTypeName)
+          << FirstII << FirstType;
+      ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                      SecondField->getSourceRange(), FieldTypeName)
+          << SecondII << SecondType;
+
       return true;
     }
 
     const bool IsFirstBitField = FirstField->isBitField();
     const bool IsSecondBitField = SecondField->isBitField();
     if (IsFirstBitField != IsSecondBitField) {
-      DiagError(FieldSingleBitField) << FirstII << IsFirstBitField;
-      DiagNote(FieldSingleBitField) << SecondII << IsSecondBitField;
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                       FirstField->getSourceRange(), FieldSingleBitField)
+          << FirstII << IsFirstBitField;
+      ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                      SecondField->getSourceRange(), FieldSingleBitField)
+          << SecondII << IsSecondBitField;
       return true;
     }
 
     if (IsFirstBitField && IsSecondBitField) {
-      unsigned FirstBitWidthHash = computeODRHash(FirstField->getBitWidth());
-      unsigned SecondBitWidthHash = computeODRHash(SecondField->getBitWidth());
+      unsigned FirstBitWidthHash =
+          ComputeODRHash(FirstField->getBitWidth());
+      unsigned SecondBitWidthHash =
+          ComputeODRHash(SecondField->getBitWidth());
       if (FirstBitWidthHash != SecondBitWidthHash) {
-        DiagError(FieldDifferentWidthBitField)
+        ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                         FirstField->getSourceRange(),
+                         FieldDifferentWidthBitField)
             << FirstII << FirstField->getBitWidth()->getSourceRange();
-        DiagNote(FieldDifferentWidthBitField)
+        ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                        SecondField->getSourceRange(),
+                        FieldDifferentWidthBitField)
             << SecondII << SecondField->getBitWidth()->getSourceRange();
         return true;
       }
@@ -9737,8 +9713,12 @@ void ASTReader::diagnoseOdrViolations() {
     const bool IsFirstMutable = FirstField->isMutable();
     const bool IsSecondMutable = SecondField->isMutable();
     if (IsFirstMutable != IsSecondMutable) {
-      DiagError(FieldSingleMutable) << FirstII << IsFirstMutable;
-      DiagNote(FieldSingleMutable) << SecondII << IsSecondMutable;
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                       FirstField->getSourceRange(), FieldSingleMutable)
+          << FirstII << IsFirstMutable;
+      ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                      SecondField->getSourceRange(), FieldSingleMutable)
+          << SecondII << IsSecondMutable;
       return true;
     }
 
@@ -9746,20 +9726,26 @@ void ASTReader::diagnoseOdrViolations() {
     const Expr *SecondInitializer = SecondField->getInClassInitializer();
     if ((!FirstInitializer && SecondInitializer) ||
         (FirstInitializer && !SecondInitializer)) {
-      DiagError(FieldSingleInitializer)
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                       FirstField->getSourceRange(), FieldSingleInitializer)
           << FirstII << (FirstInitializer != nullptr);
-      DiagNote(FieldSingleInitializer)
+      ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                      SecondField->getSourceRange(), FieldSingleInitializer)
           << SecondII << (SecondInitializer != nullptr);
       return true;
     }
 
     if (FirstInitializer && SecondInitializer) {
-      unsigned FirstInitHash = computeODRHash(FirstInitializer);
-      unsigned SecondInitHash = computeODRHash(SecondInitializer);
+      unsigned FirstInitHash = ComputeODRHash(FirstInitializer);
+      unsigned SecondInitHash = ComputeODRHash(SecondInitializer);
       if (FirstInitHash != SecondInitHash) {
-        DiagError(FieldDifferentInitializers)
+        ODRDiagDeclError(FirstRecord, FirstModule, FirstField->getLocation(),
+                         FirstField->getSourceRange(),
+                         FieldDifferentInitializers)
             << FirstII << FirstInitializer->getSourceRange();
-        DiagNote(FieldDifferentInitializers)
+        ODRDiagDeclNote(SecondModule, SecondField->getLocation(),
+                        SecondField->getSourceRange(),
+                        FieldDifferentInitializers)
             << SecondII << SecondInitializer->getSourceRange();
         return true;
       }
@@ -9769,84 +9755,65 @@ void ASTReader::diagnoseOdrViolations() {
   };
 
   auto ODRDiagTypeDefOrAlias =
-      [this](NamedDecl *FirstRecord, StringRef FirstModule,
-             StringRef SecondModule, const TypedefNameDecl *FirstTD,
-             const TypedefNameDecl *SecondTD, bool IsTypeAlias) {
-        enum ODRTypedefDifference {
-          TypedefName,
-          TypedefType,
-        };
-
-        auto DiagError = [FirstRecord, FirstTD, FirstModule,
-                          this](ODRTypedefDifference DiffType) {
-          return Diag(FirstTD->getLocation(),
-                      diag::err_module_odr_violation_typedef)
-                 << FirstRecord << FirstModule.empty() << FirstModule
-                 << FirstTD->getSourceRange() << DiffType;
-        };
-        auto DiagNote = [SecondTD, SecondModule,
-                         this](ODRTypedefDifference DiffType) {
-          return Diag(SecondTD->getLocation(),
-                      diag::note_module_odr_violation_typedef)
-                 << SecondModule << SecondTD->getSourceRange() << DiffType;
-        };
-
-        DeclarationName FirstName = FirstTD->getDeclName();
-        DeclarationName SecondName = SecondTD->getDeclName();
+      [&ODRDiagDeclError, &ODRDiagDeclNote, &ComputeQualTypeODRHash](
+          NamedDecl *FirstRecord, StringRef FirstModule, StringRef SecondModule,
+          TypedefNameDecl *FirstTD, TypedefNameDecl *SecondTD,
+          bool IsTypeAlias) {
+        auto FirstName = FirstTD->getDeclName();
+        auto SecondName = SecondTD->getDeclName();
         if (FirstName != SecondName) {
-          DiagError(TypedefName) << IsTypeAlias << FirstName;
-          DiagNote(TypedefName) << IsTypeAlias << SecondName;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstTD->getLocation(),
+                           FirstTD->getSourceRange(), TypedefName)
+              << IsTypeAlias << FirstName;
+          ODRDiagDeclNote(SecondModule, SecondTD->getLocation(),
+                          SecondTD->getSourceRange(), TypedefName)
+              << IsTypeAlias << SecondName;
           return true;
         }
 
         QualType FirstType = FirstTD->getUnderlyingType();
         QualType SecondType = SecondTD->getUnderlyingType();
-        if (computeODRHash(FirstType) != computeODRHash(SecondType)) {
-          DiagError(TypedefType) << IsTypeAlias << FirstName << FirstType;
-          DiagNote(TypedefType) << IsTypeAlias << SecondName << SecondType;
+        if (ComputeQualTypeODRHash(FirstType) !=
+            ComputeQualTypeODRHash(SecondType)) {
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstTD->getLocation(),
+                           FirstTD->getSourceRange(), TypedefType)
+              << IsTypeAlias << FirstName << FirstType;
+          ODRDiagDeclNote(SecondModule, SecondTD->getLocation(),
+                          SecondTD->getSourceRange(), TypedefType)
+              << IsTypeAlias << SecondName << SecondType;
           return true;
         }
 
         return false;
-      };
+  };
 
-  auto ODRDiagVar = [this](NamedDecl *FirstRecord, StringRef FirstModule,
-                           StringRef SecondModule, const VarDecl *FirstVD,
-                           const VarDecl *SecondVD) {
-    enum ODRVarDifference {
-      VarName,
-      VarType,
-      VarSingleInitializer,
-      VarDifferentInitializer,
-      VarConstexpr,
-    };
-
-    auto DiagError = [FirstRecord, FirstVD, FirstModule,
-                      this](ODRVarDifference DiffType) {
-      return Diag(FirstVD->getLocation(),
-                  diag::err_module_odr_violation_variable)
-             << FirstRecord << FirstModule.empty() << FirstModule
-             << FirstVD->getSourceRange() << DiffType;
-    };
-    auto DiagNote = [SecondVD, SecondModule, this](ODRVarDifference DiffType) {
-      return Diag(SecondVD->getLocation(),
-                  diag::note_module_odr_violation_variable)
-             << SecondModule << SecondVD->getSourceRange() << DiffType;
-    };
-
-    DeclarationName FirstName = FirstVD->getDeclName();
-    DeclarationName SecondName = SecondVD->getDeclName();
+  auto ODRDiagVar = [&ODRDiagDeclError, &ODRDiagDeclNote,
+                     &ComputeQualTypeODRHash, &ComputeODRHash,
+                     this](NamedDecl *FirstRecord, StringRef FirstModule,
+                           StringRef SecondModule, VarDecl *FirstVD,
+                           VarDecl *SecondVD) {
+    auto FirstName = FirstVD->getDeclName();
+    auto SecondName = SecondVD->getDeclName();
     if (FirstName != SecondName) {
-      DiagError(VarName) << FirstName;
-      DiagNote(VarName) << SecondName;
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstVD->getLocation(),
+                       FirstVD->getSourceRange(), VarName)
+          << FirstName;
+      ODRDiagDeclNote(SecondModule, SecondVD->getLocation(),
+                      SecondVD->getSourceRange(), VarName)
+          << SecondName;
       return true;
     }
 
     QualType FirstType = FirstVD->getType();
     QualType SecondType = SecondVD->getType();
-    if (computeODRHash(FirstType) != computeODRHash(SecondType)) {
-      DiagError(VarType) << FirstName << FirstType;
-      DiagNote(VarType) << SecondName << SecondType;
+    if (ComputeQualTypeODRHash(FirstType) !=
+        ComputeQualTypeODRHash(SecondType)) {
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstVD->getLocation(),
+                       FirstVD->getSourceRange(), VarType)
+          << FirstName << FirstType;
+      ODRDiagDeclNote(SecondModule, SecondVD->getLocation(),
+                      SecondVD->getSourceRange(), VarType)
+          << SecondName << SecondType;
       return true;
     }
 
@@ -9856,20 +9823,24 @@ void ASTReader::diagnoseOdrViolations() {
     const Expr *FirstInit = FirstVD->getInit();
     const Expr *SecondInit = SecondVD->getInit();
     if ((FirstInit == nullptr) != (SecondInit == nullptr)) {
-      DiagError(VarSingleInitializer)
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstVD->getLocation(),
+                       FirstVD->getSourceRange(), VarSingleInitializer)
           << FirstName << (FirstInit == nullptr)
           << (FirstInit ? FirstInit->getSourceRange() : SourceRange());
-      DiagNote(VarSingleInitializer)
+      ODRDiagDeclNote(SecondModule, SecondVD->getLocation(),
+                      SecondVD->getSourceRange(), VarSingleInitializer)
           << SecondName << (SecondInit == nullptr)
           << (SecondInit ? SecondInit->getSourceRange() : SourceRange());
       return true;
     }
 
     if (FirstInit && SecondInit &&
-        computeODRHash(FirstInit) != computeODRHash(SecondInit)) {
-      DiagError(VarDifferentInitializer)
+        ComputeODRHash(FirstInit) != ComputeODRHash(SecondInit)) {
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstVD->getLocation(),
+                       FirstVD->getSourceRange(), VarDifferentInitializer)
           << FirstName << FirstInit->getSourceRange();
-      DiagNote(VarDifferentInitializer)
+      ODRDiagDeclNote(SecondModule, SecondVD->getLocation(),
+                      SecondVD->getSourceRange(), VarDifferentInitializer)
           << SecondName << SecondInit->getSourceRange();
       return true;
     }
@@ -9877,20 +9848,63 @@ void ASTReader::diagnoseOdrViolations() {
     const bool FirstIsConstexpr = FirstVD->isConstexpr();
     const bool SecondIsConstexpr = SecondVD->isConstexpr();
     if (FirstIsConstexpr != SecondIsConstexpr) {
-      DiagError(VarConstexpr) << FirstName << FirstIsConstexpr;
-      DiagNote(VarConstexpr) << SecondName << SecondIsConstexpr;
+      ODRDiagDeclError(FirstRecord, FirstModule, FirstVD->getLocation(),
+                       FirstVD->getSourceRange(), VarConstexpr)
+          << FirstName << FirstIsConstexpr;
+      ODRDiagDeclNote(SecondModule, SecondVD->getLocation(),
+                      SecondVD->getSourceRange(), VarConstexpr)
+          << SecondName << SecondIsConstexpr;
       return true;
     }
     return false;
   };
 
+  auto DifferenceSelector = [](Decl *D) {
+    assert(D && "valid Decl required");
+    switch (D->getKind()) {
+    default:
+      return Other;
+    case Decl::AccessSpec:
+      switch (D->getAccess()) {
+      case AS_public:
+        return PublicSpecifer;
+      case AS_private:
+        return PrivateSpecifer;
+      case AS_protected:
+        return ProtectedSpecifer;
+      case AS_none:
+        break;
+      }
+      llvm_unreachable("Invalid access specifier");
+    case Decl::StaticAssert:
+      return StaticAssert;
+    case Decl::Field:
+      return Field;
+    case Decl::CXXMethod:
+    case Decl::CXXConstructor:
+    case Decl::CXXDestructor:
+      return CXXMethod;
+    case Decl::TypeAlias:
+      return TypeAlias;
+    case Decl::Typedef:
+      return TypeDef;
+    case Decl::Var:
+      return Var;
+    case Decl::Friend:
+      return Friend;
+    case Decl::FunctionTemplate:
+      return FunctionTemplate;
+    }
+  };
+
   using DeclHashes = llvm::SmallVector<std::pair<Decl *, unsigned>, 4>;
-  auto PopulateHashes = [](DeclHashes &Hashes, RecordDecl *Record,
-                           const DeclContext *DC) {
+  auto PopulateHashes = [&ComputeSubDeclODRHash](DeclHashes &Hashes,
+                                                 RecordDecl *Record,
+                                                 const DeclContext *DC) {
     for (auto *D : Record->decls()) {
       if (!ODRHash::isDeclToBeProcessed(D, DC))
         continue;
-      Hashes.emplace_back(D, computeODRHash(D));
+      Hashes.emplace_back(D, ComputeSubDeclODRHash(D));
     }
   };
 
@@ -9902,45 +9916,8 @@ void ASTReader::diagnoseOdrViolations() {
   // If there is a diagnoseable difference, FirstDiffType and
   // SecondDiffType will not be Other and FirstDecl and SecondDecl will be
   // filled in if not EndOfClass.
-  auto FindTypeDiffs = [](DeclHashes &FirstHashes, DeclHashes &SecondHashes) {
-    auto DifferenceSelector = [](Decl *D) {
-      assert(D && "valid Decl required");
-      switch (D->getKind()) {
-      default:
-        return Other;
-      case Decl::AccessSpec:
-        switch (D->getAccess()) {
-        case AS_public:
-          return PublicSpecifer;
-        case AS_private:
-          return PrivateSpecifer;
-        case AS_protected:
-          return ProtectedSpecifer;
-        case AS_none:
-          break;
-        }
-        llvm_unreachable("Invalid access specifier");
-      case Decl::StaticAssert:
-        return StaticAssert;
-      case Decl::Field:
-        return Field;
-      case Decl::CXXMethod:
-      case Decl::CXXConstructor:
-      case Decl::CXXDestructor:
-        return CXXMethod;
-      case Decl::TypeAlias:
-        return TypeAlias;
-      case Decl::Typedef:
-        return TypeDef;
-      case Decl::Var:
-        return Var;
-      case Decl::Friend:
-        return Friend;
-      case Decl::FunctionTemplate:
-        return FunctionTemplate;
-      }
-    };
-
+  auto FindTypeDiffs = [&DifferenceSelector](DeclHashes &FirstHashes,
+                                             DeclHashes &SecondHashes) {
     DiffResult DR;
     auto FirstIt = FirstHashes.begin();
     auto SecondIt = SecondHashes.begin();
@@ -9991,35 +9968,34 @@ void ASTReader::diagnoseOdrViolations() {
     }
   };
 
-  auto DiagnoseODRMismatch = [this](DiffResult &DR, NamedDecl *FirstRecord,
-                                    StringRef FirstModule,
-                                    NamedDecl *SecondRecord,
-                                    StringRef SecondModule) {
-    auto GetMismatchedDeclLoc = [](const NamedDecl *Container,
-                                   ODRMismatchDecl DiffType, const Decl *D) {
-      SourceLocation Loc;
-      SourceRange Range;
-      auto *Tag = dyn_cast<TagDecl>(Container);
-      if (DiffType == EndOfClass && Tag) {
-        Loc = Tag->getBraceRange().getEnd();
-      } else {
-        Loc = D->getLocation();
-        Range = D->getSourceRange();
-      }
-      return std::make_pair(Loc, Range);
-    };
+  auto DiagnoseODRMismatch =
+      [this](DiffResult &DR, NamedDecl *FirstRecord, StringRef FirstModule,
+             NamedDecl *SecondRecord, StringRef SecondModule) {
+        SourceLocation FirstLoc;
+        SourceRange FirstRange;
+        auto *FirstTag = dyn_cast<TagDecl>(FirstRecord);
+        if (DR.FirstDiffType == EndOfClass && FirstTag) {
+          FirstLoc = FirstTag->getBraceRange().getEnd();
+        } else {
+          FirstLoc = DR.FirstDecl->getLocation();
+          FirstRange = DR.FirstDecl->getSourceRange();
+        }
+        Diag(FirstLoc, diag::err_module_odr_violation_mismatch_decl)
+            << FirstRecord << FirstModule.empty() << FirstModule << FirstRange
+            << DR.FirstDiffType;
 
-    auto FirstDiagInfo =
-        GetMismatchedDeclLoc(FirstRecord, DR.FirstDiffType, DR.FirstDecl);
-    Diag(FirstDiagInfo.first, diag::err_module_odr_violation_mismatch_decl)
-        << FirstRecord << FirstModule.empty() << FirstModule
-        << FirstDiagInfo.second << DR.FirstDiffType;
-
-    auto SecondDiagInfo =
-        GetMismatchedDeclLoc(SecondRecord, DR.SecondDiffType, DR.SecondDecl);
-    Diag(SecondDiagInfo.first, diag::note_module_odr_violation_mismatch_decl)
-        << SecondModule << SecondDiagInfo.second << DR.SecondDiffType;
-  };
+        SourceLocation SecondLoc;
+        SourceRange SecondRange;
+        auto *SecondTag = dyn_cast<TagDecl>(SecondRecord);
+        if (DR.SecondDiffType == EndOfClass && SecondTag) {
+          SecondLoc = SecondTag->getBraceRange().getEnd();
+        } else {
+          SecondLoc = DR.SecondDecl->getLocation();
+          SecondRange = DR.SecondDecl->getSourceRange();
+        }
+        Diag(SecondLoc, diag::note_module_odr_violation_mismatch_decl)
+            << SecondModule << SecondRange << DR.SecondDiffType;
+      };
 
   // Issue any pending ODR-failure diagnostics.
   for (auto &Merge : OdrMergeFailures) {
@@ -10067,18 +10043,20 @@ void ASTReader::diagnoseOdrViolations() {
           return Diag(Loc, diag::note_module_odr_violation_definition_data)
                  << SecondModule << Range << DiffType;
         };
-        auto GetSourceRange = [](struct CXXRecordDecl::DefinitionData *DD) {
-          unsigned NumBases = DD->NumBases;
-          if (NumBases == 0) return SourceRange();
-          ArrayRef<CXXBaseSpecifier> bases = DD->bases();
-          return SourceRange(bases[0].getBeginLoc(),
-                             bases[NumBases - 1].getEndLoc());
-        };
 
         unsigned FirstNumBases = FirstDD->NumBases;
         unsigned FirstNumVBases = FirstDD->NumVBases;
         unsigned SecondNumBases = SecondDD->NumBases;
         unsigned SecondNumVBases = SecondDD->NumVBases;
+
+        auto GetSourceRange = [](struct CXXRecordDecl::DefinitionData *DD) {
+          unsigned NumBases = DD->NumBases;
+          if (NumBases == 0) return SourceRange();
+          auto bases = DD->bases();
+          return SourceRange(bases[0].getBeginLoc(),
+                             bases[NumBases - 1].getEndLoc());
+        };
+
         if (FirstNumBases != SecondNumBases) {
           ODRDiagBaseError(FirstRecord->getLocation(), GetSourceRange(FirstDD),
                            NumBases)
@@ -10101,30 +10079,30 @@ void ASTReader::diagnoseOdrViolations() {
           break;
         }
 
-        ArrayRef<CXXBaseSpecifier> FirstBases = FirstDD->bases();
-        ArrayRef<CXXBaseSpecifier> SecondBases = SecondDD->bases();
-        unsigned I = 0;
-        for (I = 0; I < FirstNumBases; ++I) {
-          const CXXBaseSpecifier FirstBase = FirstBases[I];
-          const CXXBaseSpecifier SecondBase = SecondBases[I];
-          if (computeODRHash(FirstBase.getType()) !=
-              computeODRHash(SecondBase.getType())) {
+        auto FirstBases = FirstDD->bases();
+        auto SecondBases = SecondDD->bases();
+        unsigned i = 0;
+        for (i = 0; i < FirstNumBases; ++i) {
+          auto FirstBase = FirstBases[i];
+          auto SecondBase = SecondBases[i];
+          if (ComputeQualTypeODRHash(FirstBase.getType()) !=
+              ComputeQualTypeODRHash(SecondBase.getType())) {
             ODRDiagBaseError(FirstRecord->getLocation(),
                              FirstBase.getSourceRange(), BaseType)
-                << (I + 1) << FirstBase.getType();
+                << (i + 1) << FirstBase.getType();
             ODRDiagBaseNote(SecondRecord->getLocation(),
                             SecondBase.getSourceRange(), BaseType)
-                << (I + 1) << SecondBase.getType();
+                << (i + 1) << SecondBase.getType();
             break;
           }
 
           if (FirstBase.isVirtual() != SecondBase.isVirtual()) {
             ODRDiagBaseError(FirstRecord->getLocation(),
                              FirstBase.getSourceRange(), BaseVirtual)
-                << (I + 1) << FirstBase.isVirtual() << FirstBase.getType();
+                << (i + 1) << FirstBase.isVirtual() << FirstBase.getType();
             ODRDiagBaseNote(SecondRecord->getLocation(),
                             SecondBase.getSourceRange(), BaseVirtual)
-                << (I + 1) << SecondBase.isVirtual() << SecondBase.getType();
+                << (i + 1) << SecondBase.isVirtual() << SecondBase.getType();
             break;
           }
 
@@ -10132,17 +10110,17 @@ void ASTReader::diagnoseOdrViolations() {
               SecondBase.getAccessSpecifierAsWritten()) {
             ODRDiagBaseError(FirstRecord->getLocation(),
                              FirstBase.getSourceRange(), BaseAccess)
-                << (I + 1) << FirstBase.getType()
+                << (i + 1) << FirstBase.getType()
                 << (int)FirstBase.getAccessSpecifierAsWritten();
             ODRDiagBaseNote(SecondRecord->getLocation(),
                             SecondBase.getSourceRange(), BaseAccess)
-                << (I + 1) << SecondBase.getType()
+                << (i + 1) << SecondBase.getType()
                 << (int)SecondBase.getAccessSpecifierAsWritten();
             break;
           }
         }
 
-        if (I != FirstNumBases) {
+        if (i != FirstNumBases) {
           Diagnosed = true;
           break;
         }
@@ -10156,16 +10134,24 @@ void ASTReader::diagnoseOdrViolations() {
       assert(!FirstTemplate == !SecondTemplate &&
              "Both pointers should be null or non-null");
 
+      enum ODRTemplateDifference {
+        ParamEmptyName,
+        ParamName,
+        ParamSingleDefaultArgument,
+        ParamDifferentDefaultArgument,
+      };
+
       if (FirstTemplate && SecondTemplate) {
         DeclHashes FirstTemplateHashes;
         DeclHashes SecondTemplateHashes;
 
-        auto PopulateTemplateParameterHashs = [](DeclHashes &Hashes,
-                                                 const ClassTemplateDecl *TD) {
-          for (auto *D : TD->getTemplateParameters()->asArray()) {
-            Hashes.emplace_back(D, computeODRHash(D));
-          }
-        };
+        auto PopulateTemplateParameterHashs =
+            [&ComputeSubDeclODRHash](DeclHashes &Hashes,
+                                     const ClassTemplateDecl *TD) {
+              for (auto *D : TD->getTemplateParameters()->asArray()) {
+                Hashes.emplace_back(D, ComputeSubDeclODRHash(D));
+              }
+            };
 
         PopulateTemplateParameterHashs(FirstTemplateHashes, FirstTemplate);
         PopulateTemplateParameterHashs(SecondTemplateHashes, SecondTemplate);
@@ -10180,60 +10166,155 @@ void ASTReader::diagnoseOdrViolations() {
           if (FirstIt->second == SecondIt->second)
             continue;
 
+          auto ODRDiagTemplateError = [FirstRecord, &FirstModule, this](
+                                          SourceLocation Loc, SourceRange Range,
+                                          ODRTemplateDifference DiffType) {
+            return Diag(Loc, diag::err_module_odr_violation_template_parameter)
+                   << FirstRecord << FirstModule.empty() << FirstModule << Range
+                   << DiffType;
+          };
+          auto ODRDiagTemplateNote = [&SecondModule, this](
+                                         SourceLocation Loc, SourceRange Range,
+                                         ODRTemplateDifference DiffType) {
+            return Diag(Loc, diag::note_module_odr_violation_template_parameter)
+                   << SecondModule << Range << DiffType;
+          };
+
           const NamedDecl* FirstDecl = cast<NamedDecl>(FirstIt->first);
           const NamedDecl* SecondDecl = cast<NamedDecl>(SecondIt->first);
 
           assert(FirstDecl->getKind() == SecondDecl->getKind() &&
                  "Parameter Decl's should be the same kind.");
 
-          enum ODRTemplateDifference {
-            ParamEmptyName,
-            ParamName,
-            ParamSingleDefaultArgument,
-            ParamDifferentDefaultArgument,
-          };
-
-          auto hasDefaultArg = [](const NamedDecl *D) {
-            if (auto *TTP = dyn_cast<TemplateTypeParmDecl>(D))
-              return TTP->hasDefaultArgument() &&
-                      !TTP->defaultArgumentWasInherited();
-            if (auto *NTTP = dyn_cast<NonTypeTemplateParmDecl>(D))
-              return NTTP->hasDefaultArgument() &&
-                      !NTTP->defaultArgumentWasInherited();
-            auto *TTP = cast<TemplateTemplateParmDecl>(D);
-            return TTP->hasDefaultArgument() &&
-                    !TTP->defaultArgumentWasInherited();
-          };
-          bool hasFirstArg = hasDefaultArg(FirstDecl);
-          bool hasSecondArg = hasDefaultArg(SecondDecl);
-
-          ODRTemplateDifference ErrDiffType;
-          ODRTemplateDifference NoteDiffType;
-
           DeclarationName FirstName = FirstDecl->getDeclName();
           DeclarationName SecondName = SecondDecl->getDeclName();
 
           if (FirstName != SecondName) {
-            bool FirstNameEmpty =
+            const bool FirstNameEmpty =
                 FirstName.isIdentifier() && !FirstName.getAsIdentifierInfo();
-            bool SecondNameEmpty = SecondName.isIdentifier() &&
-                                    !SecondName.getAsIdentifierInfo();
-            ErrDiffType = FirstNameEmpty ? ParamEmptyName : ParamName;
-            NoteDiffType = SecondNameEmpty ? ParamEmptyName : ParamName;
-          } else if (hasFirstArg == hasSecondArg)
-            ErrDiffType = NoteDiffType = ParamDifferentDefaultArgument;
-          else
-            ErrDiffType = NoteDiffType = ParamSingleDefaultArgument;
+            const bool SecondNameEmpty =
+                SecondName.isIdentifier() && !SecondName.getAsIdentifierInfo();
+            assert((!FirstNameEmpty || !SecondNameEmpty) &&
+                   "Both template parameters cannot be unnamed.");
+            ODRDiagTemplateError(FirstDecl->getLocation(),
+                                 FirstDecl->getSourceRange(),
+                                 FirstNameEmpty ? ParamEmptyName : ParamName)
+                << FirstName;
+            ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                SecondDecl->getSourceRange(),
+                                SecondNameEmpty ? ParamEmptyName : ParamName)
+                << SecondName;
+            break;
+          }
 
-          Diag(FirstDecl->getLocation(),
-                diag::err_module_odr_violation_template_parameter)
-              << FirstRecord << FirstModule.empty() << FirstModule
-              << FirstDecl->getSourceRange() << ErrDiffType << hasFirstArg
-              << FirstName;
-          Diag(SecondDecl->getLocation(),
-                diag::note_module_odr_violation_template_parameter)
-              << SecondModule << SecondDecl->getSourceRange() << NoteDiffType
-              << hasSecondArg << SecondName;
+          switch (FirstDecl->getKind()) {
+          default:
+            llvm_unreachable("Invalid template parameter type.");
+          case Decl::TemplateTypeParm: {
+            const auto *FirstParam = cast<TemplateTypeParmDecl>(FirstDecl);
+            const auto *SecondParam = cast<TemplateTypeParmDecl>(SecondDecl);
+            const bool HasFirstDefaultArgument =
+                FirstParam->hasDefaultArgument() &&
+                !FirstParam->defaultArgumentWasInherited();
+            const bool HasSecondDefaultArgument =
+                SecondParam->hasDefaultArgument() &&
+                !SecondParam->defaultArgumentWasInherited();
+
+            if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
+              ODRDiagTemplateError(FirstDecl->getLocation(),
+                                   FirstDecl->getSourceRange(),
+                                   ParamSingleDefaultArgument)
+                  << HasFirstDefaultArgument;
+              ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                  SecondDecl->getSourceRange(),
+                                  ParamSingleDefaultArgument)
+                  << HasSecondDefaultArgument;
+              break;
+            }
+
+            assert(HasFirstDefaultArgument && HasSecondDefaultArgument &&
+                   "Expecting default arguments.");
+
+            ODRDiagTemplateError(FirstDecl->getLocation(),
+                                 FirstDecl->getSourceRange(),
+                                 ParamDifferentDefaultArgument);
+            ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                SecondDecl->getSourceRange(),
+                                ParamDifferentDefaultArgument);
+
+            break;
+          }
+          case Decl::NonTypeTemplateParm: {
+            const auto *FirstParam = cast<NonTypeTemplateParmDecl>(FirstDecl);
+            const auto *SecondParam = cast<NonTypeTemplateParmDecl>(SecondDecl);
+            const bool HasFirstDefaultArgument =
+                FirstParam->hasDefaultArgument() &&
+                !FirstParam->defaultArgumentWasInherited();
+            const bool HasSecondDefaultArgument =
+                SecondParam->hasDefaultArgument() &&
+                !SecondParam->defaultArgumentWasInherited();
+
+            if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
+              ODRDiagTemplateError(FirstDecl->getLocation(),
+                                   FirstDecl->getSourceRange(),
+                                   ParamSingleDefaultArgument)
+                  << HasFirstDefaultArgument;
+              ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                  SecondDecl->getSourceRange(),
+                                  ParamSingleDefaultArgument)
+                  << HasSecondDefaultArgument;
+              break;
+            }
+
+            assert(HasFirstDefaultArgument && HasSecondDefaultArgument &&
+                   "Expecting default arguments.");
+
+            ODRDiagTemplateError(FirstDecl->getLocation(),
+                                 FirstDecl->getSourceRange(),
+                                 ParamDifferentDefaultArgument);
+            ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                SecondDecl->getSourceRange(),
+                                ParamDifferentDefaultArgument);
+
+            break;
+          }
+          case Decl::TemplateTemplateParm: {
+            const auto *FirstParam = cast<TemplateTemplateParmDecl>(FirstDecl);
+            const auto *SecondParam =
+                cast<TemplateTemplateParmDecl>(SecondDecl);
+            const bool HasFirstDefaultArgument =
+                FirstParam->hasDefaultArgument() &&
+                !FirstParam->defaultArgumentWasInherited();
+            const bool HasSecondDefaultArgument =
+                SecondParam->hasDefaultArgument() &&
+                !SecondParam->defaultArgumentWasInherited();
+
+            if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
+              ODRDiagTemplateError(FirstDecl->getLocation(),
+                                   FirstDecl->getSourceRange(),
+                                   ParamSingleDefaultArgument)
+                  << HasFirstDefaultArgument;
+              ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                  SecondDecl->getSourceRange(),
+                                  ParamSingleDefaultArgument)
+                  << HasSecondDefaultArgument;
+              break;
+            }
+
+            assert(HasFirstDefaultArgument && HasSecondDefaultArgument &&
+                   "Expecting default arguments.");
+
+            ODRDiagTemplateError(FirstDecl->getLocation(),
+                                 FirstDecl->getSourceRange(),
+                                 ParamDifferentDefaultArgument);
+            ODRDiagTemplateNote(SecondDecl->getLocation(),
+                                SecondDecl->getSourceRange(),
+                                ParamDifferentDefaultArgument);
+
+            break;
+          }
+          }
+
           break;
         }
 
@@ -10249,11 +10330,11 @@ void ASTReader::diagnoseOdrViolations() {
       PopulateHashes(FirstHashes, FirstRecord, DC);
       PopulateHashes(SecondHashes, SecondRecord, DC);
 
-      DiffResult DR = FindTypeDiffs(FirstHashes, SecondHashes);
+      auto DR = FindTypeDiffs(FirstHashes, SecondHashes);
       ODRMismatchDecl FirstDiffType = DR.FirstDiffType;
       ODRMismatchDecl SecondDiffType = DR.SecondDiffType;
-      const Decl *FirstDecl = DR.FirstDecl;
-      const Decl *SecondDecl = DR.SecondDecl;
+      Decl *FirstDecl = DR.FirstDecl;
+      Decl *SecondDecl = DR.SecondDecl;
 
       if (FirstDiffType == Other || SecondDiffType == Other) {
         DiagnoseODRUnexpected(DR, FirstRecord, FirstModule, SecondRecord,
@@ -10269,56 +10350,8 @@ void ASTReader::diagnoseOdrViolations() {
         break;
       }
 
-      // Used with err_module_odr_violation_record and
-      // note_module_odr_violation_record
-      enum ODRCXXRecordDifference {
-        StaticAssertCondition,
-        StaticAssertMessage,
-        StaticAssertOnlyMessage,
-        MethodName,
-        MethodDeleted,
-        MethodDefaulted,
-        MethodVirtual,
-        MethodStatic,
-        MethodVolatile,
-        MethodConst,
-        MethodInline,
-        MethodNumberParameters,
-        MethodParameterType,
-        MethodParameterName,
-        MethodParameterSingleDefaultArgument,
-        MethodParameterDifferentDefaultArgument,
-        MethodNoTemplateArguments,
-        MethodDifferentNumberTemplateArguments,
-        MethodDifferentTemplateArgument,
-        MethodSingleBody,
-        MethodDifferentBody,
-        FriendTypeFunction,
-        FriendType,
-        FriendFunction,
-        FunctionTemplateDifferentNumberParameters,
-        FunctionTemplateParameterDifferentKind,
-        FunctionTemplateParameterName,
-        FunctionTemplateParameterSingleDefaultArgument,
-        FunctionTemplateParameterDifferentDefaultArgument,
-        FunctionTemplateParameterDifferentType,
-        FunctionTemplatePackParameter,
-      };
-      auto ODRDiagDeclError = [FirstRecord, &FirstModule,
-                               this](SourceLocation Loc, SourceRange Range,
-                                     ODRCXXRecordDifference DiffType) {
-        return Diag(Loc, diag::err_module_odr_violation_record)
-               << FirstRecord << FirstModule.empty() << FirstModule << Range
-               << DiffType;
-      };
-      auto ODRDiagDeclNote = [&SecondModule,
-                              this](SourceLocation Loc, SourceRange Range,
-                                    ODRCXXRecordDifference DiffType) {
-        return Diag(Loc, diag::note_module_odr_violation_record)
-               << SecondModule << Range << DiffType;
-      };
-
       assert(FirstDiffType == SecondDiffType);
+
       switch (FirstDiffType) {
       case Other:
       case EndOfClass:
@@ -10328,24 +10361,24 @@ void ASTReader::diagnoseOdrViolations() {
         llvm_unreachable("Invalid diff type");
 
       case StaticAssert: {
-        const StaticAssertDecl *FirstSA = cast<StaticAssertDecl>(FirstDecl);
-        const StaticAssertDecl *SecondSA = cast<StaticAssertDecl>(SecondDecl);
+        StaticAssertDecl *FirstSA = cast<StaticAssertDecl>(FirstDecl);
+        StaticAssertDecl *SecondSA = cast<StaticAssertDecl>(SecondDecl);
 
-        const Expr *FirstExpr = FirstSA->getAssertExpr();
-        const Expr *SecondExpr = SecondSA->getAssertExpr();
-        unsigned FirstODRHash = computeODRHash(FirstExpr);
-        unsigned SecondODRHash = computeODRHash(SecondExpr);
+        Expr *FirstExpr = FirstSA->getAssertExpr();
+        Expr *SecondExpr = SecondSA->getAssertExpr();
+        unsigned FirstODRHash = ComputeODRHash(FirstExpr);
+        unsigned SecondODRHash = ComputeODRHash(SecondExpr);
         if (FirstODRHash != SecondODRHash) {
-          ODRDiagDeclError(FirstExpr->getBeginLoc(),
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstExpr->getBeginLoc(),
                            FirstExpr->getSourceRange(), StaticAssertCondition);
-          ODRDiagDeclNote(SecondExpr->getBeginLoc(),
+          ODRDiagDeclNote(SecondModule, SecondExpr->getBeginLoc(),
                           SecondExpr->getSourceRange(), StaticAssertCondition);
           Diagnosed = true;
           break;
         }
 
-        const StringLiteral *FirstStr = FirstSA->getMessage();
-        const StringLiteral *SecondStr = SecondSA->getMessage();
+        StringLiteral *FirstStr = FirstSA->getMessage();
+        StringLiteral *SecondStr = SecondSA->getMessage();
         assert((FirstStr || SecondStr) && "Both messages cannot be empty");
         if ((FirstStr && !SecondStr) || (!FirstStr && SecondStr)) {
           SourceLocation FirstLoc, SecondLoc;
@@ -10364,9 +10397,11 @@ void ASTReader::diagnoseOdrViolations() {
             SecondLoc = SecondSA->getBeginLoc();
             SecondRange = SecondSA->getSourceRange();
           }
-          ODRDiagDeclError(FirstLoc, FirstRange, StaticAssertOnlyMessage)
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstLoc, FirstRange,
+                           StaticAssertOnlyMessage)
               << (FirstStr == nullptr);
-          ODRDiagDeclNote(SecondLoc, SecondRange, StaticAssertOnlyMessage)
+          ODRDiagDeclNote(SecondModule, SecondLoc, SecondRange,
+                          StaticAssertOnlyMessage)
               << (SecondStr == nullptr);
           Diagnosed = true;
           break;
@@ -10374,10 +10409,10 @@ void ASTReader::diagnoseOdrViolations() {
 
         if (FirstStr && SecondStr &&
             FirstStr->getString() != SecondStr->getString()) {
-          ODRDiagDeclError(FirstStr->getBeginLoc(), FirstStr->getSourceRange(),
-                           StaticAssertMessage);
-          ODRDiagDeclNote(SecondStr->getBeginLoc(), SecondStr->getSourceRange(),
-                          StaticAssertMessage);
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstStr->getBeginLoc(),
+                           FirstStr->getSourceRange(), StaticAssertMessage);
+          ODRDiagDeclNote(SecondModule, SecondStr->getBeginLoc(),
+                          SecondStr->getSourceRange(), StaticAssertMessage);
           Diagnosed = true;
           break;
         }
@@ -10405,24 +10440,16 @@ void ASTReader::diagnoseOdrViolations() {
         const CXXMethodDecl *SecondMethod = cast<CXXMethodDecl>(SecondDecl);
         FirstMethodType = GetMethodTypeForDiagnostics(FirstMethod);
         SecondMethodType = GetMethodTypeForDiagnostics(SecondMethod);
-        DeclarationName FirstName = FirstMethod->getDeclName();
-        DeclarationName SecondName = SecondMethod->getDeclName();
-        auto DiagMethodError = [&ODRDiagDeclError, FirstMethod, FirstMethodType,
-                                FirstName](ODRCXXRecordDifference DiffType) {
-          return ODRDiagDeclError(FirstMethod->getLocation(),
-                                  FirstMethod->getSourceRange(), DiffType)
-                 << FirstMethodType << FirstName;
-        };
-        auto DiagMethodNote = [&ODRDiagDeclNote, SecondMethod, SecondMethodType,
-                               SecondName](ODRCXXRecordDifference DiffType) {
-          return ODRDiagDeclNote(SecondMethod->getLocation(),
-                                 SecondMethod->getSourceRange(), DiffType)
-                 << SecondMethodType << SecondName;
-        };
-
+        auto FirstName = FirstMethod->getDeclName();
+        auto SecondName = SecondMethod->getDeclName();
         if (FirstMethodType != SecondMethodType || FirstName != SecondName) {
-          DiagMethodError(MethodName);
-          DiagMethodNote(MethodName);
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodName)
+              << FirstMethodType << FirstName;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodName)
+              << SecondMethodType << SecondName;
+
           Diagnosed = true;
           break;
         }
@@ -10430,8 +10457,13 @@ void ASTReader::diagnoseOdrViolations() {
         const bool FirstDeleted = FirstMethod->isDeletedAsWritten();
         const bool SecondDeleted = SecondMethod->isDeletedAsWritten();
         if (FirstDeleted != SecondDeleted) {
-          DiagMethodError(MethodDeleted) << FirstDeleted;
-          DiagMethodNote(MethodDeleted) << SecondDeleted;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodDeleted)
+              << FirstMethodType << FirstName << FirstDeleted;
+
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodDeleted)
+              << SecondMethodType << SecondName << SecondDeleted;
           Diagnosed = true;
           break;
         }
@@ -10439,8 +10471,13 @@ void ASTReader::diagnoseOdrViolations() {
         const bool FirstDefaulted = FirstMethod->isExplicitlyDefaulted();
         const bool SecondDefaulted = SecondMethod->isExplicitlyDefaulted();
         if (FirstDefaulted != SecondDefaulted) {
-          DiagMethodError(MethodDefaulted) << FirstDefaulted;
-          DiagMethodNote(MethodDefaulted) << SecondDefaulted;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodDefaulted)
+              << FirstMethodType << FirstName << FirstDefaulted;
+
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodDefaulted)
+              << SecondMethodType << SecondName << SecondDefaulted;
           Diagnosed = true;
           break;
         }
@@ -10451,8 +10488,12 @@ void ASTReader::diagnoseOdrViolations() {
         const bool SecondPure = SecondMethod->isPure();
         if ((FirstVirtual || SecondVirtual) &&
             (FirstVirtual != SecondVirtual || FirstPure != SecondPure)) {
-          DiagMethodError(MethodVirtual) << FirstPure << FirstVirtual;
-          DiagMethodNote(MethodVirtual) << SecondPure << SecondVirtual;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodVirtual)
+              << FirstMethodType << FirstName << FirstPure << FirstVirtual;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodVirtual)
+              << SecondMethodType << SecondName << SecondPure << SecondVirtual;
           Diagnosed = true;
           break;
         }
@@ -10460,13 +10501,17 @@ void ASTReader::diagnoseOdrViolations() {
         // CXXMethodDecl::isStatic uses the canonical Decl.  With Decl merging,
         // FirstDecl is the canonical Decl of SecondDecl, so the storage
         // class needs to be checked instead.
-        StorageClass FirstStorage = FirstMethod->getStorageClass();
-        StorageClass SecondStorage = SecondMethod->getStorageClass();
+        const auto FirstStorage = FirstMethod->getStorageClass();
+        const auto SecondStorage = SecondMethod->getStorageClass();
         const bool FirstStatic = FirstStorage == SC_Static;
         const bool SecondStatic = SecondStorage == SC_Static;
         if (FirstStatic != SecondStatic) {
-          DiagMethodError(MethodStatic) << FirstStatic;
-          DiagMethodNote(MethodStatic) << SecondStatic;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodStatic)
+              << FirstMethodType << FirstName << FirstStatic;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodStatic)
+              << SecondMethodType << SecondName << SecondStatic;
           Diagnosed = true;
           break;
         }
@@ -10474,8 +10519,12 @@ void ASTReader::diagnoseOdrViolations() {
         const bool FirstVolatile = FirstMethod->isVolatile();
         const bool SecondVolatile = SecondMethod->isVolatile();
         if (FirstVolatile != SecondVolatile) {
-          DiagMethodError(MethodVolatile) << FirstVolatile;
-          DiagMethodNote(MethodVolatile) << SecondVolatile;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodVolatile)
+              << FirstMethodType << FirstName << FirstVolatile;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodVolatile)
+              << SecondMethodType << SecondName << SecondVolatile;
           Diagnosed = true;
           break;
         }
@@ -10483,8 +10532,12 @@ void ASTReader::diagnoseOdrViolations() {
         const bool FirstConst = FirstMethod->isConst();
         const bool SecondConst = SecondMethod->isConst();
         if (FirstConst != SecondConst) {
-          DiagMethodError(MethodConst) << FirstConst;
-          DiagMethodNote(MethodConst) << SecondConst;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodConst)
+              << FirstMethodType << FirstName << FirstConst;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodConst)
+              << SecondMethodType << SecondName << SecondConst;
           Diagnosed = true;
           break;
         }
@@ -10492,8 +10545,12 @@ void ASTReader::diagnoseOdrViolations() {
         const bool FirstInline = FirstMethod->isInlineSpecified();
         const bool SecondInline = SecondMethod->isInlineSpecified();
         if (FirstInline != SecondInline) {
-          DiagMethodError(MethodInline) << FirstInline;
-          DiagMethodNote(MethodInline) << SecondInline;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodInline)
+              << FirstMethodType << FirstName << FirstInline;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodInline)
+              << SecondMethodType << SecondName << SecondInline;
           Diagnosed = true;
           break;
         }
@@ -10501,8 +10558,14 @@ void ASTReader::diagnoseOdrViolations() {
         const unsigned FirstNumParameters = FirstMethod->param_size();
         const unsigned SecondNumParameters = SecondMethod->param_size();
         if (FirstNumParameters != SecondNumParameters) {
-          DiagMethodError(MethodNumberParameters) << FirstNumParameters;
-          DiagMethodNote(MethodNumberParameters) << SecondNumParameters;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(),
+                           MethodNumberParameters)
+              << FirstMethodType << FirstName << FirstNumParameters;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(),
+                          MethodNumberParameters)
+              << SecondMethodType << SecondName << SecondNumParameters;
           Diagnosed = true;
           break;
         }
@@ -10516,26 +10579,37 @@ void ASTReader::diagnoseOdrViolations() {
           QualType FirstParamType = FirstParam->getType();
           QualType SecondParamType = SecondParam->getType();
           if (FirstParamType != SecondParamType &&
-              computeODRHash(FirstParamType) !=
-                  computeODRHash(SecondParamType)) {
+              ComputeQualTypeODRHash(FirstParamType) !=
+                  ComputeQualTypeODRHash(SecondParamType)) {
             if (const DecayedType *ParamDecayedType =
                     FirstParamType->getAs<DecayedType>()) {
-              DiagMethodError(MethodParameterType)
-                  << (I + 1) << FirstParamType << true
-                  << ParamDecayedType->getOriginalType();
+              ODRDiagDeclError(
+                  FirstRecord, FirstModule, FirstMethod->getLocation(),
+                  FirstMethod->getSourceRange(), MethodParameterType)
+                  << FirstMethodType << FirstName << (I + 1) << FirstParamType
+                  << true << ParamDecayedType->getOriginalType();
             } else {
-              DiagMethodError(MethodParameterType)
-                  << (I + 1) << FirstParamType << false;
+              ODRDiagDeclError(
+                  FirstRecord, FirstModule, FirstMethod->getLocation(),
+                  FirstMethod->getSourceRange(), MethodParameterType)
+                  << FirstMethodType << FirstName << (I + 1) << FirstParamType
+                  << false;
             }
 
             if (const DecayedType *ParamDecayedType =
                     SecondParamType->getAs<DecayedType>()) {
-              DiagMethodNote(MethodParameterType)
-                  << (I + 1) << SecondParamType << true
+              ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                              SecondMethod->getSourceRange(),
+                              MethodParameterType)
+                  << SecondMethodType << SecondName << (I + 1)
+                  << SecondParamType << true
                   << ParamDecayedType->getOriginalType();
             } else {
-              DiagMethodNote(MethodParameterType)
-                  << (I + 1) << SecondParamType << false;
+              ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                              SecondMethod->getSourceRange(),
+                              MethodParameterType)
+                  << SecondMethodType << SecondName << (I + 1)
+                  << SecondParamType << false;
             }
             ParameterMismatch = true;
             break;
@@ -10544,8 +10618,13 @@ void ASTReader::diagnoseOdrViolations() {
           DeclarationName FirstParamName = FirstParam->getDeclName();
           DeclarationName SecondParamName = SecondParam->getDeclName();
           if (FirstParamName != SecondParamName) {
-            DiagMethodError(MethodParameterName) << (I + 1) << FirstParamName;
-            DiagMethodNote(MethodParameterName) << (I + 1) << SecondParamName;
+            ODRDiagDeclError(FirstRecord, FirstModule,
+                             FirstMethod->getLocation(),
+                             FirstMethod->getSourceRange(), MethodParameterName)
+                << FirstMethodType << FirstName << (I + 1) << FirstParamName;
+            ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                            SecondMethod->getSourceRange(), MethodParameterName)
+                << SecondMethodType << SecondName << (I + 1) << SecondParamName;
             ParameterMismatch = true;
             break;
           }
@@ -10553,24 +10632,39 @@ void ASTReader::diagnoseOdrViolations() {
           const Expr *FirstInit = FirstParam->getInit();
           const Expr *SecondInit = SecondParam->getInit();
           if ((FirstInit == nullptr) != (SecondInit == nullptr)) {
-            DiagMethodError(MethodParameterSingleDefaultArgument)
-                << (I + 1) << (FirstInit == nullptr)
+            ODRDiagDeclError(FirstRecord, FirstModule,
+                             FirstMethod->getLocation(),
+                             FirstMethod->getSourceRange(),
+                             MethodParameterSingleDefaultArgument)
+                << FirstMethodType << FirstName << (I + 1)
+                << (FirstInit == nullptr)
                 << (FirstInit ? FirstInit->getSourceRange() : SourceRange());
-            DiagMethodNote(MethodParameterSingleDefaultArgument)
-                << (I + 1) << (SecondInit == nullptr)
+            ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                            SecondMethod->getSourceRange(),
+                            MethodParameterSingleDefaultArgument)
+                << SecondMethodType << SecondName << (I + 1)
+                << (SecondInit == nullptr)
                 << (SecondInit ? SecondInit->getSourceRange() : SourceRange());
             ParameterMismatch = true;
             break;
           }
 
           if (FirstInit && SecondInit &&
-              computeODRHash(FirstInit) != computeODRHash(SecondInit)) {
-            DiagMethodError(MethodParameterDifferentDefaultArgument)
-                << (I + 1) << FirstInit->getSourceRange();
-            DiagMethodNote(MethodParameterDifferentDefaultArgument)
-                << (I + 1) << SecondInit->getSourceRange();
+              ComputeODRHash(FirstInit) != ComputeODRHash(SecondInit)) {
+            ODRDiagDeclError(FirstRecord, FirstModule,
+                             FirstMethod->getLocation(),
+                             FirstMethod->getSourceRange(),
+                             MethodParameterDifferentDefaultArgument)
+                << FirstMethodType << FirstName << (I + 1)
+                << FirstInit->getSourceRange();
+            ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                            SecondMethod->getSourceRange(),
+                            MethodParameterDifferentDefaultArgument)
+                << SecondMethodType << SecondName << (I + 1)
+                << SecondInit->getSourceRange();
             ParameterMismatch = true;
             break;
+
           }
         }
 
@@ -10579,17 +10673,23 @@ void ASTReader::diagnoseOdrViolations() {
           break;
         }
 
-        const TemplateArgumentList *FirstTemplateArgs =
+        const auto *FirstTemplateArgs =
             FirstMethod->getTemplateSpecializationArgs();
-        const TemplateArgumentList *SecondTemplateArgs =
+        const auto *SecondTemplateArgs =
             SecondMethod->getTemplateSpecializationArgs();
 
         if ((FirstTemplateArgs && !SecondTemplateArgs) ||
             (!FirstTemplateArgs && SecondTemplateArgs)) {
-          DiagMethodError(MethodNoTemplateArguments)
-              << (FirstTemplateArgs != nullptr);
-          DiagMethodNote(MethodNoTemplateArguments)
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(),
+                           MethodNoTemplateArguments)
+              << FirstMethodType << FirstName << (FirstTemplateArgs != nullptr);
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(),
+                          MethodNoTemplateArguments)
+              << SecondMethodType << SecondName
               << (SecondTemplateArgs != nullptr);
+
           Diagnosed = true;
           break;
         }
@@ -10604,8 +10704,9 @@ void ASTReader::diagnoseOdrViolations() {
                     ExpandedList.push_back(&TA);
                     continue;
                   }
-                  llvm::append_range(ExpandedList, llvm::make_pointer_range(
-                                                       TA.getPackAsArray()));
+                  for (const TemplateArgument &PackTA : TA.getPackAsArray()) {
+                    ExpandedList.push_back(&PackTA);
+                  }
                 }
                 return ExpandedList;
               };
@@ -10615,10 +10716,18 @@ void ASTReader::diagnoseOdrViolations() {
               ExpandTemplateArgumentList(SecondTemplateArgs);
 
           if (FirstExpandedList.size() != SecondExpandedList.size()) {
-            DiagMethodError(MethodDifferentNumberTemplateArguments)
+            ODRDiagDeclError(FirstRecord, FirstModule,
+                             FirstMethod->getLocation(),
+                             FirstMethod->getSourceRange(),
+                             MethodDifferentNumberTemplateArguments)
+                << FirstMethodType << FirstName
                 << (unsigned)FirstExpandedList.size();
-            DiagMethodNote(MethodDifferentNumberTemplateArguments)
+            ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                            SecondMethod->getSourceRange(),
+                            MethodDifferentNumberTemplateArguments)
+                << SecondMethodType << SecondName
                 << (unsigned)SecondExpandedList.size();
+
             Diagnosed = true;
             break;
           }
@@ -10627,14 +10736,20 @@ void ASTReader::diagnoseOdrViolations() {
           for (unsigned i = 0, e = FirstExpandedList.size(); i != e; ++i) {
             const TemplateArgument &FirstTA = *FirstExpandedList[i],
                                    &SecondTA = *SecondExpandedList[i];
-            if (computeODRHash(FirstTA) == computeODRHash(SecondTA)) {
+            if (ComputeTemplateArgumentODRHash(FirstTA) ==
+                ComputeTemplateArgumentODRHash(SecondTA)) {
               continue;
             }
 
-            DiagMethodError(MethodDifferentTemplateArgument)
-                << FirstTA << i + 1;
-            DiagMethodNote(MethodDifferentTemplateArgument)
-                << SecondTA << i + 1;
+            ODRDiagDeclError(
+                FirstRecord, FirstModule, FirstMethod->getLocation(),
+                FirstMethod->getSourceRange(), MethodDifferentTemplateArgument)
+                << FirstMethodType << FirstName << FirstTA << i + 1;
+            ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                            SecondMethod->getSourceRange(),
+                            MethodDifferentTemplateArgument)
+                << SecondMethodType << SecondName << SecondTA << i + 1;
+
             TemplateArgumentMismatch = true;
             break;
           }
@@ -10646,30 +10761,38 @@ void ASTReader::diagnoseOdrViolations() {
         }
 
         // Compute the hash of the method as if it has no body.
-        auto ComputeCXXMethodODRHash = [](const CXXMethodDecl *D) {
-          ODRHash Hasher;
-          Hasher.AddFunctionDecl(D, true /*SkipBody*/);
-          return Hasher.CalculateHash();
+        auto ComputeCXXMethodODRHash = [&Hash](const CXXMethodDecl *D) {
+          Hash.clear();
+          Hash.AddFunctionDecl(D, true /*SkipBody*/);
+          return Hash.CalculateHash();
         };
 
         // Compare the hash generated to the hash stored.  A difference means
         // that a body was present in the original source.  Due to merging,
-        // the standard way of detecting a body will not work.
+        // the stardard way of detecting a body will not work.
         const bool HasFirstBody =
             ComputeCXXMethodODRHash(FirstMethod) != FirstMethod->getODRHash();
         const bool HasSecondBody =
             ComputeCXXMethodODRHash(SecondMethod) != SecondMethod->getODRHash();
 
         if (HasFirstBody != HasSecondBody) {
-          DiagMethodError(MethodSingleBody) << HasFirstBody;
-          DiagMethodNote(MethodSingleBody) << HasSecondBody;
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodSingleBody)
+              << FirstMethodType << FirstName << HasFirstBody;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodSingleBody)
+              << SecondMethodType << SecondName << HasSecondBody;
           Diagnosed = true;
           break;
         }
 
         if (HasFirstBody && HasSecondBody) {
-          DiagMethodError(MethodDifferentBody);
-          DiagMethodNote(MethodDifferentBody);
+          ODRDiagDeclError(FirstRecord, FirstModule, FirstMethod->getLocation(),
+                           FirstMethod->getSourceRange(), MethodDifferentBody)
+              << FirstMethodType << FirstName;
+          ODRDiagDeclNote(SecondModule, SecondMethod->getLocation(),
+                          SecondMethod->getSourceRange(), MethodDifferentBody)
+              << SecondMethodType << SecondName;
           Diagnosed = true;
           break;
         }
@@ -10691,22 +10814,24 @@ void ASTReader::diagnoseOdrViolations() {
         break;
       }
       case Friend: {
-        const FriendDecl *FirstFriend = cast<FriendDecl>(FirstDecl);
-        const FriendDecl *SecondFriend = cast<FriendDecl>(SecondDecl);
+        FriendDecl *FirstFriend = cast<FriendDecl>(FirstDecl);
+        FriendDecl *SecondFriend = cast<FriendDecl>(SecondDecl);
 
-        const NamedDecl *FirstND = FirstFriend->getFriendDecl();
-        const NamedDecl *SecondND = SecondFriend->getFriendDecl();
+        NamedDecl *FirstND = FirstFriend->getFriendDecl();
+        NamedDecl *SecondND = SecondFriend->getFriendDecl();
 
         TypeSourceInfo *FirstTSI = FirstFriend->getFriendType();
         TypeSourceInfo *SecondTSI = SecondFriend->getFriendType();
 
         if (FirstND && SecondND) {
-          ODRDiagDeclError(FirstFriend->getFriendLoc(),
+          ODRDiagDeclError(FirstRecord, FirstModule,
+                           FirstFriend->getFriendLoc(),
                            FirstFriend->getSourceRange(), FriendFunction)
               << FirstND;
-          ODRDiagDeclNote(SecondFriend->getFriendLoc(),
+          ODRDiagDeclNote(SecondModule, SecondFriend->getFriendLoc(),
                           SecondFriend->getSourceRange(), FriendFunction)
               << SecondND;
+
           Diagnosed = true;
           break;
         }
@@ -10714,31 +10839,33 @@ void ASTReader::diagnoseOdrViolations() {
         if (FirstTSI && SecondTSI) {
           QualType FirstFriendType = FirstTSI->getType();
           QualType SecondFriendType = SecondTSI->getType();
-          assert(computeODRHash(FirstFriendType) !=
-                 computeODRHash(SecondFriendType));
-          ODRDiagDeclError(FirstFriend->getFriendLoc(),
+          assert(ComputeQualTypeODRHash(FirstFriendType) !=
+                 ComputeQualTypeODRHash(SecondFriendType));
+          ODRDiagDeclError(FirstRecord, FirstModule,
+                           FirstFriend->getFriendLoc(),
                            FirstFriend->getSourceRange(), FriendType)
               << FirstFriendType;
-          ODRDiagDeclNote(SecondFriend->getFriendLoc(),
+          ODRDiagDeclNote(SecondModule, SecondFriend->getFriendLoc(),
                           SecondFriend->getSourceRange(), FriendType)
               << SecondFriendType;
           Diagnosed = true;
           break;
         }
 
-        ODRDiagDeclError(FirstFriend->getFriendLoc(),
+        ODRDiagDeclError(FirstRecord, FirstModule, FirstFriend->getFriendLoc(),
                          FirstFriend->getSourceRange(), FriendTypeFunction)
             << (FirstTSI == nullptr);
-        ODRDiagDeclNote(SecondFriend->getFriendLoc(),
+        ODRDiagDeclNote(SecondModule, SecondFriend->getFriendLoc(),
                         SecondFriend->getSourceRange(), FriendTypeFunction)
             << (SecondTSI == nullptr);
+
         Diagnosed = true;
         break;
       }
       case FunctionTemplate: {
-        const FunctionTemplateDecl *FirstTemplate =
+        FunctionTemplateDecl *FirstTemplate =
             cast<FunctionTemplateDecl>(FirstDecl);
-        const FunctionTemplateDecl *SecondTemplate =
+        FunctionTemplateDecl *SecondTemplate =
             cast<FunctionTemplateDecl>(SecondDecl);
 
         TemplateParameterList *FirstTPL =
@@ -10746,24 +10873,17 @@ void ASTReader::diagnoseOdrViolations() {
         TemplateParameterList *SecondTPL =
             SecondTemplate->getTemplateParameters();
 
-        auto DiagTemplateError = [&ODRDiagDeclError, FirstTemplate](
-                                     ODRCXXRecordDifference DiffType) {
-          return ODRDiagDeclError(FirstTemplate->getLocation(),
-                                  FirstTemplate->getSourceRange(), DiffType)
-                 << FirstTemplate;
-        };
-        auto DiagTemplateNote = [&ODRDiagDeclNote, SecondTemplate](
-                                    ODRCXXRecordDifference DiffType) {
-          return ODRDiagDeclNote(SecondTemplate->getLocation(),
-                                 SecondTemplate->getSourceRange(), DiffType)
-                 << SecondTemplate;
-        };
-
         if (FirstTPL->size() != SecondTPL->size()) {
-          DiagTemplateError(FunctionTemplateDifferentNumberParameters)
-              << FirstTPL->size();
-          DiagTemplateNote(FunctionTemplateDifferentNumberParameters)
-              << SecondTPL->size();
+          ODRDiagDeclError(FirstRecord, FirstModule,
+                           FirstTemplate->getLocation(),
+                           FirstTemplate->getSourceRange(),
+                           FunctionTemplateDifferentNumberParameters)
+              << FirstTemplate << FirstTPL->size();
+          ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                          SecondTemplate->getSourceRange(),
+                          FunctionTemplateDifferentNumberParameters)
+              << SecondTemplate << SecondTPL->size();
+
           Diagnosed = true;
           break;
         }
@@ -10792,19 +10912,31 @@ void ASTReader::diagnoseOdrViolations() {
               }
             };
 
-            DiagTemplateError(FunctionTemplateParameterDifferentKind)
-                << (i + 1) << GetParamType(FirstParam);
-            DiagTemplateNote(FunctionTemplateParameterDifferentKind)
-                << (i + 1) << GetParamType(SecondParam);
+            ODRDiagDeclError(FirstRecord, FirstModule,
+                             FirstTemplate->getLocation(),
+                             FirstTemplate->getSourceRange(),
+                             FunctionTemplateParameterDifferentKind)
+                << FirstTemplate << (i + 1) << GetParamType(FirstParam);
+            ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                            SecondTemplate->getSourceRange(),
+                            FunctionTemplateParameterDifferentKind)
+                << SecondTemplate << (i + 1) << GetParamType(SecondParam);
+
             ParameterMismatch = true;
             break;
           }
 
           if (FirstParam->getName() != SecondParam->getName()) {
-            DiagTemplateError(FunctionTemplateParameterName)
-                << (i + 1) << (bool)FirstParam->getIdentifier() << FirstParam;
-            DiagTemplateNote(FunctionTemplateParameterName)
-                << (i + 1) << (bool)SecondParam->getIdentifier() << SecondParam;
+            ODRDiagDeclError(
+                FirstRecord, FirstModule, FirstTemplate->getLocation(),
+                FirstTemplate->getSourceRange(), FunctionTemplateParameterName)
+                << FirstTemplate << (i + 1) << (bool)FirstParam->getIdentifier()
+                << FirstParam;
+            ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                            SecondTemplate->getSourceRange(),
+                            FunctionTemplateParameterName)
+                << SecondTemplate << (i + 1)
+                << (bool)SecondParam->getIdentifier() << SecondParam;
             ParameterMismatch = true;
             break;
           }
@@ -10822,10 +10954,15 @@ void ASTReader::diagnoseOdrViolations() {
                 SecondTTPD->hasDefaultArgument() &&
                 !SecondTTPD->defaultArgumentWasInherited();
             if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
-              DiagTemplateError(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasFirstDefaultArgument;
-              DiagTemplateNote(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasSecondDefaultArgument;
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplateParameterSingleDefaultArgument)
+                  << FirstTemplate << (i + 1) << HasFirstDefaultArgument;
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplateParameterSingleDefaultArgument)
+                  << SecondTemplate << (i + 1) << HasSecondDefaultArgument;
               ParameterMismatch = true;
               break;
             }
@@ -10833,13 +10970,18 @@ void ASTReader::diagnoseOdrViolations() {
             if (HasFirstDefaultArgument && HasSecondDefaultArgument) {
               QualType FirstType = FirstTTPD->getDefaultArgument();
               QualType SecondType = SecondTTPD->getDefaultArgument();
-              if (computeODRHash(FirstType) != computeODRHash(SecondType)) {
-                DiagTemplateError(
+              if (ComputeQualTypeODRHash(FirstType) !=
+                  ComputeQualTypeODRHash(SecondType)) {
+                ODRDiagDeclError(
+                    FirstRecord, FirstModule, FirstTemplate->getLocation(),
+                    FirstTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << FirstType;
-                DiagTemplateNote(
+                    << FirstTemplate << (i + 1) << FirstType;
+                ODRDiagDeclNote(
+                    SecondModule, SecondTemplate->getLocation(),
+                    SecondTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << SecondType;
+                    << SecondTemplate << (i + 1) << SecondType;
                 ParameterMismatch = true;
                 break;
               }
@@ -10847,10 +10989,15 @@ void ASTReader::diagnoseOdrViolations() {
 
             if (FirstTTPD->isParameterPack() !=
                 SecondTTPD->isParameterPack()) {
-              DiagTemplateError(FunctionTemplatePackParameter)
-                  << (i + 1) << FirstTTPD->isParameterPack();
-              DiagTemplateNote(FunctionTemplatePackParameter)
-                  << (i + 1) << SecondTTPD->isParameterPack();
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplatePackParameter)
+                  << FirstTemplate << (i + 1) << FirstTTPD->isParameterPack();
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplatePackParameter)
+                  << SecondTemplate << (i + 1) << SecondTTPD->isParameterPack();
               ParameterMismatch = true;
               break;
             }
@@ -10868,20 +11015,17 @@ void ASTReader::diagnoseOdrViolations() {
             TemplateParameterList *SecondTPL =
                 SecondTTPD->getTemplateParameters();
 
-            auto ComputeTemplateParameterListODRHash =
-                [](const TemplateParameterList *TPL) {
-                  assert(TPL);
-                  ODRHash Hasher;
-                  Hasher.AddTemplateParameterList(TPL);
-                  return Hasher.CalculateHash();
-                };
-
             if (ComputeTemplateParameterListODRHash(FirstTPL) !=
                 ComputeTemplateParameterListODRHash(SecondTPL)) {
-              DiagTemplateError(FunctionTemplateParameterDifferentType)
-                  << (i + 1);
-              DiagTemplateNote(FunctionTemplateParameterDifferentType)
-                  << (i + 1);
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplateParameterDifferentType)
+                  << FirstTemplate << (i + 1);
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplateParameterDifferentType)
+                  << SecondTemplate << (i + 1);
               ParameterMismatch = true;
               break;
             }
@@ -10893,10 +11037,15 @@ void ASTReader::diagnoseOdrViolations() {
                 SecondTTPD->hasDefaultArgument() &&
                 !SecondTTPD->defaultArgumentWasInherited();
             if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
-              DiagTemplateError(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasFirstDefaultArgument;
-              DiagTemplateNote(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasSecondDefaultArgument;
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplateParameterSingleDefaultArgument)
+                  << FirstTemplate << (i + 1) << HasFirstDefaultArgument;
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplateParameterSingleDefaultArgument)
+                  << SecondTemplate << (i + 1) << HasSecondDefaultArgument;
               ParameterMismatch = true;
               break;
             }
@@ -10906,13 +11055,18 @@ void ASTReader::diagnoseOdrViolations() {
                   FirstTTPD->getDefaultArgument().getArgument();
               TemplateArgument SecondTA =
                   SecondTTPD->getDefaultArgument().getArgument();
-              if (computeODRHash(FirstTA) != computeODRHash(SecondTA)) {
-                DiagTemplateError(
+              if (ComputeTemplateArgumentODRHash(FirstTA) !=
+                  ComputeTemplateArgumentODRHash(SecondTA)) {
+                ODRDiagDeclError(
+                    FirstRecord, FirstModule, FirstTemplate->getLocation(),
+                    FirstTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << FirstTA;
-                DiagTemplateNote(
+                    << FirstTemplate << (i + 1) << FirstTA;
+                ODRDiagDeclNote(
+                    SecondModule, SecondTemplate->getLocation(),
+                    SecondTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << SecondTA;
+                    << SecondTemplate << (i + 1) << SecondTA;
                 ParameterMismatch = true;
                 break;
               }
@@ -10920,10 +11074,15 @@ void ASTReader::diagnoseOdrViolations() {
 
             if (FirstTTPD->isParameterPack() !=
                 SecondTTPD->isParameterPack()) {
-              DiagTemplateError(FunctionTemplatePackParameter)
-                  << (i + 1) << FirstTTPD->isParameterPack();
-              DiagTemplateNote(FunctionTemplatePackParameter)
-                  << (i + 1) << SecondTTPD->isParameterPack();
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplatePackParameter)
+                  << FirstTemplate << (i + 1) << FirstTTPD->isParameterPack();
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplatePackParameter)
+                  << SecondTemplate << (i + 1) << SecondTTPD->isParameterPack();
               ParameterMismatch = true;
               break;
             }
@@ -10938,11 +11097,17 @@ void ASTReader::diagnoseOdrViolations() {
 
             QualType FirstType = FirstNTTPD->getType();
             QualType SecondType = SecondNTTPD->getType();
-            if (computeODRHash(FirstType) != computeODRHash(SecondType)) {
-              DiagTemplateError(FunctionTemplateParameterDifferentType)
-                  << (i + 1);
-              DiagTemplateNote(FunctionTemplateParameterDifferentType)
-                  << (i + 1);
+            if (ComputeQualTypeODRHash(FirstType) !=
+                ComputeQualTypeODRHash(SecondType)) {
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplateParameterDifferentType)
+                  << FirstTemplate << (i + 1);
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplateParameterDifferentType)
+                  << SecondTemplate << (i + 1);
               ParameterMismatch = true;
               break;
             }
@@ -10954,10 +11119,15 @@ void ASTReader::diagnoseOdrViolations() {
                 SecondNTTPD->hasDefaultArgument() &&
                 !SecondNTTPD->defaultArgumentWasInherited();
             if (HasFirstDefaultArgument != HasSecondDefaultArgument) {
-              DiagTemplateError(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasFirstDefaultArgument;
-              DiagTemplateNote(FunctionTemplateParameterSingleDefaultArgument)
-                  << (i + 1) << HasSecondDefaultArgument;
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplateParameterSingleDefaultArgument)
+                  << FirstTemplate << (i + 1) << HasFirstDefaultArgument;
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplateParameterSingleDefaultArgument)
+                  << SecondTemplate << (i + 1) << HasSecondDefaultArgument;
               ParameterMismatch = true;
               break;
             }
@@ -10965,14 +11135,18 @@ void ASTReader::diagnoseOdrViolations() {
             if (HasFirstDefaultArgument && HasSecondDefaultArgument) {
               Expr *FirstDefaultArgument = FirstNTTPD->getDefaultArgument();
               Expr *SecondDefaultArgument = SecondNTTPD->getDefaultArgument();
-              if (computeODRHash(FirstDefaultArgument) !=
-                  computeODRHash(SecondDefaultArgument)) {
-                DiagTemplateError(
+              if (ComputeODRHash(FirstDefaultArgument) !=
+                  ComputeODRHash(SecondDefaultArgument)) {
+                ODRDiagDeclError(
+                    FirstRecord, FirstModule, FirstTemplate->getLocation(),
+                    FirstTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << FirstDefaultArgument;
-                DiagTemplateNote(
+                    << FirstTemplate << (i + 1) << FirstDefaultArgument;
+                ODRDiagDeclNote(
+                    SecondModule, SecondTemplate->getLocation(),
+                    SecondTemplate->getSourceRange(),
                     FunctionTemplateParameterDifferentDefaultArgument)
-                    << (i + 1) << SecondDefaultArgument;
+                    << SecondTemplate << (i + 1) << SecondDefaultArgument;
                 ParameterMismatch = true;
                 break;
               }
@@ -10980,10 +11154,16 @@ void ASTReader::diagnoseOdrViolations() {
 
             if (FirstNTTPD->isParameterPack() !=
                 SecondNTTPD->isParameterPack()) {
-              DiagTemplateError(FunctionTemplatePackParameter)
-                  << (i + 1) << FirstNTTPD->isParameterPack();
-              DiagTemplateNote(FunctionTemplatePackParameter)
-                  << (i + 1) << SecondNTTPD->isParameterPack();
+              ODRDiagDeclError(FirstRecord, FirstModule,
+                               FirstTemplate->getLocation(),
+                               FirstTemplate->getSourceRange(),
+                               FunctionTemplatePackParameter)
+                  << FirstTemplate << (i + 1) << FirstNTTPD->isParameterPack();
+              ODRDiagDeclNote(SecondModule, SecondTemplate->getLocation(),
+                              SecondTemplate->getSourceRange(),
+                              FunctionTemplatePackParameter)
+                  << SecondTemplate << (i + 1)
+                  << SecondNTTPD->isParameterPack();
               ParameterMismatch = true;
               break;
             }
@@ -11062,8 +11242,8 @@ void ASTReader::diagnoseOdrViolations() {
                << SecondModule << Range << DiffType;
       };
 
-      if (computeODRHash(FirstFunction->getReturnType()) !=
-          computeODRHash(SecondFunction->getReturnType())) {
+      if (ComputeQualTypeODRHash(FirstFunction->getReturnType()) !=
+          ComputeQualTypeODRHash(SecondFunction->getReturnType())) {
         ODRDiagError(FirstFunction->getReturnTypeSourceRange().getBegin(),
                      FirstFunction->getReturnTypeSourceRange(), ReturnType)
             << FirstFunction->getReturnType();
@@ -11077,11 +11257,11 @@ void ASTReader::diagnoseOdrViolations() {
       assert(FirstFunction->param_size() == SecondFunction->param_size() &&
              "Merged functions with different number of parameters");
 
-      size_t ParamSize = FirstFunction->param_size();
+      auto ParamSize = FirstFunction->param_size();
       bool ParameterMismatch = false;
       for (unsigned I = 0; I < ParamSize; ++I) {
-        const ParmVarDecl *FirstParam = FirstFunction->getParamDecl(I);
-        const ParmVarDecl *SecondParam = SecondFunction->getParamDecl(I);
+        auto *FirstParam = FirstFunction->getParamDecl(I);
+        auto *SecondParam = SecondFunction->getParamDecl(I);
 
         assert(getContext().hasSameType(FirstParam->getType(),
                                       SecondParam->getType()) &&
@@ -11101,7 +11281,8 @@ void ASTReader::diagnoseOdrViolations() {
         QualType FirstParamType = FirstParam->getType();
         QualType SecondParamType = SecondParam->getType();
         if (FirstParamType != SecondParamType &&
-            computeODRHash(FirstParamType) != computeODRHash(SecondParamType)) {
+            ComputeQualTypeODRHash(FirstParamType) !=
+                ComputeQualTypeODRHash(SecondParamType)) {
           if (const DecayedType *ParamDecayedType =
                   FirstParamType->getAs<DecayedType>()) {
             ODRDiagError(FirstParam->getLocation(),
@@ -11145,7 +11326,7 @@ void ASTReader::diagnoseOdrViolations() {
         }
 
         if (FirstInit && SecondInit &&
-            computeODRHash(FirstInit) != computeODRHash(SecondInit)) {
+            ComputeODRHash(FirstInit) != ComputeODRHash(SecondInit)) {
           ODRDiagError(FirstParam->getLocation(), FirstParam->getSourceRange(),
                        ParameterDifferentDefaultArgument)
               << (I + 1) << FirstInit->getSourceRange();
@@ -11156,7 +11337,8 @@ void ASTReader::diagnoseOdrViolations() {
           break;
         }
 
-        assert(computeODRHash(FirstParam) == computeODRHash(SecondParam) &&
+        assert(ComputeSubDeclODRHash(FirstParam) ==
+                   ComputeSubDeclODRHash(SecondParam) &&
                "Undiagnosed parameter difference.");
       }
 
@@ -11187,8 +11369,8 @@ void ASTReader::diagnoseOdrViolations() {
       DifferentSpecifiedTypes,
       DifferentNumberEnumConstants,
       EnumConstantName,
-      EnumConstantSingleInitializer,
-      EnumConstantDifferentInitializer,
+      EnumConstantSingleInitilizer,
+      EnumConstantDifferentInitilizer,
     };
 
     // If we've already pointed out a specific problem with this enum, don't
@@ -11201,14 +11383,16 @@ void ASTReader::diagnoseOdrViolations() {
 
     using DeclHashes =
         llvm::SmallVector<std::pair<EnumConstantDecl *, unsigned>, 4>;
-    auto PopulateHashes = [FirstEnum](DeclHashes &Hashes, EnumDecl *Enum) {
+    auto PopulateHashes = [&ComputeSubDeclODRHash, FirstEnum](
+                              DeclHashes &Hashes, EnumDecl *Enum) {
       for (auto *D : Enum->decls()) {
         // Due to decl merging, the first EnumDecl is the parent of
         // Decls in both records.
         if (!ODRHash::isDeclToBeProcessed(D, FirstEnum))
           continue;
         assert(isa<EnumConstantDecl>(D) && "Unexpected Decl kind");
-        Hashes.emplace_back(cast<EnumConstantDecl>(D), computeODRHash(D));
+        Hashes.emplace_back(cast<EnumConstantDecl>(D),
+                            ComputeSubDeclODRHash(D));
       }
     };
     DeclHashes FirstHashes;
@@ -11223,23 +11407,26 @@ void ASTReader::diagnoseOdrViolations() {
           getOwningModuleNameForDiagnostic(SecondEnum);
 
       auto ODRDiagError = [FirstEnum, &FirstModule,
-                           this](const auto *DiagAnchor,
+                           this](SourceLocation Loc, SourceRange Range,
                                  ODREnumDifference DiffType) {
-        return Diag(DiagAnchor->getLocation(),
-                    diag::err_module_odr_violation_enum)
-               << FirstEnum << FirstModule.empty() << FirstModule
-               << DiagAnchor->getSourceRange() << DiffType;
+        return Diag(Loc, diag::err_module_odr_violation_enum)
+               << FirstEnum << FirstModule.empty() << FirstModule << Range
+               << DiffType;
       };
-      auto ODRDiagNote = [&SecondModule, this](const auto *DiagAnchor,
+      auto ODRDiagNote = [&SecondModule, this](SourceLocation Loc,
+                                               SourceRange Range,
                                                ODREnumDifference DiffType) {
-        return Diag(DiagAnchor->getLocation(),
-                    diag::note_module_odr_violation_enum)
-               << SecondModule << DiagAnchor->getSourceRange() << DiffType;
+        return Diag(Loc, diag::note_module_odr_violation_enum)
+               << SecondModule << Range << DiffType;
       };
 
       if (FirstEnum->isScoped() != SecondEnum->isScoped()) {
-        ODRDiagError(FirstEnum, SingleScopedEnum) << FirstEnum->isScoped();
-        ODRDiagNote(SecondEnum, SingleScopedEnum) << SecondEnum->isScoped();
+        ODRDiagError(FirstEnum->getLocation(), FirstEnum->getSourceRange(),
+                     SingleScopedEnum)
+            << FirstEnum->isScoped();
+        ODRDiagNote(SecondEnum->getLocation(), SecondEnum->getSourceRange(),
+                    SingleScopedEnum)
+            << SecondEnum->isScoped();
         Diagnosed = true;
         continue;
       }
@@ -11247,9 +11434,11 @@ void ASTReader::diagnoseOdrViolations() {
       if (FirstEnum->isScoped() && SecondEnum->isScoped()) {
         if (FirstEnum->isScopedUsingClassTag() !=
             SecondEnum->isScopedUsingClassTag()) {
-          ODRDiagError(FirstEnum, EnumTagKeywordMismatch)
+          ODRDiagError(FirstEnum->getLocation(), FirstEnum->getSourceRange(),
+                       EnumTagKeywordMismatch)
               << FirstEnum->isScopedUsingClassTag();
-          ODRDiagNote(SecondEnum, EnumTagKeywordMismatch)
+          ODRDiagNote(SecondEnum->getLocation(), SecondEnum->getSourceRange(),
+                      EnumTagKeywordMismatch)
               << SecondEnum->isScopedUsingClassTag();
           Diagnosed = true;
           continue;
@@ -11265,20 +11454,24 @@ void ASTReader::diagnoseOdrViolations() {
               ? SecondEnum->getIntegerTypeSourceInfo()->getType()
               : QualType();
       if (FirstUnderlyingType.isNull() != SecondUnderlyingType.isNull()) {
-        ODRDiagError(FirstEnum, SingleSpecifiedType)
-            << !FirstUnderlyingType.isNull();
-        ODRDiagNote(SecondEnum, SingleSpecifiedType)
-            << !SecondUnderlyingType.isNull();
-        Diagnosed = true;
-        continue;
+          ODRDiagError(FirstEnum->getLocation(), FirstEnum->getSourceRange(),
+                       SingleSpecifiedType)
+              << !FirstUnderlyingType.isNull();
+          ODRDiagNote(SecondEnum->getLocation(), SecondEnum->getSourceRange(),
+                      SingleSpecifiedType)
+              << !SecondUnderlyingType.isNull();
+          Diagnosed = true;
+          continue;
       }
 
       if (!FirstUnderlyingType.isNull() && !SecondUnderlyingType.isNull()) {
-        if (computeODRHash(FirstUnderlyingType) !=
-            computeODRHash(SecondUnderlyingType)) {
-          ODRDiagError(FirstEnum, DifferentSpecifiedTypes)
+        if (ComputeQualTypeODRHash(FirstUnderlyingType) !=
+            ComputeQualTypeODRHash(SecondUnderlyingType)) {
+          ODRDiagError(FirstEnum->getLocation(), FirstEnum->getSourceRange(),
+                       DifferentSpecifiedTypes)
               << FirstUnderlyingType;
-          ODRDiagNote(SecondEnum, DifferentSpecifiedTypes)
+          ODRDiagNote(SecondEnum->getLocation(), SecondEnum->getSourceRange(),
+                      DifferentSpecifiedTypes)
               << SecondUnderlyingType;
           Diagnosed = true;
           continue;
@@ -11289,9 +11482,11 @@ void ASTReader::diagnoseOdrViolations() {
       PopulateHashes(SecondHashes, SecondEnum);
 
       if (FirstHashes.size() != SecondHashes.size()) {
-        ODRDiagError(FirstEnum, DifferentNumberEnumConstants)
+        ODRDiagError(FirstEnum->getLocation(), FirstEnum->getSourceRange(),
+                     DifferentNumberEnumConstants)
             << (int)FirstHashes.size();
-        ODRDiagNote(SecondEnum, DifferentNumberEnumConstants)
+        ODRDiagNote(SecondEnum->getLocation(), SecondEnum->getSourceRange(),
+                    DifferentNumberEnumConstants)
             << (int)SecondHashes.size();
         Diagnosed = true;
         continue;
@@ -11300,38 +11495,49 @@ void ASTReader::diagnoseOdrViolations() {
       for (unsigned I = 0; I < FirstHashes.size(); ++I) {
         if (FirstHashes[I].second == SecondHashes[I].second)
           continue;
-        const EnumConstantDecl *FirstConstant = FirstHashes[I].first;
-        const EnumConstantDecl *SecondConstant = SecondHashes[I].first;
+        const EnumConstantDecl *FirstEnumConstant = FirstHashes[I].first;
+        const EnumConstantDecl *SecondEnumConstant = SecondHashes[I].first;
 
-        if (FirstConstant->getDeclName() != SecondConstant->getDeclName()) {
+        if (FirstEnumConstant->getDeclName() !=
+            SecondEnumConstant->getDeclName()) {
 
-          ODRDiagError(FirstConstant, EnumConstantName)
-              << I + 1 << FirstConstant;
-          ODRDiagNote(SecondConstant, EnumConstantName)
-              << I + 1 << SecondConstant;
+          ODRDiagError(FirstEnumConstant->getLocation(),
+                       FirstEnumConstant->getSourceRange(), EnumConstantName)
+              << I + 1 << FirstEnumConstant;
+          ODRDiagNote(SecondEnumConstant->getLocation(),
+                      SecondEnumConstant->getSourceRange(), EnumConstantName)
+              << I + 1 << SecondEnumConstant;
           Diagnosed = true;
           break;
         }
 
-        const Expr *FirstInit = FirstConstant->getInitExpr();
-        const Expr *SecondInit = SecondConstant->getInitExpr();
+        const Expr *FirstInit = FirstEnumConstant->getInitExpr();
+        const Expr *SecondInit = SecondEnumConstant->getInitExpr();
         if (!FirstInit && !SecondInit)
           continue;
 
         if (!FirstInit || !SecondInit) {
-          ODRDiagError(FirstConstant, EnumConstantSingleInitializer)
-              << I + 1 << FirstConstant << (FirstInit != nullptr);
-          ODRDiagNote(SecondConstant, EnumConstantSingleInitializer)
-              << I + 1 << SecondConstant << (SecondInit != nullptr);
+          ODRDiagError(FirstEnumConstant->getLocation(),
+                       FirstEnumConstant->getSourceRange(),
+                       EnumConstantSingleInitilizer)
+              << I + 1 << FirstEnumConstant << (FirstInit != nullptr);
+          ODRDiagNote(SecondEnumConstant->getLocation(),
+                      SecondEnumConstant->getSourceRange(),
+                      EnumConstantSingleInitilizer)
+              << I + 1 << SecondEnumConstant << (SecondInit != nullptr);
           Diagnosed = true;
           break;
         }
 
-        if (computeODRHash(FirstInit) != computeODRHash(SecondInit)) {
-          ODRDiagError(FirstConstant, EnumConstantDifferentInitializer)
-              << I + 1 << FirstConstant;
-          ODRDiagNote(SecondConstant, EnumConstantDifferentInitializer)
-              << I + 1 << SecondConstant;
+        if (ComputeODRHash(FirstInit) != ComputeODRHash(SecondInit)) {
+          ODRDiagError(FirstEnumConstant->getLocation(),
+                       FirstEnumConstant->getSourceRange(),
+                       EnumConstantDifferentInitilizer)
+              << I + 1 << FirstEnumConstant;
+          ODRDiagNote(SecondEnumConstant->getLocation(),
+                      SecondEnumConstant->getSourceRange(),
+                      EnumConstantDifferentInitilizer)
+              << I + 1 << SecondEnumConstant;
           Diagnosed = true;
           break;
         }
@@ -11746,15 +11952,6 @@ OMPClause *OMPClauseReader::readClause() {
     Sizes.NumComponentLists = Record.readInt();
     Sizes.NumComponents = Record.readInt();
     C = OMPIsDevicePtrClause::CreateEmpty(Context, Sizes);
-    break;
-  }
-  case llvm::omp::OMPC_has_device_addr: {
-    OMPMappableExprListSizeTy Sizes;
-    Sizes.NumVars = Record.readInt();
-    Sizes.NumUniqueDeclarations = Record.readInt();
-    Sizes.NumComponentLists = Record.readInt();
-    Sizes.NumComponents = Record.readInt();
-    C = OMPHasDeviceAddrClause::CreateEmpty(Context, Sizes);
     break;
   }
   case llvm::omp::OMPC_allocate:
@@ -12326,7 +12523,6 @@ void OMPClauseReader::VisitOMPDependClause(OMPDependClause *C) {
       static_cast<OpenMPDependClauseKind>(Record.readInt()));
   C->setDependencyLoc(Record.readSourceLocation());
   C->setColonLoc(Record.readSourceLocation());
-  C->setOmpAllMemoryLoc(Record.readSourceLocation());
   unsigned NumVars = C->varlist_size();
   SmallVector<Expr *, 16> Vars;
   Vars.reserve(NumVars);
@@ -12710,49 +12906,6 @@ void OMPClauseReader::VisitOMPIsDevicePtrClause(OMPIsDevicePtrClause *C) {
   SmallVector<OMPClauseMappableExprCommon::MappableComponent, 32> Components;
   Components.reserve(TotalComponents);
   for (unsigned i = 0; i < TotalComponents; ++i) {
-    Expr *AssociatedExpr = Record.readSubExpr();
-    auto *AssociatedDecl = Record.readDeclAs<ValueDecl>();
-    Components.emplace_back(AssociatedExpr, AssociatedDecl,
-                            /*IsNonContiguous=*/false);
-  }
-  C->setComponents(Components, ListSizes);
-}
-
-void OMPClauseReader::VisitOMPHasDeviceAddrClause(OMPHasDeviceAddrClause *C) {
-  C->setLParenLoc(Record.readSourceLocation());
-  auto NumVars = C->varlist_size();
-  auto UniqueDecls = C->getUniqueDeclarationsNum();
-  auto TotalLists = C->getTotalComponentListNum();
-  auto TotalComponents = C->getTotalComponentsNum();
-
-  SmallVector<Expr *, 16> Vars;
-  Vars.reserve(NumVars);
-  for (unsigned I = 0; I != NumVars; ++I)
-    Vars.push_back(Record.readSubExpr());
-  C->setVarRefs(Vars);
-  Vars.clear();
-
-  SmallVector<ValueDecl *, 16> Decls;
-  Decls.reserve(UniqueDecls);
-  for (unsigned I = 0; I < UniqueDecls; ++I)
-    Decls.push_back(Record.readDeclAs<ValueDecl>());
-  C->setUniqueDecls(Decls);
-
-  SmallVector<unsigned, 16> ListsPerDecl;
-  ListsPerDecl.reserve(UniqueDecls);
-  for (unsigned I = 0; I < UniqueDecls; ++I)
-    ListsPerDecl.push_back(Record.readInt());
-  C->setDeclNumLists(ListsPerDecl);
-
-  SmallVector<unsigned, 32> ListSizes;
-  ListSizes.reserve(TotalLists);
-  for (unsigned i = 0; i < TotalLists; ++i)
-    ListSizes.push_back(Record.readInt());
-  C->setComponentListSizes(ListSizes);
-
-  SmallVector<OMPClauseMappableExprCommon::MappableComponent, 32> Components;
-  Components.reserve(TotalComponents);
-  for (unsigned I = 0; I < TotalComponents; ++I) {
     Expr *AssociatedExpr = Record.readSubExpr();
     auto *AssociatedDecl = Record.readDeclAs<ValueDecl>();
     Components.emplace_back(AssociatedExpr, AssociatedDecl,

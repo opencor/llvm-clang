@@ -6,6 +6,6 @@
 typedef unsigned NSUInteger;
 void *__strong NSAllocateCollectable(NSUInteger size, NSUInteger options);
 
-void test1(void) {
+void test1() {
   NSAllocateCollectable(100, 0);
 }

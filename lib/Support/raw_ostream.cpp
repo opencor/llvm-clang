@@ -408,7 +408,7 @@ raw_ostream &raw_ostream::operator<<(const FormattedBytes &FB) {
   const size_t Size = Bytes.size();
   HexPrintStyle HPS = FB.Upper ? HexPrintStyle::Upper : HexPrintStyle::Lower;
   uint64_t OffsetWidth = 0;
-  if (FB.FirstByteOffset) {
+  if (FB.FirstByteOffset.hasValue()) {
     // Figure out how many nibbles are needed to print the largest offset
     // represented by this data set, so that we can align the offset field
     // to the right width.
@@ -428,8 +428,8 @@ raw_ostream &raw_ostream::operator<<(const FormattedBytes &FB) {
   while (!Bytes.empty()) {
     indent(FB.IndentLevel);
 
-    if (FB.FirstByteOffset) {
-      uint64_t Offset = FB.FirstByteOffset.value();
+    if (FB.FirstByteOffset.hasValue()) {
+      uint64_t Offset = FB.FirstByteOffset.getValue();
       llvm::write_hex(*this, Offset + LineIndex, HPS, OffsetWidth);
       *this << ": ";
     }
@@ -977,29 +977,6 @@ uint64_t raw_null_ostream::current_pos() const {
 
 void raw_null_ostream::pwrite_impl(const char *Ptr, size_t Size,
                                    uint64_t Offset) {}
-
-raw_fd_null_ostream::raw_fd_null_ostream(StringRef Filename, std::error_code &EC,
-                                         sys::fs::OpenFlags Flags)
-    : raw_fd_ostream(Filename, EC, Flags) {}
-
-raw_fd_null_ostream::raw_fd_null_ostream(int fd, bool shouldClose, bool unbuffered)
-    : raw_fd_ostream(fd, shouldClose, unbuffered) {}
-
-raw_fd_null_ostream::~raw_fd_null_ostream() {
-#ifndef NDEBUG
-  flush();
-#endif
-}
-
-void raw_fd_null_ostream::write_impl(const char *Ptr, size_t Size) {
-}
-
-uint64_t raw_fd_null_ostream::current_pos() const {
-  return 0;
-}
-
-void raw_fd_null_ostream::pwrite_impl(const char *Ptr, size_t Size,
-                                      uint64_t Offset) {}
 
 void raw_pwrite_stream::anchor() {}
 

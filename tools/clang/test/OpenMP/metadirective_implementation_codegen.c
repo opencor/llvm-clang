@@ -6,9 +6,9 @@
 #ifndef HEADER
 #define HEADER
 
-void bar(void);
+void bar();
 
-void foo(void) {
+void foo() {
 #pragma omp metadirective when(implementation = {vendor(score(0)  \
                                                         : llvm)}, \
                                device = {kind(cpu)}               \

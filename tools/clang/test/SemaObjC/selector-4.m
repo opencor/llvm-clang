@@ -18,7 +18,7 @@
 @end
 
 #else
-int main(void) {
+int main() {
     (void)@selector(compare:);
 }
 

@@ -45,7 +45,8 @@ void Parser::MaybeSkipAttributes(tok::ObjCKeywordKind Kind) {
 /// [OBJC]  objc-protocol-definition
 /// [OBJC]  objc-method-definition
 /// [OBJC]  '@' 'end'
-Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives(ParsedAttributes &Attrs) {
+Parser::DeclGroupPtrTy
+Parser::ParseObjCAtDirectives(ParsedAttributesWithRange &Attrs) {
   SourceLocation AtLoc = ConsumeToken(); // the "@"
 
   if (Tok.is(tok::code_completion)) {
@@ -78,8 +79,7 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives(ParsedAttributes &Attrs) {
     break;
   case tok::objc_import:
     if (getLangOpts().Modules || getLangOpts().DebuggerSupport) {
-      Sema::ModuleImportState IS = Sema::ModuleImportState::NotACXX20Module;
-      SingleDecl = ParseModuleImport(AtLoc, IS);
+      SingleDecl = ParseModuleImport(AtLoc);
       break;
     }
     Diag(AtLoc, diag::err_atimport);
@@ -283,7 +283,7 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                     /*consumeLastToken=*/true))
       return nullptr;
 
-    ObjCCategoryDecl *CategoryType = Actions.ActOnStartCategoryInterface(
+    Decl *CategoryType = Actions.ActOnStartCategoryInterface(
         AtLoc, nameId, nameLoc, typeParameterList, categoryId, categoryLoc,
         ProtocolRefs.data(), ProtocolRefs.size(), ProtocolLocs.data(),
         EndProtoLoc, attrs);
@@ -353,7 +353,7 @@ Decl *Parser::ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
     Actions.ActOnTypedefedProtocols(protocols, protocolLocs,
                                     superClassId, superClassLoc);
 
-  ObjCInterfaceDecl *ClsType = Actions.ActOnStartClassInterface(
+  Decl *ClsType = Actions.ActOnStartClassInterface(
       getCurScope(), AtLoc, nameId, nameLoc, typeParameterList, superClassId,
       superClassLoc, typeArgs,
       SourceRange(typeArgsLAngleLoc, typeArgsRAngleLoc), protocols.data(),
@@ -650,21 +650,19 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
       if (Tok.is(tok::r_brace))
         break;
 
-      ParsedAttributes EmptyAttrs(AttrFactory);
+      ParsedAttributesWithRange attrs(AttrFactory);
 
       // Since we call ParseDeclarationOrFunctionDefinition() instead of
       // ParseExternalDeclaration() below (so that this doesn't parse nested
       // @interfaces), this needs to duplicate some code from the latter.
       if (Tok.isOneOf(tok::kw_static_assert, tok::kw__Static_assert)) {
         SourceLocation DeclEnd;
-        ParsedAttributes EmptyDeclSpecAttrs(AttrFactory);
-        allTUVariables.push_back(ParseDeclaration(
-            DeclaratorContext::File, DeclEnd, EmptyAttrs, EmptyDeclSpecAttrs));
+        allTUVariables.push_back(
+            ParseDeclaration(DeclaratorContext::File, DeclEnd, attrs));
         continue;
       }
 
-      allTUVariables.push_back(
-          ParseDeclarationOrFunctionDefinition(EmptyAttrs));
+      allTUVariables.push_back(ParseDeclarationOrFunctionDefinition(attrs));
       continue;
     }
 
@@ -1227,10 +1225,6 @@ static void takeDeclAttributes(ParsedAttributesView &attrs,
 /// declarator and add them to the given list.
 static void takeDeclAttributes(ParsedAttributes &attrs,
                                Declarator &D) {
-  // This gets called only from Parser::ParseObjCTypeName(), and that should
-  // never add declaration attributes to the Declarator.
-  assert(D.getDeclarationAttributes().empty());
-
   // First, take ownership of all attributes.
   attrs.getPool().takeAllFrom(D.getAttributePool());
   attrs.getPool().takeAllFrom(D.getDeclSpec().getAttributePool());
@@ -1274,7 +1268,7 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
     if (context == DeclaratorContext::ObjCResult)
       dsContext = DeclSpecContext::DSC_objc_method_result;
     ParseSpecifierQualifierList(declSpec, AS_none, dsContext);
-    Declarator declarator(declSpec, ParsedAttributesView::none(), context);
+    Declarator declarator(declSpec, context);
     ParseDeclarator(declarator);
 
     // If that's not invalid, extract a type.
@@ -1493,8 +1487,7 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
     DeclSpec DS(AttrFactory);
     ParseDeclarationSpecifiers(DS);
     // Parse the declarator.
-    Declarator ParmDecl(DS, ParsedAttributesView::none(),
-                        DeclaratorContext::Prototype);
+    Declarator ParmDecl(DS, DeclaratorContext::Prototype);
     ParseDeclarator(ParmDecl);
     IdentifierInfo *ParmII = ParmDecl.getIdentifier();
     Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), ParmDecl);
@@ -1700,8 +1693,7 @@ void Parser::parseObjCTypeArgsOrProtocolQualifiers(
                          typeArg, Actions.getASTContext().getPrintingPolicy());
 
       // Form a declarator to turn this into a type.
-      Declarator D(DS, ParsedAttributesView::none(),
-                   DeclaratorContext::TypeName);
+      Declarator D(DS, DeclaratorContext::TypeName);
       TypeResult fullTypeArg = Actions.ActOnTypeName(getCurScope(), D);
       if (fullTypeArg.isUsable()) {
         typeArgs.push_back(fullTypeArg.get());
@@ -1872,16 +1864,16 @@ TypeResult Parser::parseObjCTypeArgsAndProtocolQualifiers(
            protocolRAngleLoc);
 }
 
-void Parser::HelperActionsForIvarDeclarations(
-    ObjCContainerDecl *interfaceDecl, SourceLocation atLoc,
-    BalancedDelimiterTracker &T, SmallVectorImpl<Decl *> &AllIvarDecls,
-    bool RBraceMissing) {
+void Parser::HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,
+                                 BalancedDelimiterTracker &T,
+                                 SmallVectorImpl<Decl *> &AllIvarDecls,
+                                 bool RBraceMissing) {
   if (!RBraceMissing)
     T.consumeClose();
 
-  assert(getObjCDeclContext() == interfaceDecl &&
-         "Ivars should have interfaceDecl as their decl context");
+  Actions.ActOnObjCContainerStartDefinition(interfaceDecl);
   Actions.ActOnLastBitfield(T.getCloseLocation(), AllIvarDecls);
+  Actions.ActOnObjCContainerFinishDefinition();
   // Call ActOnFields() even if we don't have any decls. This is useful
   // for code rewriting tools that need to be aware of the empty list.
   Actions.ActOnFields(getCurScope(), atLoc, interfaceDecl, AllIvarDecls,
@@ -1910,13 +1902,14 @@ void Parser::HelperActionsForIvarDeclarations(
 ///   objc-instance-variable-decl:
 ///     struct-declaration
 ///
-void Parser::ParseObjCClassInstanceVariables(ObjCContainerDecl *interfaceDecl,
+void Parser::ParseObjCClassInstanceVariables(Decl *interfaceDecl,
                                              tok::ObjCKeywordKind visibility,
                                              SourceLocation atLoc) {
   assert(Tok.is(tok::l_brace) && "expected {");
   SmallVector<Decl *, 32> AllIvarDecls;
 
-  ParseScope ClassScope(this, Scope::DeclScope | Scope::ClassScope);
+  ParseScope ClassScope(this, Scope::DeclScope|Scope::ClassScope);
+  ObjCDeclContextSwitch ObjCDC(*this);
 
   BalancedDelimiterTracker T(*this, tok::l_brace);
   T.consumeOpen();
@@ -1980,13 +1973,13 @@ void Parser::ParseObjCClassInstanceVariables(ObjCContainerDecl *interfaceDecl,
     }
 
     auto ObjCIvarCallback = [&](ParsingFieldDeclarator &FD) {
-      assert(getObjCDeclContext() == interfaceDecl &&
-             "Ivar should have interfaceDecl as its decl context");
+      Actions.ActOnObjCContainerStartDefinition(interfaceDecl);
       // Install the declarator into the interface decl.
       FD.D.setObjCIvar(true);
       Decl *Field = Actions.ActOnIvar(
           getCurScope(), FD.D.getDeclSpec().getSourceRange().getBegin(), FD.D,
           FD.BitfieldSize, visibility);
+      Actions.ActOnObjCContainerFinishDefinition();
       if (Field)
         AllIvarDecls.push_back(Field);
       FD.complete(Field);
@@ -2128,7 +2121,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc,
   // We have a class or category name - consume it.
   IdentifierInfo *nameId = Tok.getIdentifierInfo();
   SourceLocation nameLoc = ConsumeToken(); // consume class or category name
-  ObjCImplDecl *ObjCImpDecl = nullptr;
+  Decl *ObjCImpDecl = nullptr;
 
   // Neither a type parameter list nor a list of protocol references is
   // permitted here. Parse and diagnose them.
@@ -2223,7 +2216,7 @@ Parser::ParseObjCAtImplementationDeclaration(SourceLocation AtLoc,
   {
     ObjCImplParsingDataRAII ObjCImplParsing(*this, ObjCImpDecl);
     while (!ObjCImplParsing.isFinished() && !isEofOrEom()) {
-      ParsedAttributes attrs(AttrFactory);
+      ParsedAttributesWithRange attrs(AttrFactory);
       MaybeParseCXX11Attributes(attrs);
       if (DeclGroupPtrTy DGP = ParseExternalDeclaration(attrs)) {
         DeclGroupRef DG = DGP.get();
@@ -2546,8 +2539,7 @@ StmtResult Parser::ParseObjCTryStmt(SourceLocation atLoc) {
         if (Tok.isNot(tok::ellipsis)) {
           DeclSpec DS(AttrFactory);
           ParseDeclarationSpecifiers(DS);
-          Declarator ParmDecl(DS, ParsedAttributesView::none(),
-                              DeclaratorContext::ObjCCatch);
+          Declarator ParmDecl(DS, DeclaratorContext::ObjCCatch);
           ParseDeclarator(ParmDecl);
 
           // Inform the actions module about the declarator, so it
@@ -2963,8 +2955,7 @@ bool Parser::ParseObjCXXMessageReceiver(bool &IsExpr, void *&TypeOrExpr) {
   // We have a class message. Turn the simple-type-specifier or
   // typename-specifier we parsed into a type and parse the
   // remainder of the class message.
-  Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                            DeclaratorContext::TypeName);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::TypeName);
   TypeResult Type = Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
   if (Type.isInvalid())
     return true;

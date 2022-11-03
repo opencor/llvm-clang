@@ -2,13 +2,10 @@
 ; trying to use ML-driven advisor.
 ; REQUIRES: !have_tf_aot
 ; REQUIRES: !have_tf_api
-; REQUIRES: default_triple
+; REQUIRES: default_target
 ; RUN: not llc -O2 -regalloc-enable-advisor=development < %s 2>&1 | FileCheck %s
 ; RUN: not llc -O2 -regalloc-enable-advisor=release < %s 2>&1 | FileCheck %s
 ; RUN: llc -O2 -regalloc-enable-advisor=default < %s 2>&1 | FileCheck %s --check-prefix=DEFAULT
-
-; regalloc-enable-advisor is not enabled for NVPTX
-; UNSUPPORTED: nvptx
 
 define void @f2(i64 %lhs, i64 %rhs, i64* %addr) {
   %sum = add i64 %lhs, %rhs

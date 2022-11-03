@@ -1,8 +1,8 @@
 // RUN: %clang_cc1 -fsyntax-only -fobjc-exceptions -verify -Wunreachable-code %s
 
-void f(void);
+void f();
 
-void g1(void) {
+void g1() {
   @try {
     f();
     @throw @"";
@@ -24,7 +24,7 @@ void g1(void) {
   }
 }
 
-void g2(void) {
+void g2() {
   @try {
     // Nested @try.
     @try {
@@ -41,7 +41,7 @@ void g2(void) {
   }
 }
 
-void g3(void) {
+void g3() {
   @try {
     @try {
       f();

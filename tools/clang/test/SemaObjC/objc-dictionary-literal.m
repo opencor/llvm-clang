@@ -5,7 +5,7 @@
 
 #define nil ((void *)0)
 
-void checkNSDictionaryUnavailableDiagnostic(void) {
+void checkNSDictionaryUnavailableDiagnostic() {
   id key;
   id value;
   id dict = @{ key : value }; // expected-error {{definition of class NSDictionary must be available to use Objective-C dictionary literals}}
@@ -13,7 +13,7 @@ void checkNSDictionaryUnavailableDiagnostic(void) {
 
 @class NSDictionary; // expected-note {{forward declaration of class here}}
 
-void checkNSDictionaryFDDiagnostic(void) {
+void checkNSDictionaryFDDiagnostic() {
   id key;
   id value;
   id dic = @{ key : value }; // expected-error {{definition of class NSDictionary must be available to use Objective-C dictionary literals}}
@@ -43,7 +43,7 @@ typedef long NSInteger;
 @end
 
 void *pvoid;
-int main(void) {
+int main() {
 	NSDictionary *dict = @{ @"name":@666 };
         dict[@"name"] = @666;
 
@@ -64,7 +64,7 @@ int main(void) {
 }
 
 enum XXXYYYZZZType { XXXYYYZZZTypeAny }; // expected-note {{'XXXYYYZZZTypeAny' declared here}}
-void foo(void) {
+void foo() {
   NSDictionary *d = @{
     @"A" : @(XXXYYYZZZTypeA), // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeA'; did you mean 'XXXYYYZZZTypeAny'}}
     @"F" : @(XXXYYYZZZTypeSomethingSomething), // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeSomethingSomething'}}

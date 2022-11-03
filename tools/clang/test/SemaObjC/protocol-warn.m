@@ -47,7 +47,7 @@
 @implementation UIWebPDFView
 @end
 
-UIWebPDFView *getView(void)
+UIWebPDFView *getView()
 {
     UIWebBrowserView *browserView;
     UIWebPDFView *pdfView;

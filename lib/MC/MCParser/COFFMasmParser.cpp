@@ -7,18 +7,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDirectives.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
+#include "llvm/MC/MCParser/MCAsmParserUtils.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolCOFF.h"
 #include "llvm/MC/SectionKind.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/SMLoc.h"
+#include <cassert>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 using namespace llvm;
@@ -238,7 +245,7 @@ bool COFFMasmParser::ParseSectionSwitch(StringRef Section,
     return TokError("unexpected token in section switching directive");
   Lex();
 
-  getStreamer().switchSection(getContext().getCOFFSection(
+  getStreamer().SwitchSection(getContext().getCOFFSection(
       Section, Characteristics, Kind, COMDATSymName, Type));
 
   return false;
@@ -266,7 +273,7 @@ bool COFFMasmParser::ParseDirectiveSegment(StringRef Directive, SMLoc Loc) {
             COFF::IMAGE_SCN_MEM_READ;
   }
   SectionKind Kind = computeSectionKind(Flags);
-  getStreamer().switchSection(getContext().getCOFFSection(
+  getStreamer().SwitchSection(getContext().getCOFFSection(
       SectionName, Flags, Kind, "", (COFF::COMDATType)(0)));
   return false;
 }
@@ -293,13 +300,13 @@ bool COFFMasmParser::ParseDirectiveIncludelib(StringRef Directive, SMLoc Loc) {
 
   unsigned Flags = COFF::IMAGE_SCN_MEM_PRELOAD | COFF::IMAGE_SCN_MEM_16BIT;
   SectionKind Kind = computeSectionKind(Flags);
-  getStreamer().pushSection();
-  getStreamer().switchSection(getContext().getCOFFSection(
+  getStreamer().PushSection();
+  getStreamer().SwitchSection(getContext().getCOFFSection(
       ".drectve", Flags, Kind, "", (COFF::COMDATType)(0)));
   getStreamer().emitBytes("/DEFAULTLIB:");
   getStreamer().emitBytes(Lib);
   getStreamer().emitBytes(" ");
-  getStreamer().popSection();
+  getStreamer().PopSection();
   return false;
 }
 
@@ -336,7 +343,7 @@ bool COFFMasmParser::ParseDirectiveProc(StringRef Directive, SMLoc Loc) {
       getTok().getString().equals_insensitive("frame")) {
     Lex();
     Framed = true;
-    getStreamer().emitWinCFIStartProc(Sym, Loc);
+    getStreamer().EmitWinCFIStartProc(Sym, Loc);
   }
   getStreamer().emitLabel(Sym, Loc);
 
@@ -357,7 +364,7 @@ bool COFFMasmParser::ParseDirectiveEndProc(StringRef Directive, SMLoc Loc) {
                                CurrentProcedure + "'");
 
   if (CurrentProcedureFramed) {
-    getStreamer().emitWinCFIEndProc(Loc);
+    getStreamer().EmitWinCFIEndProc(Loc);
   }
   CurrentProcedure = "";
   CurrentProcedureFramed = false;
@@ -391,13 +398,13 @@ bool COFFMasmParser::ParseSEHDirectiveAllocStack(StringRef Directive,
     return Error(SizeLoc, "expected integer size");
   if (Size % 8 != 0)
     return Error(SizeLoc, "stack size must be a multiple of 8");
-  getStreamer().emitWinCFIAllocStack(static_cast<unsigned>(Size), Loc);
+  getStreamer().EmitWinCFIAllocStack(static_cast<unsigned>(Size), Loc);
   return false;
 }
 
 bool COFFMasmParser::ParseSEHDirectiveEndProlog(StringRef Directive,
                                                 SMLoc Loc) {
-  getStreamer().emitWinCFIEndProlog(Loc);
+  getStreamer().EmitWinCFIEndProlog(Loc);
   return false;
 }
 

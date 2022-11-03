@@ -670,17 +670,16 @@ SDValue MSP430TargetLowering::LowerCCCArguments(
         InVals.push_back(ArgValue);
       }
     } else {
-      // Only arguments passed on the stack should make it here.
+      // Only arguments passed on the stack should make it here. 
       assert(VA.isMemLoc());
 
       SDValue InVal;
       ISD::ArgFlagsTy Flags = Ins[i].Flags;
 
       if (Flags.isByVal()) {
-        MVT PtrVT = VA.getLocVT();
         int FI = MFI.CreateFixedObject(Flags.getByValSize(),
                                        VA.getLocMemOffset(), true);
-        InVal = DAG.getFrameIndex(FI, PtrVT);
+        InVal = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
       } else {
         // Load the argument to a virtual register
         unsigned ObjSize = VA.getLocVT().getSizeInBits()/8;
@@ -778,14 +777,13 @@ MSP430TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     if (!Reg)
       llvm_unreachable("sret virtual register not created in entry block");
 
-    MVT PtrVT = getFrameIndexTy(DAG.getDataLayout());
     SDValue Val =
-      DAG.getCopyFromReg(Chain, dl, Reg, PtrVT);
+      DAG.getCopyFromReg(Chain, dl, Reg, getPointerTy(DAG.getDataLayout()));
     unsigned R12 = MSP430::R12;
 
     Chain = DAG.getCopyToReg(Chain, dl, R12, Val, Flag);
     Flag = Chain.getValue(1);
-    RetOps.push_back(DAG.getRegister(R12, PtrVT));
+    RetOps.push_back(DAG.getRegister(R12, getPointerTy(DAG.getDataLayout())));
   }
 
   unsigned Opc = (CallConv == CallingConv::MSP430_INTR ?
@@ -816,7 +814,7 @@ SDValue MSP430TargetLowering::LowerCCCCallTo(
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = CCInfo.getNextStackOffset();
-  MVT PtrVT = getFrameIndexTy(DAG.getDataLayout());
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, dl);
 
@@ -1012,7 +1010,7 @@ SDValue MSP430TargetLowering::LowerGlobalAddress(SDValue Op,
                                                  SelectionDAG &DAG) const {
   const GlobalValue *GV = cast<GlobalAddressSDNode>(Op)->getGlobal();
   int64_t Offset = cast<GlobalAddressSDNode>(Op)->getOffset();
-  EVT PtrVT = Op.getValueType();
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   // Create the TargetGlobalAddress node, folding in the constant offset.
   SDValue Result = DAG.getTargetGlobalAddress(GV, SDLoc(Op), PtrVT, Offset);
@@ -1023,7 +1021,7 @@ SDValue MSP430TargetLowering::LowerExternalSymbol(SDValue Op,
                                                   SelectionDAG &DAG) const {
   SDLoc dl(Op);
   const char *Sym = cast<ExternalSymbolSDNode>(Op)->getSymbol();
-  EVT PtrVT = Op.getValueType();
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
   SDValue Result = DAG.getTargetExternalSymbol(Sym, PtrVT);
 
   return DAG.getNode(MSP430ISD::Wrapper, dl, PtrVT, Result);
@@ -1032,8 +1030,8 @@ SDValue MSP430TargetLowering::LowerExternalSymbol(SDValue Op,
 SDValue MSP430TargetLowering::LowerBlockAddress(SDValue Op,
                                                 SelectionDAG &DAG) const {
   SDLoc dl(Op);
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
   const BlockAddress *BA = cast<BlockAddressSDNode>(Op)->getBlockAddress();
-  EVT PtrVT = Op.getValueType();
   SDValue Result = DAG.getTargetBlockAddress(BA, PtrVT);
 
   return DAG.getNode(MSP430ISD::Wrapper, dl, PtrVT, Result);
@@ -1250,11 +1248,11 @@ MSP430TargetLowering::getReturnAddressFrameIndex(SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MSP430MachineFunctionInfo *FuncInfo = MF.getInfo<MSP430MachineFunctionInfo>();
   int ReturnAddrIndex = FuncInfo->getRAIndex();
-  MVT PtrVT = getFrameIndexTy(MF.getDataLayout());
+  auto PtrVT = getPointerTy(MF.getDataLayout());
 
   if (ReturnAddrIndex == 0) {
     // Set up a frame object for the return address.
-    uint64_t SlotSize = PtrVT.getStoreSize();
+    uint64_t SlotSize = MF.getDataLayout().getPointerSize();
     ReturnAddrIndex = MF.getFrameInfo().CreateFixedObject(SlotSize, -SlotSize,
                                                            true);
     FuncInfo->setRAIndex(ReturnAddrIndex);
@@ -1273,12 +1271,12 @@ SDValue MSP430TargetLowering::LowerRETURNADDR(SDValue Op,
 
   unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
   SDLoc dl(Op);
-  EVT PtrVT = Op.getValueType();
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   if (Depth > 0) {
     SDValue FrameAddr = LowerFRAMEADDR(Op, DAG);
     SDValue Offset =
-      DAG.getConstant(PtrVT.getStoreSize(), dl, MVT::i16);
+        DAG.getConstant(DAG.getDataLayout().getPointerSize(), dl, MVT::i16);
     return DAG.getLoad(PtrVT, dl, DAG.getEntryNode(),
                        DAG.getNode(ISD::ADD, dl, PtrVT, FrameAddr, Offset),
                        MachinePointerInfo());
@@ -1310,9 +1308,7 @@ SDValue MSP430TargetLowering::LowerVASTART(SDValue Op,
                                            SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MSP430MachineFunctionInfo *FuncInfo = MF.getInfo<MSP430MachineFunctionInfo>();
-
-  SDValue Ptr = Op.getOperand(1);
-  EVT PtrVT = Ptr.getValueType();
+  auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   // Frame index of first vararg argument
   SDValue FrameIndex =
@@ -1320,14 +1316,14 @@ SDValue MSP430TargetLowering::LowerVASTART(SDValue Op,
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
 
   // Create a store of the frame index to the location operand
-  return DAG.getStore(Op.getOperand(0), SDLoc(Op), FrameIndex, Ptr,
+  return DAG.getStore(Op.getOperand(0), SDLoc(Op), FrameIndex, Op.getOperand(1),
                       MachinePointerInfo(SV));
 }
 
 SDValue MSP430TargetLowering::LowerJumpTable(SDValue Op,
                                              SelectionDAG &DAG) const {
     JumpTableSDNode *JT = cast<JumpTableSDNode>(Op);
-    EVT PtrVT = Op.getValueType();
+    auto PtrVT = getPointerTy(DAG.getDataLayout());
     SDValue Result = DAG.getTargetJumpTable(JT->getIndex(), PtrVT);
     return DAG.getNode(MSP430ISD::Wrapper, SDLoc(JT), PtrVT, Result);
 }

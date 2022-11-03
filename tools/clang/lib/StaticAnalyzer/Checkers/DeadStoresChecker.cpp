@@ -107,8 +107,11 @@ LookThroughTransitiveAssignmentsAndCommaOperators(const Expr *Ex) {
       dyn_cast<BinaryOperator>(Ex->IgnoreParenCasts());
     if (!BO)
       break;
-    BinaryOperatorKind Op = BO->getOpcode();
-    if (Op == BO_Assign || Op == BO_Comma) {
+    if (BO->getOpcode() == BO_Assign) {
+      Ex = BO->getRHS();
+      continue;
+    }
+    if (BO->getOpcode() == BO_Comma) {
       Ex = BO->getRHS();
       continue;
     }

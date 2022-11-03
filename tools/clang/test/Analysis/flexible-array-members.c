@@ -22,7 +22,7 @@ void *alloca(size_t size);
 void *malloc(size_t size);
 void free(void *ptr);
 
-void test_incomplete_array_fam(void) {
+void test_incomplete_array_fam() {
   typedef struct FAM {
     char c;
     int data[];
@@ -48,7 +48,7 @@ void test_incomplete_array_fam(void) {
   free(q);
 }
 
-void test_zero_length_array_fam(void) {
+void test_zero_length_array_fam() {
   typedef struct FAM {
     char c;
     int data[0];
@@ -74,7 +74,7 @@ void test_zero_length_array_fam(void) {
   free(q);
 }
 
-void test_single_element_array_possible_fam(void) {
+void test_single_element_array_possible_fam() {
   typedef struct FAM {
     char c;
     int data[1];

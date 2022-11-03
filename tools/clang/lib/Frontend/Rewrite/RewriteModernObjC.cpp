@@ -24,7 +24,6 @@
 #include "clang/Lex/Lexer.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -601,7 +600,7 @@ namespace {
       QualType StrType = Context->getConstantArrayType(
           Context->CharTy, llvm::APInt(32, Str.size() + 1), nullptr,
           ArrayType::Normal, 0);
-      return StringLiteral::Create(*Context, Str, StringLiteral::Ordinary,
+      return StringLiteral::Create(*Context, Str, StringLiteral::Ascii,
                                    /*Pascal=*/false, StrType, SourceLocation());
     }
   };
@@ -5357,15 +5356,16 @@ Stmt *RewriteModernObjC::SynthBlockInitExpr(BlockExpr *Exp,
       Exp = new (Context) DeclRefExpr(*Context, FD, false, FD->getType(),
                                       VK_LValue, SourceLocation());
       bool isNestedCapturedVar = false;
-      for (const auto &CI : block->captures()) {
-        const VarDecl *variable = CI.getVariable();
-        if (variable == ND && CI.isNested()) {
-          assert(CI.isByRef() &&
-                 "SynthBlockInitExpr - captured block variable is not byref");
-          isNestedCapturedVar = true;
-          break;
+      if (block)
+        for (const auto &CI : block->captures()) {
+          const VarDecl *variable = CI.getVariable();
+          if (variable == ND && CI.isNested()) {
+            assert (CI.isByRef() &&
+                    "SynthBlockInitExpr - captured block variable is not byref");
+            isNestedCapturedVar = true;
+            break;
+          }
         }
-      }
       // captured nested byref variable has its address passed. Do not take
       // its address again.
       if (!isNestedCapturedVar)

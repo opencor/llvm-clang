@@ -54,7 +54,7 @@
 
 int X = 0;
 
-int main(void) {
+int main() {
   int i;
   for (i = 0; i < 100; i++)
     X += i;

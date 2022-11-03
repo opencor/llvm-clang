@@ -7,9 +7,9 @@ void a(b_t work) { }
 struct _s {
     int a;
 };
-struct _s *r(void);
+struct _s *r();
 
-void f(void) {
+void f() {
     __block struct _s *s = 0;
     a(^{
         s = (struct _s *)r();

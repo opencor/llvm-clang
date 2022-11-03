@@ -13,7 +13,7 @@
 #ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONSUBTARGET_H
 #define LLVM_LIB_TARGET_HEXAGON_HEXAGONSUBTARGET_H
 
-#include "HexagonDepArch.h"
+#include "HexagonArch.h"
 #include "HexagonFrameLowering.h"
 #include "HexagonISelLowering.h"
 #include "HexagonInstrInfo.h"

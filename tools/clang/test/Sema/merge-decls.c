@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -verify -fsyntax-only -Wno-strict-prototypes
+// RUN: %clang_cc1 %s -verify -fsyntax-only
 
 void foo(void);
 void foo(void) {} 

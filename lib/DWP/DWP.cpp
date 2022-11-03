@@ -16,9 +16,6 @@
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
 #include "llvm/Object/Decompressor.h"
-#include "llvm/Object/ELFObjectFile.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include <limits>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -184,7 +181,7 @@ addAllTypesFromDWP(MCStreamer &Out,
                    const DWARFUnitIndex &TUIndex, MCSection *OutputTypes,
                    StringRef Types, const UnitIndexEntry &TUEntry,
                    uint32_t &TypesOffset, unsigned TypesContributionIndex) {
-  Out.switchSection(OutputTypes);
+  Out.SwitchSection(OutputTypes);
   for (const DWARFUnitIndex::Entry &E : TUIndex.getRows()) {
     auto *I = E.getContributions();
     if (!I)
@@ -218,7 +215,7 @@ static void addAllTypesFromTypesSection(
     MCSection *OutputTypes, const std::vector<StringRef> &TypesSections,
     const UnitIndexEntry &CUEntry, uint32_t &TypesOffset) {
   for (StringRef Types : TypesSections) {
-    Out.switchSection(OutputTypes);
+    Out.SwitchSection(OutputTypes);
     uint64_t Offset = 0;
     DataExtractor Data(Types, true, 0);
     while (Data.isValidOffset(Offset)) {
@@ -275,16 +272,12 @@ static Error createError(StringRef Name, Error E) {
 
 static Error
 handleCompressedSection(std::deque<SmallString<32>> &UncompressedSections,
-                        SectionRef Sec, StringRef Name, StringRef &Contents) {
-  auto *Obj = dyn_cast<ELFObjectFileBase>(Sec.getObject());
-  if (!Obj ||
-      !(static_cast<ELFSectionRef>(Sec).getFlags() & ELF::SHF_COMPRESSED))
+                        StringRef &Name, StringRef &Contents) {
+  if (!Decompressor::isGnuStyle(Name))
     return Error::success();
-  bool IsLE = isa<object::ELF32LEObjectFile>(Obj) ||
-              isa<object::ELF64LEObjectFile>(Obj);
-  bool Is64 = isa<object::ELF64LEObjectFile>(Obj) ||
-              isa<object::ELF64BEObjectFile>(Obj);
-  Expected<Decompressor> Dec = Decompressor::create(Name, Contents, IsLE, Is64);
+
+  Expected<Decompressor> Dec =
+      Decompressor::create(Name, Contents, false /*IsLE*/, false /*Is64Bit*/);
   if (!Dec)
     return createError(Name, Dec.takeError());
 
@@ -292,6 +285,7 @@ handleCompressedSection(std::deque<SmallString<32>> &UncompressedSections,
   if (Error E = Dec->resizeAndDecompress(UncompressedSections.back()))
     return createError(Name, std::move(E));
 
+  Name = Name.substr(2); // Drop ".z"
   Contents = UncompressedSections.back();
   return Error::success();
 }
@@ -379,7 +373,7 @@ void writeStringsAndOffsets(MCStreamer &Out, DWPStringPool &Strings,
 
   Data = DataExtractor(CurStrOffsetSection, true, 0);
 
-  Out.switchSection(StrOffsetSection);
+  Out.SwitchSection(StrOffsetSection);
 
   uint64_t HeaderSize = debugStrOffsetsHeaderSize(Data, Version);
   uint64_t Offset = 0;
@@ -433,7 +427,7 @@ void writeIndex(MCStreamer &Out, MCSection *Section,
     ++I;
   }
 
-  Out.switchSection(Section);
+  Out.SwitchSection(Section);
   Out.emitIntValue(IndexVersion, 4);        // Version
   Out.emitIntValue(Columns, 4);             // Columns
   Out.emitIntValue(IndexEntries.size(), 4); // Num Units
@@ -499,8 +493,7 @@ Error handleSection(
     return ContentsOrErr.takeError();
   StringRef Contents = *ContentsOrErr;
 
-  if (auto Err = handleCompressedSection(UncompressedSections, Section, Name,
-                                         Contents))
+  if (auto Err = handleCompressedSection(UncompressedSections, Name, Contents))
     return Err;
 
   Name = Name.substr(Name.find_first_not_of("._"));
@@ -533,7 +526,7 @@ Error handleSection(
   else if (OutSection == InfoSection)
     CurInfoSection.push_back(Contents);
   else {
-    Out.switchSection(OutSection);
+    Out.SwitchSection(OutSection);
     Out.emitBytes(Contents);
   }
   return Error::success();
@@ -640,7 +633,7 @@ Error write(MCStreamer &Out, ArrayRef<std::string> Inputs) {
         ContributionOffsets[getContributionIndex(DW_SECT_INFO, IndexVersion)];
     if (CurCUIndexSection.empty()) {
       bool FoundCUUnit = false;
-      Out.switchSection(InfoSection);
+      Out.SwitchSection(InfoSection);
       for (StringRef Info : CurInfoSection) {
         uint64_t UnitOffset = 0;
         while (Info.size() > UnitOffset) {
@@ -655,12 +648,6 @@ Error write(MCStreamer &Out, ArrayRef<std::string> Inputs) {
                                                              IndexVersion)];
           C.Offset = InfoSectionOffset;
           C.Length = Header.Length + 4;
-
-          if (std::numeric_limits<uint32_t>::max() - InfoSectionOffset <
-              C.Length)
-            return make_error<DWPError>(
-                "debug information section offset is greater than 4GB");
-
           UnitOffset += C.Length;
           if (Header.Version < 5 ||
               Header.UnitType == dwarf::DW_UT_split_compile) {
@@ -681,7 +668,7 @@ Error write(MCStreamer &Out, ArrayRef<std::string> Inputs) {
             FoundCUUnit = true;
           } else if (Header.UnitType == dwarf::DW_UT_split_type) {
             auto P = TypeIndexEntries.insert(
-                std::make_pair(*Header.Signature, Entry));
+                std::make_pair(Header.Signature.getValue(), Entry));
             if (!P.second)
               continue;
           }
@@ -716,7 +703,7 @@ Error write(MCStreamer &Out, ArrayRef<std::string> Inputs) {
                                   utostr(CUIndex.getVersion()) +
                                   " and expecting " + utostr(IndexVersion));
 
-    Out.switchSection(InfoSection);
+    Out.SwitchSection(InfoSection);
     for (const DWARFUnitIndex::Entry &E : CUIndex.getRows()) {
       auto *I = E.getContributions();
       if (!I)

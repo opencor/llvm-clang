@@ -64,8 +64,6 @@ class SanitizerArgs {
   llvm::AsanDetectStackUseAfterReturnMode AsanUseAfterReturn =
       llvm::AsanDetectStackUseAfterReturnMode::Invalid;
 
-  std::string MemtagMode;
-
 public:
   /// Parses the sanitizer arguments from an argument list.
   SanitizerArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
@@ -98,23 +96,6 @@ public:
   bool needsCfiDiagRt() const;
   bool needsStatsRt() const { return Stats; }
   bool needsScudoRt() const { return Sanitizers.has(SanitizerKind::Scudo); }
-
-  bool hasMemTag() const {
-    return hasMemtagHeap() || hasMemtagStack() || hasMemtagGlobals();
-  }
-  bool hasMemtagHeap() const {
-    return Sanitizers.has(SanitizerKind::MemtagHeap);
-  }
-  bool hasMemtagStack() const {
-    return Sanitizers.has(SanitizerKind::MemtagStack);
-  }
-  bool hasMemtagGlobals() const {
-    return Sanitizers.has(SanitizerKind::MemtagGlobals);
-  }
-  const std::string &getMemtagMode() const {
-    assert(!MemtagMode.empty());
-    return MemtagMode;
-  }
 
   bool requiresPIE() const;
   bool needsUnwindTables() const;

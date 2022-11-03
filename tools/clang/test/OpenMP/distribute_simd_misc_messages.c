@@ -20,7 +20,7 @@ void xxx(int argc) {
 // expected-error@+1 {{unexpected OpenMP directive '#pragma omp distribute simd'}}
 #pragma omp distribute simd safelen(4)
 
-void test_no_clause(void) {
+void test_no_clause() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -35,7 +35,7 @@ void test_no_clause(void) {
   ++i;
 }
 
-void test_branch_protected_scope(void) {
+void test_branch_protected_scope() {
   int i = 0;
 L1:
   ++i;
@@ -64,7 +64,7 @@ L1:
     goto L1;
 }
 
-void test_invalid_clause(void) {
+void test_invalid_clause() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -74,7 +74,7 @@ void test_invalid_clause(void) {
     ;
 }
 
-void test_non_identifiers(void) {
+void test_non_identifiers() {
   int i, x;
 
 #pragma omp target
@@ -99,8 +99,8 @@ void test_non_identifiers(void) {
     ;
 }
 
-extern int foo(void);
-void test_safelen(void) {
+extern int foo();
+void test_safelen() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -224,7 +224,7 @@ void test_safelen(void) {
     ;
 }
 
-void test_simdlen(void) {
+void test_simdlen() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -347,7 +347,7 @@ void test_simdlen(void) {
     ;
 }
 
-void test_safelen_simdlen(void) {
+void test_safelen_simdlen() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -364,7 +364,7 @@ void test_safelen_simdlen(void) {
     ;
 }
 
-void test_collapse(void) {
+void test_collapse() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -511,7 +511,7 @@ void test_collapse(void) {
         i += j;
 }
 
-void test_linear(void) {
+void test_linear() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -574,7 +574,7 @@ void test_linear(void) {
     ;
 }
 
-void test_aligned(void) {
+void test_aligned() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -713,7 +713,7 @@ void test_aligned(void) {
     ;
 }
 
-void test_private(void) {
+void test_private() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -773,7 +773,7 @@ void test_private(void) {
   }
 }
 
-void test_firstprivate(void) {
+void test_firstprivate() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -784,7 +784,7 @@ void test_firstprivate(void) {
     ;
 }
 
-void test_lastprivate(void) {
+void test_lastprivate() {
   int i;
 #pragma omp target
 #pragma omp teams
@@ -844,7 +844,7 @@ void test_lastprivate(void) {
     ;
 }
 
-void test_reduction(void) {
+void test_reduction() {
   int i, x, y;
 #pragma omp target
 #pragma omp teams
@@ -992,7 +992,7 @@ void test_reduction(void) {
     ;
 }
 
-void test_loop_messages(void) {
+void test_loop_messages() {
   float a[100], b[100], c[100];
 #pragma omp target
 #pragma omp teams
@@ -1034,7 +1034,7 @@ void linear_modifiers(int argc) {
   for (k = 0; k < argc; ++k) ++k;
 }
 
-void test_nontemporal(void) {
+void test_nontemporal() {
   int i;
 // omp45-error@+1 {{unexpected OpenMP clause 'nontemporal' in directive '#pragma omp distribute simd'}} expected-error@+1 {{expected expression}} expected-error@+1 {{expected ')'}} expected-note@+1 {{to match this '('}}
 #pragma omp distribute simd nontemporal(

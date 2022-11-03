@@ -1,24 +1,21 @@
-// RUN: %clang_cc1 -fsyntax-only -fdouble-square-bracket-attributes -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify %s
 
 #if !__has_extension(gnu_asm)
 #error Extension 'gnu_asm' should be available by default
 #endif
 
-void f1(void) {
+void f1() {
   // PR7673: Some versions of GCC support an empty clobbers section.
   asm ("ret" : : :);
 }
 
-void f2(void) {
+void f2() {
   asm("foo" : "=r" (a)); // expected-error {{use of undeclared identifier 'a'}}
   asm("foo" : : "r" (b)); // expected-error {{use of undeclared identifier 'b'}} 
-
-  [[]] asm("");
-  [[gnu::deprecated]] asm(""); // expected-warning {{'deprecated' attribute ignored}}
 }
 
-void a(void) __asm__(""); // expected-error {{cannot use an empty string literal in 'asm'}}
-void a(void) {
+void a() __asm__(""); // expected-error {{cannot use an empty string literal in 'asm'}}
+void a() {
   __asm__(""); // ok
 }
 

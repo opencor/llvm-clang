@@ -16,7 +16,7 @@ foreach(target, symlinks) {
 
 # //:lld depends on this symlink target, see comment in //BUILD.gn.
 group("symlinks") {
-  deps = [ ":lld" ]
+  deps = []
   foreach(target, symlinks) {
     deps += [ ":$target" ]
   }

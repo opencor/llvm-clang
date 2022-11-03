@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -no-opaque-pointers -triple x86_64-pc-linux-gnu -emit-llvm < %s| FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-pc-linux-gnu -emit-llvm < %s| FileCheck %s
 
 // Test that we have the structure definition, the gep offsets, the name of the
 // global, the bit grab, and the icmp correct.
@@ -6,7 +6,7 @@ extern void a(const char *);
 
 // CHECK: @__cpu_model = external dso_local global { i32, i32, i32, [1 x i32] }
 
-void intel(void) {
+void intel() {
   if (__builtin_cpu_is("intel"))
     a("intel");
 
@@ -14,7 +14,7 @@ void intel(void) {
   // CHECK: = icmp eq i32 [[LOAD]], 1
 }
 
-void amd(void) {
+void amd() {
   if (__builtin_cpu_is("amd"))
     a("amd");
 
@@ -22,7 +22,7 @@ void amd(void) {
   // CHECK: = icmp eq i32 [[LOAD]], 2
 }
 
-void atom(void) {
+void atom() {
   if (__builtin_cpu_is("atom"))
     a("atom");
 
@@ -30,7 +30,7 @@ void atom(void) {
   // CHECK: = icmp eq i32 [[LOAD]], 1
 }
 
-void amdfam10h(void) {
+void amdfam10h() {
   if (__builtin_cpu_is("amdfam10h"))
     a("amdfam10h");
 
@@ -38,7 +38,7 @@ void amdfam10h(void) {
   // CHECK: = icmp eq i32 [[LOAD]], 4
 }
 
-void barcelona(void) {
+void barcelona() {
   if (__builtin_cpu_is("barcelona"))
     a("barcelona");
 
@@ -46,7 +46,7 @@ void barcelona(void) {
   // CHECK: = icmp eq i32 [[LOAD]], 4
 }
 
-void nehalem(void) {
+void nehalem() {
   if (__builtin_cpu_is("nehalem"))
     a("nehalem");
 

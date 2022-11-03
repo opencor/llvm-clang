@@ -28,7 +28,7 @@ struct X {
   enum  : Integer { Blah, Blarg } field4 : 4;
 };
 
-void test(void) {
+void test() {
   long value = 2;
   Enumeration e = value;
 }

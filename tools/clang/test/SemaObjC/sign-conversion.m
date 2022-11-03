@@ -20,7 +20,7 @@ typedef unsigned int NSUInteger;
 
 @end
 
-void foo(void) {
+void foo() {
     X *x = [X new];
     signed int sint = -1;
     [x setUint:sint];  // expected-warning {{implicit conversion changes signedness: 'int' to 'NSUInteger'}}
@@ -28,7 +28,7 @@ void foo(void) {
 }
 
 // rdar://13855682
-void Test1(void) {
+void Test1() {
 signed int si = -1;
 NSArray *array;
 

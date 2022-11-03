@@ -8,7 +8,7 @@ void test(char *fmt, ...) {
   va_end(ap);
 }
 
-void foo(void) {
+void foo() {
   double a;
   test("test",a);
 }

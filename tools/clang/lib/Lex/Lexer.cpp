@@ -37,7 +37,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/MemoryBufferRef.h"
 #include "llvm/Support/NativeFormatting.h"
-#include "llvm/Support/Unicode.h"
 #include "llvm/Support/UnicodeCharRanges.h"
 #include <algorithm>
 #include <cassert>
@@ -137,8 +136,7 @@ Lexer::Lexer(FileID FID, const llvm::MemoryBufferRef &InputFile,
              Preprocessor &PP, bool IsFirstIncludeOfFile)
     : PreprocessorLexer(&PP, FID),
       FileLoc(PP.getSourceManager().getLocForStartOfFile(FID)),
-      LangOpts(PP.getLangOpts()), LineComment(LangOpts.LineComment),
-      IsFirstTimeLexingFile(IsFirstIncludeOfFile) {
+      LangOpts(PP.getLangOpts()), IsFirstTimeLexingFile(IsFirstIncludeOfFile) {
   InitLexer(InputFile.getBufferStart(), InputFile.getBufferStart(),
             InputFile.getBufferEnd());
 
@@ -151,7 +149,7 @@ Lexer::Lexer(FileID FID, const llvm::MemoryBufferRef &InputFile,
 Lexer::Lexer(SourceLocation fileloc, const LangOptions &langOpts,
              const char *BufStart, const char *BufPtr, const char *BufEnd,
              bool IsFirstIncludeOfFile)
-    : FileLoc(fileloc), LangOpts(langOpts), LineComment(LangOpts.LineComment),
+    : FileLoc(fileloc), LangOpts(langOpts),
       IsFirstTimeLexingFile(IsFirstIncludeOfFile) {
   InitLexer(BufStart, BufPtr, BufEnd);
 
@@ -227,11 +225,13 @@ Lexer *Lexer::Create_PragmaLexer(SourceLocation SpellingLoc,
   return L;
 }
 
-void Lexer::seek(unsigned Offset, bool IsAtStartOfLine) {
-  this->IsAtPhysicalStartOfLine = IsAtStartOfLine;
-  this->IsAtStartOfLine = IsAtStartOfLine;
-  assert((BufferStart + Offset) <= BufferEnd);
-  BufferPtr = BufferStart + Offset;
+bool Lexer::skipOver(unsigned NumBytes) {
+  IsAtPhysicalStartOfLine = true;
+  IsAtStartOfLine = true;
+  if ((BufferPtr + NumBytes) > BufferEnd)
+    return true;
+  BufferPtr += NumBytes;
+  return false;
 }
 
 template <typename T> static void StringifyImpl(T &Str, char Quote) {
@@ -1193,11 +1193,11 @@ static char GetTrigraphCharForLetter(char Letter) {
 /// prefixed with ??, emit a trigraph warning.  If trigraphs are enabled,
 /// return the result character.  Finally, emit a warning about trigraph use
 /// whether trigraphs are enabled or not.
-static char DecodeTrigraphChar(const char *CP, Lexer *L, bool Trigraphs) {
+static char DecodeTrigraphChar(const char *CP, Lexer *L) {
   char Res = GetTrigraphCharForLetter(*CP);
   if (!Res || !L) return Res;
 
-  if (!Trigraphs) {
+  if (!L->getLangOpts().Trigraphs) {
     if (!L->isLexingRawMode())
       L->Diag(CP-2, diag::trigraph_ignored);
     return 0;
@@ -1371,8 +1371,7 @@ Slash:
   if (Ptr[0] == '?' && Ptr[1] == '?') {
     // If this is actually a legal trigraph (not something like "??x"), emit
     // a trigraph warning.  If so, and if trigraphs are enabled, return it.
-    if (char C = DecodeTrigraphChar(Ptr + 2, Tok ? this : nullptr,
-                                    LangOpts.Trigraphs)) {
+    if (char C = DecodeTrigraphChar(Ptr+2, Tok ? this : nullptr)) {
       // Remember that this token needs to be cleaned.
       if (Tok) Tok->setFlag(Token::NeedsCleaning);
 
@@ -1462,11 +1461,11 @@ static bool isAllowedIDChar(uint32_t C, const LangOptions &LangOpts) {
     return false;
   } else if (LangOpts.DollarIdents && '$' == C) {
     return true;
-  } else if (LangOpts.CPlusPlus || LangOpts.C2x) {
+  } else if (LangOpts.CPlusPlus) {
     // A non-leading codepoint must have the XID_Continue property.
     // XIDContinueRanges doesn't contains characters also in XIDStartRanges,
     // so we need to check both tables.
-    // '_' doesn't have the XID_Continue property but is allowed in C and C++.
+    // '_' doesn't have the XID_Continue property but is allowed in C++.
     static const llvm::sys::UnicodeCharSet XIDStartChars(XIDStartRanges);
     static const llvm::sys::UnicodeCharSet XIDContinueChars(XIDContinueRanges);
     return C == '_' || XIDStartChars.contains(C) ||
@@ -1486,7 +1485,7 @@ static bool isAllowedInitiallyIDChar(uint32_t C, const LangOptions &LangOpts) {
   if (LangOpts.AsmPreprocessor) {
     return false;
   }
-  if (LangOpts.CPlusPlus || LangOpts.C2x) {
+  if (LangOpts.CPlusPlus) {
     static const llvm::sys::UnicodeCharSet XIDStartChars(XIDStartRanges);
     // '_' doesn't have the XID_Start property but is allowed in C++.
     return C == '_' || XIDStartChars.contains(C);
@@ -1882,7 +1881,7 @@ bool Lexer::LexNumericConstant(Token &Result, const char *CurPtr) {
     if (!LangOpts.C99) {
       if (!isHexaLiteral(BufferPtr, LangOpts))
         IsHexFloat = false;
-      else if (!LangOpts.CPlusPlus17 &&
+      else if (!getLangOpts().CPlusPlus17 &&
                std::find(BufferPtr, CurPtr, '_') != CurPtr)
         IsHexFloat = false;
     }
@@ -1891,12 +1890,12 @@ bool Lexer::LexNumericConstant(Token &Result, const char *CurPtr) {
   }
 
   // If we have a digit separator, continue.
-  if (C == '\'' && (LangOpts.CPlusPlus14 || LangOpts.C2x)) {
+  if (C == '\'' && (getLangOpts().CPlusPlus14 || getLangOpts().C2x)) {
     unsigned NextSize;
-    char Next = getCharAndSizeNoWarn(CurPtr + Size, NextSize, LangOpts);
+    char Next = getCharAndSizeNoWarn(CurPtr + Size, NextSize, getLangOpts());
     if (isAsciiIdentifierContinue(Next)) {
       if (!isLexingRawMode())
-        Diag(CurPtr, LangOpts.CPlusPlus
+        Diag(CurPtr, getLangOpts().CPlusPlus
                          ? diag::warn_cxx11_compat_digit_separator
                          : diag::warn_c2x_compat_digit_separator);
       CurPtr = ConsumeChar(CurPtr, Size, Result);
@@ -1922,7 +1921,7 @@ bool Lexer::LexNumericConstant(Token &Result, const char *CurPtr) {
 /// in C++11, or warn on a ud-suffix in C++98.
 const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
                                bool IsStringLiteral) {
-  assert(LangOpts.CPlusPlus);
+  assert(getLangOpts().CPlusPlus);
 
   // Maximally munch an identifier.
   unsigned Size;
@@ -1938,7 +1937,7 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
       return CurPtr;
   }
 
-  if (!LangOpts.CPlusPlus11) {
+  if (!getLangOpts().CPlusPlus11) {
     if (!isLexingRawMode())
       Diag(CurPtr,
            C == '_' ? diag::warn_cxx11_compat_user_defined_literal
@@ -1956,7 +1955,7 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
     bool IsUDSuffix = false;
     if (C == '_')
       IsUDSuffix = true;
-    else if (IsStringLiteral && LangOpts.CPlusPlus14) {
+    else if (IsStringLiteral && getLangOpts().CPlusPlus14) {
       // In C++1y, we need to look ahead a few characters to see if this is a
       // valid suffix for a string literal or a numeric literal (this could be
       // the 'operator""if' defining a numeric literal operator).
@@ -1966,12 +1965,13 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
       unsigned Chars = 1;
       while (true) {
         unsigned NextSize;
-        char Next = getCharAndSizeNoWarn(CurPtr + Consumed, NextSize, LangOpts);
+        char Next = getCharAndSizeNoWarn(CurPtr + Consumed, NextSize,
+                                         getLangOpts());
         if (!isAsciiIdentifierContinue(Next)) {
           // End of suffix. Check whether this is on the allowed list.
           const StringRef CompleteSuffix(Buffer, Chars);
-          IsUDSuffix =
-              StringLiteralParser::isValidUDSuffix(LangOpts, CompleteSuffix);
+          IsUDSuffix = StringLiteralParser::isValidUDSuffix(getLangOpts(),
+                                                            CompleteSuffix);
           break;
         }
 
@@ -1986,10 +1986,10 @@ const char *Lexer::LexUDSuffix(Token &Result, const char *CurPtr,
 
     if (!IsUDSuffix) {
       if (!isLexingRawMode())
-        Diag(CurPtr, LangOpts.MSVCCompat
+        Diag(CurPtr, getLangOpts().MSVCCompat
                          ? diag::ext_ms_reserved_user_defined_literal
                          : diag::ext_reserved_user_defined_literal)
-            << FixItHint::CreateInsertion(getSourceLocation(CurPtr), " ");
+          << FixItHint::CreateInsertion(getSourceLocation(CurPtr), " ");
       return CurPtr;
     }
 
@@ -2022,8 +2022,9 @@ bool Lexer::LexStringLiteral(Token &Result, const char *CurPtr,
       (Kind == tok::utf8_string_literal ||
        Kind == tok::utf16_string_literal ||
        Kind == tok::utf32_string_literal))
-    Diag(BufferPtr, LangOpts.CPlusPlus ? diag::warn_cxx98_compat_unicode_literal
-                                       : diag::warn_c99_compat_unicode_literal);
+    Diag(BufferPtr, getLangOpts().CPlusPlus
+           ? diag::warn_cxx98_compat_unicode_literal
+           : diag::warn_c99_compat_unicode_literal);
 
   char C = getAndAdvanceChar(CurPtr, Result);
   while (C != '"') {
@@ -2057,7 +2058,7 @@ bool Lexer::LexStringLiteral(Token &Result, const char *CurPtr,
   }
 
   // If we are in C++11, lex the optional ud-suffix.
-  if (LangOpts.CPlusPlus)
+  if (getLangOpts().CPlusPlus)
     CurPtr = LexUDSuffix(Result, CurPtr, true);
 
   // If a nul character existed in the string, warn about it.
@@ -2141,7 +2142,7 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
   }
 
   // If we are in C++11, lex the optional ud-suffix.
-  if (LangOpts.CPlusPlus)
+  if (getLangOpts().CPlusPlus)
     CurPtr = LexUDSuffix(Result, CurPtr, true);
 
   // Update the location of token as well as BufferPtr.
@@ -2237,7 +2238,7 @@ bool Lexer::LexCharConstant(Token &Result, const char *CurPtr,
 
   if (!isLexingRawMode()) {
     if (Kind == tok::utf16_char_constant || Kind == tok::utf32_char_constant)
-      Diag(BufferPtr, LangOpts.CPlusPlus
+      Diag(BufferPtr, getLangOpts().CPlusPlus
                           ? diag::warn_cxx98_compat_unicode_literal
                           : diag::warn_c99_compat_unicode_literal);
     else if (Kind == tok::utf8_char_constant)
@@ -2279,7 +2280,7 @@ bool Lexer::LexCharConstant(Token &Result, const char *CurPtr,
   }
 
   // If we are in C++11, lex the optional ud-suffix.
-  if (LangOpts.CPlusPlus)
+  if (getLangOpts().CPlusPlus)
     CurPtr = LexUDSuffix(Result, CurPtr, false);
 
   // If a nul character existed in the character, warn about it.
@@ -2377,13 +2378,13 @@ bool Lexer::SkipLineComment(Token &Result, const char *CurPtr,
                             bool &TokAtPhysicalStartOfLine) {
   // If Line comments aren't explicitly enabled for this language, emit an
   // extension warning.
-  if (!LineComment) {
+  if (!LangOpts.LineComment) {
     if (!isLexingRawMode()) // There's no PP in raw mode, so can't emit diags.
       Diag(BufferPtr, diag::ext_line_comment);
 
     // Mark them enabled so we only emit one warning for this translation
     // unit.
-    LineComment = true;
+    LangOpts.LineComment = true;
   }
 
   // Scan over the body of the comment.  The common case, when scanning, is that
@@ -2392,37 +2393,13 @@ bool Lexer::SkipLineComment(Token &Result, const char *CurPtr,
   //
   // This loop terminates with CurPtr pointing at the newline (or end of buffer)
   // character that ends the line comment.
-
-  // C++23 [lex.phases] p1
-  // Diagnose invalid UTF-8 if the corresponding warning is enabled, emitting a
-  // diagnostic only once per entire ill-formed subsequence to avoid
-  // emiting to many diagnostics (see http://unicode.org/review/pr-121.html).
-  bool UnicodeDecodingAlreadyDiagnosed = false;
-
   char C;
   while (true) {
     C = *CurPtr;
     // Skip over characters in the fast loop.
-    while (isASCII(C) && C != 0 &&   // Potentially EOF.
-           C != '\n' && C != '\r') { // Newline or DOS-style newline.
+    while (C != 0 &&                // Potentially EOF.
+           C != '\n' && C != '\r')  // Newline or DOS-style newline.
       C = *++CurPtr;
-      UnicodeDecodingAlreadyDiagnosed = false;
-    }
-
-    if (!isASCII(C)) {
-      unsigned Length = llvm::getUTF8SequenceSize(
-          (const llvm::UTF8 *)CurPtr, (const llvm::UTF8 *)BufferEnd);
-      if (Length == 0) {
-        if (!UnicodeDecodingAlreadyDiagnosed && !isLexingRawMode())
-          Diag(CurPtr, diag::warn_invalid_utf8_in_comment);
-        UnicodeDecodingAlreadyDiagnosed = true;
-        ++CurPtr;
-      } else {
-        UnicodeDecodingAlreadyDiagnosed = false;
-        CurPtr += Length;
-      }
-      continue;
-    }
 
     const char *NextLine = CurPtr;
     if (C != 0) {
@@ -2567,8 +2544,8 @@ bool Lexer::SaveLineComment(Token &Result, const char *CurPtr) {
 /// isBlockCommentEndOfEscapedNewLine - Return true if the specified newline
 /// character (either \\n or \\r) is part of an escaped newline sequence.  Issue
 /// a diagnostic if so.  We know that the newline is inside of a block comment.
-static bool isEndOfBlockCommentWithEscapedNewLine(const char *CurPtr, Lexer *L,
-                                                  bool Trigraphs) {
+static bool isEndOfBlockCommentWithEscapedNewLine(const char *CurPtr,
+                                                  Lexer *L) {
   assert(CurPtr[0] == '\n' || CurPtr[0] == '\r');
 
   // Position of the first trigraph in the ending sequence.
@@ -2619,7 +2596,7 @@ static bool isEndOfBlockCommentWithEscapedNewLine(const char *CurPtr, Lexer *L,
   if (TrigraphPos) {
     // If no trigraphs are enabled, warn that we ignored this trigraph and
     // ignore this * character.
-    if (!Trigraphs) {
+    if (!L->getLangOpts().Trigraphs) {
       if (!L->isLexingRawMode())
         L->Diag(TrigraphPos, diag::trigraph_ignored_block_comment);
       return false;
@@ -2689,12 +2666,6 @@ bool Lexer::SkipBlockComment(Token &Result, const char *CurPtr,
   if (C == '/')
     C = *CurPtr++;
 
-  // C++23 [lex.phases] p1
-  // Diagnose invalid UTF-8 if the corresponding warning is enabled, emitting a
-  // diagnostic only once per entire ill-formed subsequence to avoid
-  // emiting to many diagnostics (see http://unicode.org/review/pr-121.html).
-  bool UnicodeDecodingAlreadyDiagnosed = false;
-
   while (true) {
     // Skip over all non-interesting characters until we find end of buffer or a
     // (probably ending) '/' character.
@@ -2703,21 +2674,14 @@ bool Lexer::SkipBlockComment(Token &Result, const char *CurPtr,
         // doesn't check for '\0'.
         !(PP && PP->getCodeCompletionFileLoc() == FileLoc)) {
       // While not aligned to a 16-byte boundary.
-      while (C != '/' && (intptr_t)CurPtr % 16 != 0) {
-        if (!isASCII(C))
-          goto MultiByteUTF8;
+      while (C != '/' && ((intptr_t)CurPtr & 0x0F) != 0)
         C = *CurPtr++;
-      }
+
       if (C == '/') goto FoundSlash;
 
 #ifdef __SSE2__
       __m128i Slashes = _mm_set1_epi8('/');
-      while (CurPtr + 16 < BufferEnd) {
-        int Mask = _mm_movemask_epi8(*(const __m128i *)CurPtr);
-        if (LLVM_UNLIKELY(Mask != 0)) {
-          goto MultiByteUTF8;
-        }
-        // look for slashes
+      while (CurPtr+16 <= BufferEnd) {
         int cmp = _mm_movemask_epi8(_mm_cmpeq_epi8(*(const __m128i*)CurPtr,
                                     Slashes));
         if (cmp != 0) {
@@ -2730,38 +2694,21 @@ bool Lexer::SkipBlockComment(Token &Result, const char *CurPtr,
         CurPtr += 16;
       }
 #elif __ALTIVEC__
-      __vector unsigned char LongUTF = {0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-                                        0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-                                        0x80, 0x80, 0x80, 0x80};
       __vector unsigned char Slashes = {
         '/', '/', '/', '/',  '/', '/', '/', '/',
         '/', '/', '/', '/',  '/', '/', '/', '/'
       };
-      while (CurPtr + 16 < BufferEnd) {
-        if (LLVM_UNLIKELY(
-                vec_any_ge(*(const __vector unsigned char *)CurPtr, LongUTF)))
-          goto MultiByteUTF8;
-        if (vec_any_eq(*(const __vector unsigned char *)CurPtr, Slashes)) {
-          break;
-        }
+      while (CurPtr + 16 <= BufferEnd &&
+             !vec_any_eq(*(const __vector unsigned char *)CurPtr, Slashes))
         CurPtr += 16;
-      }
-
 #else
-      while (CurPtr + 16 < BufferEnd) {
-        bool HasNonASCII = false;
-        for (unsigned I = 0; I < 16; ++I)
-          HasNonASCII |= !isASCII(CurPtr[I]);
-
-        if (LLVM_UNLIKELY(HasNonASCII))
-          goto MultiByteUTF8;
-
-        bool HasSlash = false;
-        for (unsigned I = 0; I < 16; ++I)
-          HasSlash |= CurPtr[I] == '/';
-        if (HasSlash)
-          break;
-        CurPtr += 16;
+      // Scan for '/' quickly.  Many block comments are very large.
+      while (CurPtr[0] != '/' &&
+             CurPtr[1] != '/' &&
+             CurPtr[2] != '/' &&
+             CurPtr[3] != '/' &&
+             CurPtr+4 < BufferEnd) {
+        CurPtr += 4;
       }
 #endif
 
@@ -2769,30 +2716,9 @@ bool Lexer::SkipBlockComment(Token &Result, const char *CurPtr,
       C = *CurPtr++;
     }
 
-    // Loop to scan the remainder, warning on invalid UTF-8
-    // if the corresponding warning is enabled, emitting a diagnostic only once
-    // per sequence that cannot be decoded.
-    while (C != '/' && C != '\0') {
-      if (isASCII(C)) {
-        UnicodeDecodingAlreadyDiagnosed = false;
-        C = *CurPtr++;
-        continue;
-      }
-    MultiByteUTF8:
-      // CurPtr is 1 code unit past C, so to decode
-      // the codepoint, we need to read from the previous position.
-      unsigned Length = llvm::getUTF8SequenceSize(
-          (const llvm::UTF8 *)CurPtr - 1, (const llvm::UTF8 *)BufferEnd);
-      if (Length == 0) {
-        if (!UnicodeDecodingAlreadyDiagnosed && !isLexingRawMode())
-          Diag(CurPtr - 1, diag::warn_invalid_utf8_in_comment);
-        UnicodeDecodingAlreadyDiagnosed = true;
-      } else {
-        UnicodeDecodingAlreadyDiagnosed = false;
-        CurPtr += Length - 1;
-      }
+    // Loop to scan the remainder.
+    while (C != '/' && C != '\0')
       C = *CurPtr++;
-    }
 
     if (C == '/') {
   FoundSlash:
@@ -2800,8 +2726,7 @@ bool Lexer::SkipBlockComment(Token &Result, const char *CurPtr,
         break;
 
       if ((CurPtr[-2] == '\n' || CurPtr[-2] == '\r')) {
-        if (isEndOfBlockCommentWithEscapedNewLine(CurPtr - 2, this,
-                                                  LangOpts.Trigraphs)) {
+        if (isEndOfBlockCommentWithEscapedNewLine(CurPtr-2, this)) {
           // We found the final */, though it had an escaped newline between the
           // * and /.  We're done!
           break;
@@ -2976,11 +2901,11 @@ bool Lexer::LexEndOfFile(Token &Result, const char *CurPtr) {
     ConditionalStack.pop_back();
   }
 
+  SourceLocation EndLoc = getSourceLocation(BufferEnd);
   // C99 5.1.1.2p2: If the file is non-empty and didn't end in a newline, issue
   // a pedwarn.
   if (CurPtr != BufferStart && (CurPtr[-1] != '\n' && CurPtr[-1] != '\r')) {
     DiagnosticsEngine &Diags = PP->getDiagnostics();
-    SourceLocation EndLoc = getSourceLocation(BufferEnd);
     unsigned DiagID;
 
     if (LangOpts.CPlusPlus11) {
@@ -3003,7 +2928,7 @@ bool Lexer::LexEndOfFile(Token &Result, const char *CurPtr) {
   BufferPtr = CurPtr;
 
   // Finally, let the preprocessor handle this.
-  return PP->HandleEndOfFile(Result, isPragmaLexer());
+  return PP->HandleEndOfFile(Result, EndLoc, isPragmaLexer());
 }
 
 /// isNextPPTokenLParen - Return 1 if the next unexpanded token lexed from
@@ -3012,13 +2937,6 @@ bool Lexer::LexEndOfFile(Token &Result, const char *CurPtr) {
 /// lexer.
 unsigned Lexer::isNextPPTokenLParen() {
   assert(!LexingRawMode && "How can we expand a macro from a skipping buffer?");
-
-  if (isDependencyDirectivesLexer()) {
-    if (NextDepDirectiveTokenIndex == DepDirectives.front().Tokens.size())
-      return 2;
-    return DepDirectives.front().Tokens[NextDepDirectiveTokenIndex].is(
-        tok::l_paren);
-  }
 
   // Switch to 'skipping' mode.  This will ensure that we can lex a token
   // without emitting diagnostics, disables macro expansion, and will cause EOF
@@ -3195,28 +3113,27 @@ bool Lexer::isCodeCompletionPoint(const char *CurPtr) const {
   return false;
 }
 
-llvm::Optional<uint32_t> Lexer::tryReadNumericUCN(const char *&StartPtr,
-                                                  const char *SlashLoc,
-                                                  Token *Result) {
+uint32_t Lexer::tryReadUCN(const char *&StartPtr, const char *SlashLoc,
+                           Token *Result) {
   unsigned CharSize;
   char Kind = getCharAndSize(StartPtr, CharSize);
-  assert((Kind == 'u' || Kind == 'U') && "expected a UCN");
+  bool Delimited = false;
+  bool FoundEndDelimiter = false;
+  unsigned Count = 0;
+  bool Diagnose = Result && !isLexingRawMode();
 
   unsigned NumHexDigits;
   if (Kind == 'u')
     NumHexDigits = 4;
   else if (Kind == 'U')
     NumHexDigits = 8;
-
-  bool Delimited = false;
-  bool FoundEndDelimiter = false;
-  unsigned Count = 0;
-  bool Diagnose = Result && !isLexingRawMode();
+  else
+    return 0;
 
   if (!LangOpts.CPlusPlus && !LangOpts.C99) {
     if (Diagnose)
       Diag(SlashLoc, diag::warn_ucn_not_valid_in_c89);
-    return llvm::None;
+    return 0;
   }
 
   const char *CurPtr = StartPtr + CharSize;
@@ -3243,14 +3160,14 @@ llvm::Optional<uint32_t> Lexer::tryReadNumericUCN(const char *&StartPtr,
         break;
       if (Diagnose)
         Diag(BufferPtr, diag::warn_delimited_ucn_incomplete)
-            << StringRef(KindLoc, 1);
-      return llvm::None;
+            << StringRef(&C, 1);
+      return 0;
     }
 
     if (CodePoint & 0xF000'0000) {
       if (Diagnose)
         Diag(KindLoc, diag::err_escape_too_large) << 0;
-      return llvm::None;
+      return 0;
     }
 
     CodePoint <<= 4;
@@ -3264,13 +3181,7 @@ llvm::Optional<uint32_t> Lexer::tryReadNumericUCN(const char *&StartPtr,
       Diag(StartPtr, FoundEndDelimiter ? diag::warn_delimited_ucn_empty
                                        : diag::warn_ucn_escape_no_digits)
           << StringRef(KindLoc, 1);
-    return llvm::None;
-  }
-
-  if (Delimited && Kind == 'U') {
-    if (Diagnose)
-      Diag(StartPtr, diag::err_hex_escape_no_digits) << StringRef(KindLoc, 1);
-    return llvm::None;
+    return 0;
   }
 
   if (!Delimited && Count != NumHexDigits) {
@@ -3283,14 +3194,11 @@ llvm::Optional<uint32_t> Lexer::tryReadNumericUCN(const char *&StartPtr,
             << FixItHint::CreateReplacement(URange, "u");
       }
     }
-    return llvm::None;
+    return 0;
   }
 
   if (Delimited && PP) {
-    Diag(BufferPtr, PP->getLangOpts().CPlusPlus2b
-                        ? diag::warn_cxx2b_delimited_escape_sequence
-                        : diag::ext_delimited_escape_sequence)
-        << /*delimited*/ 0 << (PP->getLangOpts().CPlusPlus ? 1 : 0);
+    Diag(BufferPtr, diag::ext_delimited_escape_sequence);
   }
 
   if (Result) {
@@ -3303,113 +3211,6 @@ llvm::Optional<uint32_t> Lexer::tryReadNumericUCN(const char *&StartPtr,
   } else {
     StartPtr = CurPtr;
   }
-  return CodePoint;
-}
-
-llvm::Optional<uint32_t> Lexer::tryReadNamedUCN(const char *&StartPtr,
-                                                Token *Result) {
-  unsigned CharSize;
-  bool Diagnose = Result && !isLexingRawMode();
-
-  char C = getCharAndSize(StartPtr, CharSize);
-  assert(C == 'N' && "expected \\N{...}");
-
-  const char *CurPtr = StartPtr + CharSize;
-  const char *KindLoc = &CurPtr[-1];
-
-  C = getCharAndSize(CurPtr, CharSize);
-  if (C != '{') {
-    if (Diagnose)
-      Diag(StartPtr, diag::warn_ucn_escape_incomplete);
-    return llvm::None;
-  }
-  CurPtr += CharSize;
-  const char *StartName = CurPtr;
-  bool FoundEndDelimiter = false;
-  llvm::SmallVector<char, 30> Buffer;
-  while (C) {
-    C = getCharAndSize(CurPtr, CharSize);
-    CurPtr += CharSize;
-    if (C == '}') {
-      FoundEndDelimiter = true;
-      break;
-    }
-
-    if (!isAlphanumeric(C) && C != '_' && C != '-' && C != ' ')
-      break;
-    Buffer.push_back(C);
-  }
-
-  if (!FoundEndDelimiter || Buffer.empty()) {
-    if (Diagnose)
-      Diag(StartPtr, FoundEndDelimiter ? diag::warn_delimited_ucn_empty
-                                       : diag::warn_delimited_ucn_incomplete)
-          << StringRef(KindLoc, 1);
-    return llvm::None;
-  }
-
-  StringRef Name(Buffer.data(), Buffer.size());
-  llvm::Optional<char32_t> Res =
-      llvm::sys::unicode::nameToCodepointStrict(Name);
-  llvm::Optional<llvm::sys::unicode::LooseMatchingResult> LooseMatch;
-  if (!Res) {
-    if (!isLexingRawMode()) {
-      Diag(StartPtr, diag::err_invalid_ucn_name)
-          << StringRef(Buffer.data(), Buffer.size());
-      LooseMatch = llvm::sys::unicode::nameToCodepointLooseMatching(Name);
-      if (LooseMatch) {
-        Diag(StartName, diag::note_invalid_ucn_name_loose_matching)
-            << FixItHint::CreateReplacement(
-                   makeCharRange(*this, StartName, CurPtr - CharSize),
-                   LooseMatch->Name);
-      }
-    }
-    // When finding a match using Unicode loose matching rules
-    // recover after having emitted a diagnostic.
-    if (!LooseMatch)
-      return llvm::None;
-    // We do not offer missspelled character names suggestions here
-    // as the set of what would be a valid suggestion depends on context,
-    // and we should not make invalid suggestions.
-  }
-
-  if (Diagnose && PP && !LooseMatch)
-    Diag(BufferPtr, PP->getLangOpts().CPlusPlus2b
-                        ? diag::warn_cxx2b_delimited_escape_sequence
-                        : diag::ext_delimited_escape_sequence)
-        << /*named*/ 1 << (PP->getLangOpts().CPlusPlus ? 1 : 0);
-
-  if (LooseMatch)
-    Res = LooseMatch->CodePoint;
-
-  if (Result) {
-    Result->setFlag(Token::HasUCN);
-    if (CurPtr - StartPtr == (ptrdiff_t)(Buffer.size() + 4))
-      StartPtr = CurPtr;
-    else
-      while (StartPtr != CurPtr)
-        (void)getAndAdvanceChar(StartPtr, *Result);
-  } else {
-    StartPtr = CurPtr;
-  }
-  return *Res;
-}
-
-uint32_t Lexer::tryReadUCN(const char *&StartPtr, const char *SlashLoc,
-                           Token *Result) {
-
-  unsigned CharSize;
-  llvm::Optional<uint32_t> CodePointOpt;
-  char Kind = getCharAndSize(StartPtr, CharSize);
-  if (Kind == 'u' || Kind == 'U')
-    CodePointOpt = tryReadNumericUCN(StartPtr, SlashLoc, Result);
-  else if (Kind == 'N')
-    CodePointOpt = tryReadNamedUCN(StartPtr, Result);
-
-  if (!CodePointOpt)
-    return 0;
-
-  uint32_t CodePoint = *CodePointOpt;
 
   // Don't apply C family restrictions to UCNs in assembly mode
   if (LangOpts.AsmPreprocessor)
@@ -3479,8 +3280,6 @@ void Lexer::PropagateLineStartLeadingSpaceInfo(Token &Result) {
 }
 
 bool Lexer::Lex(Token &Result) {
-  assert(!isDependencyDirectivesLexer());
-
   // Start a new token.
   Result.startToken();
 
@@ -3636,7 +3435,8 @@ LexNextToken:
     // If the next token is obviously a // or /* */ comment, skip it efficiently
     // too (without going through the big switch stmt).
     if (CurPtr[0] == '/' && CurPtr[1] == '/' && !inKeepCommentMode() &&
-        LineComment && (LangOpts.CPlusPlus || !LangOpts.TraditionalCPP)) {
+        LangOpts.LineComment &&
+        (LangOpts.CPlusPlus || !LangOpts.TraditionalCPP)) {
       if (SkipLineComment(Result, CurPtr+2, TokAtPhysicalStartOfLine))
         return true; // There is a token to return.
       goto SkipIgnoredUnits;
@@ -3659,10 +3459,7 @@ LexNextToken:
     MIOpt.ReadToken();
     return LexNumericConstant(Result, CurPtr);
 
-  // Identifier (e.g., uber), or
-  // UTF-8 (C2x/C++17) or UTF-16 (C11/C++11) character literal, or
-  // UTF-8 or UTF-16 string literal (C11/C++11).
-  case 'u':
+  case 'u':   // Identifier (uber) or C11/C++11 UTF-8 or UTF-16 string literal
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
@@ -3696,7 +3493,7 @@ LexNextToken:
                                ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
                                            SizeTmp2, Result),
                                tok::utf8_string_literal);
-        if (Char2 == '\'' && (LangOpts.CPlusPlus17 || LangOpts.C2x))
+        if (Char2 == '\'' && LangOpts.CPlusPlus17)
           return LexCharConstant(
               Result, ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
                                   SizeTmp2, Result),
@@ -3720,7 +3517,7 @@ LexNextToken:
     // treat u like the start of an identifier.
     return LexIdentifierContinue(Result, CurPtr);
 
-  case 'U': // Identifier (e.g. Uber) or C11/C++11 UTF-32 string literal
+  case 'U':   // Identifier (Uber) or C11/C++11 UTF-32 string literal
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
@@ -3946,8 +3743,8 @@ LexNextToken:
       // "foo".  Check to see if the character after the second slash is a '*'.
       // If so, we will lex that as a "/" instead of the start of a comment.
       // However, we never do this if we are just preprocessing.
-      bool TreatAsComment =
-          LineComment && (LangOpts.CPlusPlus || !LangOpts.TraditionalCPP);
+      bool TreatAsComment = LangOpts.LineComment &&
+                            (LangOpts.CPlusPlus || !LangOpts.TraditionalCPP);
       if (!TreatAsComment)
         if (!(PP && PP->isPreprocessedOutput()))
           TreatAsComment = getCharAndSize(CurPtr+SizeTmp, SizeTmp2) != '*';
@@ -4044,7 +3841,7 @@ LexNextToken:
     } else if (Char == '=') {
       char After = getCharAndSize(CurPtr+SizeTmp, SizeTmp2);
       if (After == '>') {
-        if (LangOpts.CPlusPlus20) {
+        if (getLangOpts().CPlusPlus20) {
           if (!isLexingRawMode())
             Diag(BufferPtr, diag::warn_cxx17_compat_spaceship);
           CurPtr = ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
@@ -4054,7 +3851,7 @@ LexNextToken:
         }
         // Suggest adding a space between the '<=' and the '>' to avoid a
         // change in semantics if this turns up in C++ <=17 mode.
-        if (LangOpts.CPlusPlus && !isLexingRawMode()) {
+        if (getLangOpts().CPlusPlus && !isLexingRawMode()) {
           Diag(BufferPtr, diag::warn_cxx20_compat_spaceship)
             << FixItHint::CreateInsertion(
                    getSourceLocation(CurPtr + SizeTmp, SizeTmp2), " ");
@@ -4300,136 +4097,5 @@ HandleDirective:
   }
 
   // We parsed the directive; lex a token with the new state.
-  return false;
-}
-
-const char *Lexer::convertDependencyDirectiveToken(
-    const dependency_directives_scan::Token &DDTok, Token &Result) {
-  const char *TokPtr = BufferStart + DDTok.Offset;
-  Result.startToken();
-  Result.setLocation(getSourceLocation(TokPtr));
-  Result.setKind(DDTok.Kind);
-  Result.setFlag((Token::TokenFlags)DDTok.Flags);
-  Result.setLength(DDTok.Length);
-  BufferPtr = TokPtr + DDTok.Length;
-  return TokPtr;
-}
-
-bool Lexer::LexDependencyDirectiveToken(Token &Result) {
-  assert(isDependencyDirectivesLexer());
-
-  using namespace dependency_directives_scan;
-
-  while (NextDepDirectiveTokenIndex == DepDirectives.front().Tokens.size()) {
-    if (DepDirectives.front().Kind == pp_eof)
-      return LexEndOfFile(Result, BufferEnd);
-    NextDepDirectiveTokenIndex = 0;
-    DepDirectives = DepDirectives.drop_front();
-  }
-
-  const dependency_directives_scan::Token &DDTok =
-      DepDirectives.front().Tokens[NextDepDirectiveTokenIndex++];
-  if (NextDepDirectiveTokenIndex > 1 || DDTok.Kind != tok::hash) {
-    // Read something other than a preprocessor directive hash.
-    MIOpt.ReadToken();
-  }
-
-  const char *TokPtr = convertDependencyDirectiveToken(DDTok, Result);
-
-  if (Result.is(tok::hash) && Result.isAtStartOfLine()) {
-    PP->HandleDirective(Result);
-    return false;
-  }
-  if (Result.is(tok::raw_identifier)) {
-    Result.setRawIdentifierData(TokPtr);
-    if (!isLexingRawMode()) {
-      IdentifierInfo *II = PP->LookUpIdentifierInfo(Result);
-      if (II->isHandleIdentifierCase())
-        return PP->HandleIdentifier(Result);
-    }
-    return true;
-  }
-  if (Result.isLiteral()) {
-    Result.setLiteralData(TokPtr);
-    return true;
-  }
-  if (Result.is(tok::colon) &&
-      (LangOpts.CPlusPlus || LangOpts.DoubleSquareBracketAttributes)) {
-    // Convert consecutive colons to 'tok::coloncolon'.
-    if (*BufferPtr == ':') {
-      assert(DepDirectives.front().Tokens[NextDepDirectiveTokenIndex].is(
-          tok::colon));
-      ++NextDepDirectiveTokenIndex;
-      Result.setKind(tok::coloncolon);
-    }
-    return true;
-  }
-  if (Result.is(tok::eod))
-    ParsingPreprocessorDirective = false;
-
-  return true;
-}
-
-bool Lexer::LexDependencyDirectiveTokenWhileSkipping(Token &Result) {
-  assert(isDependencyDirectivesLexer());
-
-  using namespace dependency_directives_scan;
-
-  bool Stop = false;
-  unsigned NestedIfs = 0;
-  do {
-    DepDirectives = DepDirectives.drop_front();
-    switch (DepDirectives.front().Kind) {
-    case pp_none:
-      llvm_unreachable("unexpected 'pp_none'");
-    case pp_include:
-    case pp___include_macros:
-    case pp_define:
-    case pp_undef:
-    case pp_import:
-    case pp_pragma_import:
-    case pp_pragma_once:
-    case pp_pragma_push_macro:
-    case pp_pragma_pop_macro:
-    case pp_pragma_include_alias:
-    case pp_include_next:
-    case decl_at_import:
-    case cxx_module_decl:
-    case cxx_import_decl:
-    case cxx_export_module_decl:
-    case cxx_export_import_decl:
-      break;
-    case pp_if:
-    case pp_ifdef:
-    case pp_ifndef:
-      ++NestedIfs;
-      break;
-    case pp_elif:
-    case pp_elifdef:
-    case pp_elifndef:
-    case pp_else:
-      if (!NestedIfs) {
-        Stop = true;
-      }
-      break;
-    case pp_endif:
-      if (!NestedIfs) {
-        Stop = true;
-      } else {
-        --NestedIfs;
-      }
-      break;
-    case pp_eof:
-      NextDepDirectiveTokenIndex = 0;
-      return LexEndOfFile(Result, BufferEnd);
-    }
-  } while (!Stop);
-
-  const dependency_directives_scan::Token &DDTok =
-      DepDirectives.front().Tokens.front();
-  assert(DDTok.is(tok::hash));
-  NextDepDirectiveTokenIndex = 1;
-
-  convertDependencyDirectiveToken(DDTok, Result);
   return false;
 }

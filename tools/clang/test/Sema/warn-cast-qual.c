@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-void foo(void) {
+void foo() {
   const char *const ptr = 0;
   const char *const *ptrptr = 0;
   char *const *ptrcptr = 0;
@@ -38,7 +38,7 @@ void foo(void) {
   const char *charptr2 = (char *)charptr; // no warning
 }
 
-void bar_0(void) {
+void bar_0() {
   struct C {
     const int a;
     int b;
@@ -50,7 +50,7 @@ void bar_0(void) {
   *(int *)(&S.b) = 0; // expected-warning {{cast from 'const int *' to 'int *' drops const qualifier}}
 }
 
-void bar_1(void) {
+void bar_1() {
   struct C {
     const int a;
     int b;

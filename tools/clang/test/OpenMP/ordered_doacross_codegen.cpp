@@ -1,14 +1,14 @@
-// RUN: %clang_cc1 -no-opaque-pointers -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s --check-prefixes=CHECK,CHECK-NORMAL
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefixes=CHECK,CHECK-NORMAL
+// RUN: %clang_cc1 -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s --check-prefixes=CHECK,CHECK-NORMAL
+// RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefixes=CHECK,CHECK-NORMAL
 
-// RUN: %clang_cc1 -no-opaque-pointers -verify -fopenmp -fopenmp-enable-irbuilder -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s --check-prefixes=CHECK,CHECK-IRBUILDER
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp -fopenmp-enable-irbuilder -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp -fopenmp-enable-irbuilder -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefixes=CHECK,CHECK-IRBUILDER
+// RUN: %clang_cc1 -verify -fopenmp -fopenmp-enable-irbuilder -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s --check-prefixes=CHECK,CHECK-IRBUILDER
+// RUN: %clang_cc1 -fopenmp -fopenmp-enable-irbuilder -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp -fopenmp-enable-irbuilder -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefixes=CHECK,CHECK-IRBUILDER
 
-// RUN: %clang_cc1 -no-opaque-pointers -verify -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck --check-prefix SIMD-ONLY0 %s
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp-simd -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
-// RUN: %clang_cc1 -no-opaque-pointers -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
 // SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
 // expected-no-diagnostics
 
@@ -88,6 +88,9 @@ int main() {
 #pragma omp ordered depend(sink : i - 2)
     d[i] = a[i - 2];
   }
+  // CHECK: landingpad
+  // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
+  // CHECK: br label %
 
   // CHECK: call void @__kmpc_for_static_fini(
   // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
@@ -147,6 +150,10 @@ int main1() {
 #pragma omp ordered depend(sink : i - 2)
     d[i] = a[i - 2];
   }
+  // CHECK: landingpad
+  // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
+  // CHECK: br label %
+
   // CHECK: call void @__kmpc_for_static_fini(
   // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
   // CHECK: ret i32 0
@@ -260,6 +267,10 @@ struct TestStruct {
         baz(a[i][j], b[i][j]);
       }
   }
+  // CHECK: landingpad
+  // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
+  // CHECK: br label %
+
   // CHECK: call void @__kmpc_for_static_fini(
   // CHECK-NORMAL: call void @__kmpc_doacross_fini([[IDENT]], i32 [[GTID]])
   // CHECK: ret

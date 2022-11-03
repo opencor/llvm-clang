@@ -11,7 +11,6 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
-#include "llvm/DebugInfo/DWARF/DWARFExpression.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/JSON.h"
 
@@ -1044,19 +1043,14 @@ bool dwarfdump::collectStatsForObjectFile(ObjectFile &Obj, DWARFContext &DICtx,
                      LocStats.LocalVarNonEntryValLocStats);
   J.objectEnd();
   OS << '\n';
-  LLVM_DEBUG(
-      llvm::dbgs() << "Total Availability: "
-                   << (VarParamTotal.Value
-                           ? (int)std::round((VarParamWithLoc.Value * 100.0) /
+  LLVM_DEBUG(llvm::dbgs() << "Total Availability: "
+                          << (int)std::round((VarParamWithLoc.Value * 100.0) /
                                              VarParamTotal.Value)
-                           : 0)
-                   << "%\n";
-      llvm::dbgs() << "PC Ranges covered: "
-                   << (GlobalStats.ScopeBytes.Value
-                           ? (int)std::round(
+                          << "%\n";
+             llvm::dbgs() << "PC Ranges covered: "
+                          << (int)std::round(
                                  (GlobalStats.ScopeBytesCovered.Value * 100.0) /
                                  GlobalStats.ScopeBytes.Value)
-                           : 0)
-                   << "%\n");
+                          << "%\n");
   return true;
 }

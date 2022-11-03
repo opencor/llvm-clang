@@ -4,8 +4,8 @@
 
 // rdar://10817031
 
-int main(void) {
-    void (^arc_fail)(void) = ^(void) {
+int main() {
+    void (^arc_fail)() = ^() {
 #ifdef ARC
 // expected-warning@-2 {{block pointer variable 'arc_fail' is null when captured by block}}
 #else

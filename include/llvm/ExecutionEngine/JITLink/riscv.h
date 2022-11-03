@@ -37,19 +37,12 @@ enum EdgeKind_riscv : Edge::Kind {
   ///
   R_RISCV_64,
 
-  /// PC-relative branch pointer value relocation
+  /// Low 12 bits of PC-relative branch pointer value relocation
   ///
   /// Fixup expression:
-  ///   Fixup <- (Target - Fixup + Addend)
+  ///   Fixup <- (Target - Fixup + Addend) & 0xFFF
   ///
   R_RISCV_BRANCH,
-
-  /// High 20 bits of PC-relative jump pointer value relocation
-  ///
-  /// Fixup expression:
-  ///   Fixup <- Target - Fixup + Addend
-  ///
-  R_RISCV_JAL,
 
   /// High 20 bits of 32-bit pointer value relocation
   ///
@@ -151,12 +144,6 @@ enum EdgeKind_riscv : Edge::Kind {
   /// Fixup expression
   ///   Fixup <- (Target - *{1}Fixup - Addend)
   R_RISCV_SUB8,
-
-  /// 6 bits label subtraction
-  ///
-  /// Fixup expression
-  ///   Fixup <- (Target - *{1}Fixup - Addend)
-  R_RISCV_SUB6,
 
   /// Local label assignment
   ///

@@ -18,7 +18,7 @@ class TargetMachine;
 
 class SparcELFTargetObjectFile : public TargetLoweringObjectFileELF {
 public:
-  SparcELFTargetObjectFile() = default;
+  SparcELFTargetObjectFile() {}
 
   void Initialize(MCContext &Ctx, const TargetMachine &TM) override;
 

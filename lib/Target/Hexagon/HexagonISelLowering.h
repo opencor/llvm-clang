@@ -107,6 +107,9 @@ class HexagonTargetLowering : public TargetLowering {
   const HexagonTargetMachine &HTM;
   const HexagonSubtarget &Subtarget;
 
+  bool CanReturnSmallStruct(const Function* CalleeFn, unsigned& RetSize)
+      const;
+
 public:
   explicit HexagonTargetLowering(const TargetMachine &TM,
                                  const HexagonSubtarget &ST);
@@ -325,7 +328,7 @@ public:
   Value *emitStoreConditional(IRBuilderBase &Builder, Value *Val, Value *Addr,
                               AtomicOrdering Ord) const override;
   AtomicExpansionKind shouldExpandAtomicLoadInIR(LoadInst *LI) const override;
-  AtomicExpansionKind shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
+  bool shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
   AtomicExpansionKind
   shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override;
 

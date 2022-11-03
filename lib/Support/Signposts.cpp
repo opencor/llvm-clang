@@ -7,9 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Signposts.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Config/config.h"
 
+#include "llvm/Config/config.h"
 #if LLVM_SUPPORT_XCODE_SIGNPOSTS
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/Support/Mutex.h"
@@ -25,7 +24,7 @@ using namespace llvm;
 namespace {
 os_log_t *LogCreator() {
   os_log_t *X = new os_log_t;
-  *X = os_log_create("org.llvm.signposts", "toolchain");
+  *X = os_log_create("org.llvm.signposts", OS_LOG_CATEGORY_POINTS_OF_INTEREST);
   return X;
 }
 struct LogDeleter {

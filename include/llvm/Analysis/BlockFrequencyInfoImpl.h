@@ -20,7 +20,6 @@
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PostOrderIterator.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SparseBitVector.h"
 #include "llvm/ADT/Twine.h"
@@ -32,6 +31,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/ScaledNumber.h"
 #include "llvm/Support/raw_ostream.h"
@@ -45,6 +45,7 @@
 #include <list>
 #include <queue>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1278,9 +1279,9 @@ bool BlockFrequencyInfoImpl<BT>::computeMassInLoop(LoopData &Loop) {
       }
       LLVM_DEBUG(dbgs() << getBlockName(HeaderNode)
                         << " has irr loop header weight "
-                        << HeaderWeight.value() << "\n");
+                        << HeaderWeight.getValue() << "\n");
       NumHeadersWithWeight++;
-      uint64_t HeaderWeightValue = HeaderWeight.value();
+      uint64_t HeaderWeightValue = HeaderWeight.getValue();
       if (!MinHeaderWeight || HeaderWeightValue < MinHeaderWeight)
         MinHeaderWeight = HeaderWeightValue;
       if (HeaderWeightValue) {
@@ -1299,7 +1300,7 @@ bool BlockFrequencyInfoImpl<BT>::computeMassInLoop(LoopData &Loop) {
       auto &HeaderNode = Loop.Nodes[H];
       assert(!getBlock(HeaderNode)->getIrrLoopHeaderWeight() &&
              "Shouldn't have a weight metadata");
-      uint64_t MinWeight = *MinHeaderWeight;
+      uint64_t MinWeight = MinHeaderWeight.getValue();
       LLVM_DEBUG(dbgs() << "Giving weight " << MinWeight << " to "
                         << getBlockName(HeaderNode) << "\n");
       if (MinWeight)
@@ -1515,7 +1516,7 @@ void BlockFrequencyInfoImpl<BT>::findReachableBlocks(
   // Find all blocks to apply inference on, that is, reachable from the entry
   // along edges with non-zero probablities
   std::queue<const BlockT *> Queue;
-  SmallPtrSet<const BlockT *, 8> Reachable;
+  std::unordered_set<const BlockT *> Reachable;
   const BlockT *Entry = &F->front();
   Queue.push(Entry);
   Reachable.insert(Entry);
@@ -1526,14 +1527,16 @@ void BlockFrequencyInfoImpl<BT>::findReachableBlocks(
       auto EP = BPI->getEdgeProbability(SrcBB, DstBB);
       if (EP.isZero())
         continue;
-      if (Reachable.insert(DstBB).second)
+      if (Reachable.find(DstBB) == Reachable.end()) {
         Queue.push(DstBB);
+        Reachable.insert(DstBB);
+      }
     }
   }
 
   // Find all blocks to apply inference on, that is, backward reachable from
   // the entry along (backward) edges with non-zero probablities
-  SmallPtrSet<const BlockT *, 8> InverseReachable;
+  std::unordered_set<const BlockT *> InverseReachable;
   for (const BlockT &BB : *F) {
     // An exit block is a block without any successors
     bool HasSucc = GraphTraits<const BlockT *>::child_begin(&BB) !=
@@ -1550,8 +1553,10 @@ void BlockFrequencyInfoImpl<BT>::findReachableBlocks(
       auto EP = BPI->getEdgeProbability(DstBB, SrcBB);
       if (EP.isZero())
         continue;
-      if (InverseReachable.insert(DstBB).second)
+      if (InverseReachable.find(DstBB) == InverseReachable.end()) {
         Queue.push(DstBB);
+        InverseReachable.insert(DstBB);
+      }
     }
   }
 
@@ -1576,14 +1581,15 @@ void BlockFrequencyInfoImpl<BT>::initTransitionProbabilities(
   // Find unique successors and corresponding probabilities for every block
   for (size_t Src = 0; Src < NumBlocks; Src++) {
     const BlockT *BB = Blocks[Src];
-    SmallPtrSet<const BlockT *, 2> UniqueSuccs;
+    std::unordered_set<const BlockT *> UniqueSuccs;
     for (const auto SI : children<const BlockT *>(BB)) {
       // Ignore cold blocks
       if (BlockIndex.find(SI) == BlockIndex.end())
         continue;
       // Ignore parallel edges between BB and SI blocks
-      if (!UniqueSuccs.insert(SI).second)
+      if (UniqueSuccs.find(SI) != UniqueSuccs.end())
         continue;
+      UniqueSuccs.insert(SI);
       // Ignore jumps with zero probability
       auto EP = BPI->getEdgeProbability(BB, SI);
       if (EP.isZero())
@@ -1732,10 +1738,10 @@ raw_ostream &BlockFrequencyInfoImpl<BT>::print(raw_ostream &OS) const {
     if (Optional<uint64_t> ProfileCount =
         BlockFrequencyInfoImplBase::getBlockProfileCount(
             F->getFunction(), getNode(&BB)))
-      OS << ", count = " << ProfileCount.value();
+      OS << ", count = " << ProfileCount.getValue();
     if (Optional<uint64_t> IrrLoopHeaderWeight =
         BB.getIrrLoopHeaderWeight())
-      OS << ", irr_loop_header_weight = " << IrrLoopHeaderWeight.value();
+      OS << ", irr_loop_header_weight = " << IrrLoopHeaderWeight.getValue();
     OS << "\n";
   }
 
@@ -1869,7 +1875,7 @@ struct BFIDOTGraphTraitsBase : public DefaultDOTGraphTraits {
     case GVDT_Count: {
       auto Count = Graph->getBlockProfileCount(Node);
       if (Count)
-        OS << *Count;
+        OS << Count.getValue();
       else
         OS << "Unknown";
       break;

@@ -619,19 +619,6 @@ let Class = AttributedType in {
   }]>;
 }
 
-let Class = BTFTagAttributedType in {
-  def : Property<"attr", BTFTypeTagAttr> {
-    let Read = [{ node->getAttr() }];
-  }
-  def : Property<"wrappedType", QualType> {
-    let Read = [{ node->getWrappedType() }];
-  }
-
-  def : Creator<[{
-    return ctx.getBTFTagAttributedType(attr, wrappedType);
-  }]>;
-}
-
 let Class = DependentAddressSpaceType in {
   def : Property<"pointeeType", QualType> {
     let Read = [{ node->getPointeeType() }];
@@ -671,7 +658,7 @@ let Class = TemplateSpecializationType in {
 
   def : Creator<[{
     QualType result;
-    if (!underlyingType) {
+    if (!underlyingType.hasValue()) {
       result = ctx.getCanonicalTemplateSpecializationType(templateName,
                                                           templateArguments);
     } else {

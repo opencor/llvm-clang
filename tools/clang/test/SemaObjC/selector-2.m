@@ -5,7 +5,7 @@
 - length;
 @end
 
-static inline SEL IsEmpty(void) {
+static inline SEL IsEmpty() {
     return @selector(length);
 }
 

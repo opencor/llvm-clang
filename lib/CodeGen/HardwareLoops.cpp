@@ -23,8 +23,10 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -35,6 +37,7 @@
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
@@ -332,7 +335,7 @@ void HardwareLoop::Create() {
 
   // Run through the basic blocks of the loop and see if any of them have dead
   // PHIs that can be removed.
-  for (auto *I : L->blocks())
+  for (auto I : L->blocks())
     DeleteDeadPHIs(I);
 }
 
@@ -407,13 +410,13 @@ Value *HardwareLoop::InitLoopCount() {
     BasicBlock *Predecessor = BB->getSinglePredecessor();
     // If it's not safe to create a while loop then don't force it and create a
     // do-while loop instead
-    if (!SCEVE.isSafeToExpandAt(ExitCount, Predecessor->getTerminator()))
+    if (!isSafeToExpandAt(ExitCount, Predecessor->getTerminator(), SE))
         UseLoopGuard = false;
     else
         BB = Predecessor;
   }
 
-  if (!SCEVE.isSafeToExpandAt(ExitCount, BB->getTerminator())) {
+  if (!isSafeToExpandAt(ExitCount, BB->getTerminator(), SE)) {
     LLVM_DEBUG(dbgs() << "- Bailing, unsafe to expand ExitCount "
                << *ExitCount << "\n");
     return nullptr;

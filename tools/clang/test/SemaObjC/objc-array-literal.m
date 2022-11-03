@@ -9,14 +9,14 @@ typedef unsigned long NSUInteger;
 typedef unsigned int NSUInteger;
 #endif
 
-void checkNSArrayUnavailableDiagnostic(void) {
+void checkNSArrayUnavailableDiagnostic() {
   id obj;
   id arr = @[obj]; // expected-error {{definition of class NSArray must be available to use Objective-C array literals}}
 }
 
 @class NSArray; // expected-note {{forward declaration of class here}}
 
-void checkNSArrayFDDiagnostic(void) {
+void checkNSArrayFDDiagnostic() {
   id obj;
   id arr = @[obj]; // expected-error {{definition of class NSArray must be available to use Objective-C array literals}}
 }
@@ -42,7 +42,7 @@ extern void NSLog(NSString *format, ...) __attribute__((format(__NSString__, 1, 
 @end
 
 
-int main(void) {
+int main() {
  NSArray *array = @[@"Hello", @"There", @"How Are You", [NSNumber numberWithInt:42]];
 
   for (id string in array)
@@ -55,11 +55,11 @@ int main(void) {
 }
 
 // rdar://14303083
-id Test14303083(void) {
+id Test14303083() {
   id obj = @[ @"A", (@"B" @"C")];
   return @[ @"A", @"B" @"C"]; // expected-warning {{concatenated NSString literal for an NSArray expression - possibly missing a comma}}
 }
-id radar15147688(void) {
+id radar15147688() {
 #define R15147688_A @"hello"
 #define R15147688_B "world"
 #define CONCATSTR R15147688_A R15147688_B
@@ -69,7 +69,7 @@ id radar15147688(void) {
 }
 
 enum XXXYYYZZZType { XXXYYYZZZTypeAny }; // expected-note {{'XXXYYYZZZTypeAny' declared here}}
-void foo(void) {
+void foo() {
   NSArray *array = @[
     @(XXXYYYZZZTypeA),                 // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeA'; did you mean 'XXXYYYZZZTypeAny'}}
     @(XXXYYYZZZTypeSomethingSomething) // expected-error {{use of undeclared identifier 'XXXYYYZZZTypeSomethingSomething'}}

@@ -22,7 +22,7 @@ class LitConfig(object):
 
     def __init__(self, progname, path, quiet,
                  useValgrind, valgrindLeakCheck, valgrindArgs,
-                 noExecute, debug, isWindows, order,
+                 noExecute, debug, isWindows,
                  params, config_prefix = None,
                  maxIndividualTestTime = 0,
                  parallelism_groups = {},
@@ -38,7 +38,6 @@ class LitConfig(object):
         self.noExecute = noExecute
         self.debug = debug
         self.isWindows = bool(isWindows)
-        self.order = order
         self.params = dict(params)
         self.bashPath = None
 
@@ -175,15 +174,6 @@ class LitConfig(object):
             # on screen immediately. Flush them here to avoid broken/misoredered
             # output.
             sys.stderr.flush()
-
-    def substitute(self, string):
-        """substitute - Interpolate params into a string"""
-        try:
-          return string % self.params
-        except KeyError as e:
-          key, = e.args
-          self.fatal("unable to find %r parameter, use '--param=%s=VALUE'" % (
-              key,key))
 
     def note(self, message):
         if not self.quiet:

@@ -5,8 +5,8 @@ typedef union <anonymous> __mbstate_t;  // expected-error {{declaration of anony
 
 
 // PR2017
-void x(void); 
-int a(void) {
+void x(); 
+int a() {
   int r[x()];  // expected-error {{size of array has non-integer type 'void'}}
 
   static y ?; // expected-error{{unknown type name 'y'}} \

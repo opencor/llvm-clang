@@ -39,8 +39,7 @@ ExitOnError ExitOnErr;
 LLVM_ATTRIBUTE_USED void linkComponents() {
   errs() << (void *)&llvm_orc_registerEHFrameSectionWrapper
          << (void *)&llvm_orc_deregisterEHFrameSectionWrapper
-         << (void *)&llvm_orc_registerJITLoaderGDBWrapper
-         << (void *)&llvm_orc_registerJITLoaderGDBAllocAction;
+         << (void *)&llvm_orc_registerJITLoaderGDBWrapper;
 }
 
 void printErrorAndExit(Twine ErrMsg) {

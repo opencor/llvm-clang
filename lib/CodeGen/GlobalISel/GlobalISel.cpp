@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/InitializePasses.h"
+#include "llvm/PassRegistry.h"
 
 using namespace llvm;
 

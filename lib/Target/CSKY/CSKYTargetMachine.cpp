@@ -13,9 +13,7 @@
 #include "CSKYTargetMachine.h"
 #include "CSKY.h"
 #include "CSKYSubtarget.h"
-#include "CSKYTargetObjectFile.h"
 #include "TargetInfo/CSKYTargetInfo.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -52,9 +50,9 @@ CSKYTargetMachine::CSKYTargetMachine(const Target &T, const Triple &TT,
                                      Optional<CodeModel::Model> CM,
                                      CodeGenOpt::Level OL, bool JIT)
     : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
-                        RM.value_or(Reloc::Static),
+                        RM.getValueOr(Reloc::Static),
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
-      TLOF(std::make_unique<CSKYELFTargetObjectFile>()) {
+      TLOF(std::make_unique<TargetLoweringObjectFileELF>()) {
   initAsmInfo();
 }
 
@@ -96,7 +94,6 @@ public:
     return getTM<CSKYTargetMachine>();
   }
 
-  void addIRPasses() override;
   bool addInstSelector() override;
   void addPreEmitPass() override;
 };
@@ -105,11 +102,6 @@ public:
 
 TargetPassConfig *CSKYTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new CSKYPassConfig(*this, PM);
-}
-
-void CSKYPassConfig::addIRPasses() {
-  addPass(createAtomicExpandPass());
-  TargetPassConfig::addIRPasses();
 }
 
 bool CSKYPassConfig::addInstSelector() {

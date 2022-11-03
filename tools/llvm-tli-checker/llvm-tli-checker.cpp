@@ -338,7 +338,6 @@ int main(int argc, char *argv[]) {
     assert(TLIandSDKboth + TLIandSDKneither + TLIdoesSDKdoesnt +
                TLIdoesntSDKdoes ==
            LibFunc::NumLibFuncs);
-    (void) TLIandSDKneither;
     outs() << "<< Total TLI yes SDK no:  " << TLIdoesSDKdoesnt
            << "\n>> Total TLI no  SDK yes: " << TLIdoesntSDKdoes
            << "\n== Total TLI yes SDK yes: " << TLIandSDKboth;

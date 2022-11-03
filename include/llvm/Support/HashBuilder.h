@@ -39,9 +39,6 @@ struct IsHashableData
 /// Declares the hasher member, and functions forwarding directly to the hasher.
 template <typename HasherT> class HashBuilderBase {
 public:
-  template <typename HasherT_ = HasherT>
-  using HashResultTy = decltype(std::declval<HasherT_ &>().final());
-
   HasherT &getHasher() { return Hasher; }
 
   /// Forward to `HasherT::update(ArrayRef<uint8_t>)`.
@@ -62,12 +59,12 @@ public:
   }
 
   /// Forward to `HasherT::final()` if available.
-  template <typename HasherT_ = HasherT> HashResultTy<HasherT_> final() {
+  template <typename HasherT_ = HasherT> StringRef final() {
     return this->getHasher().final();
   }
 
   /// Forward to `HasherT::result()` if available.
-  template <typename HasherT_ = HasherT> HashResultTy<HasherT_> result() {
+  template <typename HasherT_ = HasherT> StringRef result() {
     return this->getHasher().result();
   }
 

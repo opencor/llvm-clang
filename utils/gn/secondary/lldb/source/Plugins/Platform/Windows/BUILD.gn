@@ -8,7 +8,6 @@ static_library("Windows") {
     "//lldb/source/Breakpoint",
     "//lldb/source/Core",
     "//lldb/source/Host",
-    "//lldb/source/Plugins/Platform/gdb-server",
     "//lldb/source/Target",
   ]
 

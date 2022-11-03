@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -no-opaque-pointers -flax-vector-conversions=none -ffreestanding %s -triple=x86_64-apple-darwin -target-feature +sse -emit-llvm -o - -Wall -Werror | FileCheck %s
-// RUN: %clang_cc1 -no-opaque-pointers -flax-vector-conversions=none -fms-extensions -fms-compatibility -ffreestanding %s -triple=x86_64-windows-msvc -target-feature +sse -emit-llvm -o - -Wall -Werror | FileCheck %s
+// RUN: %clang_cc1 -flax-vector-conversions=none -ffreestanding %s -triple=x86_64-apple-darwin -target-feature +sse -emit-llvm -o - -Wall -Werror | FileCheck %s
+// RUN: %clang_cc1 -flax-vector-conversions=none -fms-extensions -fms-compatibility -ffreestanding %s -triple=x86_64-windows-msvc -target-feature +sse -emit-llvm -o - -Wall -Werror | FileCheck %s
 
 
 #include <immintrin.h>
@@ -331,35 +331,35 @@ __m128 test_mm_div_ss(__m128 A, __m128 B) {
   return _mm_div_ss(A, B);
 }
 
-unsigned int test_MM_GET_EXCEPTION_MASK(void) {
+unsigned int test_MM_GET_EXCEPTION_MASK() {
   // CHECK-LABEL: test_MM_GET_EXCEPTION_MASK
   // CHECK: call void @llvm.x86.sse.stmxcsr(i8* %{{.*}})
   // CHECK: and i32 %{{.*}}, 8064
   return _MM_GET_EXCEPTION_MASK();
 }
 
-unsigned int test_MM_GET_EXCEPTION_STATE(void) {
+unsigned int test_MM_GET_EXCEPTION_STATE() {
   // CHECK-LABEL: test_MM_GET_EXCEPTION_STATE
   // CHECK: call void @llvm.x86.sse.stmxcsr(i8* %{{.*}})
   // CHECK: and i32 %{{.*}}, 63
   return _MM_GET_EXCEPTION_STATE();
 }
 
-unsigned int test_MM_GET_FLUSH_ZERO_MODE(void) {
+unsigned int test_MM_GET_FLUSH_ZERO_MODE() {
   // CHECK-LABEL: test_MM_GET_FLUSH_ZERO_MODE
   // CHECK: call void @llvm.x86.sse.stmxcsr(i8* %{{.*}})
   // CHECK: and i32 %{{.*}}, 32768
   return _MM_GET_FLUSH_ZERO_MODE();
 }
 
-unsigned int test_MM_GET_ROUNDING_MODE(void) {
+unsigned int test_MM_GET_ROUNDING_MODE() {
   // CHECK-LABEL: test_MM_GET_ROUNDING_MODE
   // CHECK: call void @llvm.x86.sse.stmxcsr(i8* %{{.*}})
   // CHECK: and i32 %{{.*}}, 24576
   return _MM_GET_ROUNDING_MODE();
 }
 
-unsigned int test_mm_getcsr(void) {
+unsigned int test_mm_getcsr() {
   // CHECK-LABEL: test_mm_getcsr
   // CHECK: call void @llvm.x86.sse.stmxcsr(i8* %{{.*}})
   // CHECK: load i32
@@ -627,13 +627,13 @@ __m128 test_mm_setr_ps(float A, float B, float C, float D) {
   return _mm_setr_ps(A, B, C, D);
 }
 
-__m128 test_mm_setzero_ps(void) {
+__m128 test_mm_setzero_ps() {
   // CHECK-LABEL: test_mm_setzero_ps
   // CHECK: store <4 x float> zeroinitializer
   return _mm_setzero_ps();
 }
 
-void test_mm_sfence(void) {
+void test_mm_sfence() {
   // CHECK-LABEL: test_mm_sfence
   // CHECK: call void @llvm.x86.sse.sfence()
   _mm_sfence();
@@ -784,7 +784,7 @@ int test_mm_ucomineq_ss(__m128 A, __m128 B) {
   return _mm_ucomineq_ss(A, B);
 }
 
-__m128 test_mm_undefined_ps(void) {
+__m128 test_mm_undefined_ps() {
   // CHECK-LABEL: test_mm_undefined_ps
   // CHECK: ret <4 x float> zeroinitializer
   return _mm_undefined_ps();

@@ -13,11 +13,13 @@
 // entities would be non-deterministic. To prevent this, run the scans separately
 // and verify that the context hashes differ with a single FileCheck invocation.
 //
-// RUN: clang-scan-deps -compilation-database %t/cdb_a.json -format experimental-full -j 1 >  %t/result.json
+// RUN: echo -%t > %t/result.json
+// RUN: clang-scan-deps -compilation-database %t/cdb_a.json -format experimental-full -j 1 >> %t/result.json
 // RUN: clang-scan-deps -compilation-database %t/cdb_b.json -format experimental-full -j 1 >> %t/result.json
-// RUN: cat %t/result.json | sed 's:\\\\\?:/:g' | FileCheck %s -DPREFIX=%/t -check-prefix=CHECK
+// RUN: cat %t/result.json | sed 's:\\\\\?:/:g' | FileCheck %s -check-prefix=CHECK
 
-// CHECK:      {
+// CHECK:      -[[PREFIX:.*]]
+// CHECK-NEXT: {
 // CHECK-NEXT:   "modules": [
 // CHECK-NEXT:     {
 // CHECK-NEXT:       "clang-module-deps": [],
@@ -48,7 +50,7 @@
 // CHECK-NEXT:         }
 // CHECK-NEXT:       ],
 // CHECK-NEXT:       "command-line": [
-// CHECK:              "-fno-implicit-modules",
+// CHECK-NEXT:         "-fno-implicit-modules",
 // CHECK-NEXT:         "-fno-implicit-module-maps"
 // CHECK-NEXT:       ],
 // CHECK-NEXT:       "file-deps": [
@@ -89,7 +91,7 @@
 // CHECK-NEXT:         }
 // CHECK-NEXT:       ],
 // CHECK-NEXT:       "command-line": [
-// CHECK:              "-fno-implicit-modules",
+// CHECK-NEXT:         "-fno-implicit-modules",
 // CHECK-NEXT:         "-fno-implicit-module-maps"
 // CHECK-NEXT:       ],
 // CHECK-NEXT:       "file-deps": [

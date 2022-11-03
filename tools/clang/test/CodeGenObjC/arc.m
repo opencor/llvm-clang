@@ -1,10 +1,10 @@
-// RUN: %clang_cc1 -no-opaque-pointers -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -O2 -disable-llvm-passes -o - %s | FileCheck %s
-// RUN: %clang_cc1 -no-opaque-pointers -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=CHECK-GLOBALS %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -O2 -disable-llvm-passes -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=CHECK-GLOBALS %s
 
 // rdar://13129783. Check both native/non-native arc platforms. Here we check
 // that they treat nonlazybind differently.
-// RUN: %clang_cc1 -no-opaque-pointers -fobjc-runtime=macosx-10.6.0 -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=ARC-ALIEN %s
-// RUN: %clang_cc1 -no-opaque-pointers -fobjc-runtime=macosx-10.7.0 -triple x86_64-apple-darwin11 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=ARC-NATIVE %s
+// RUN: %clang_cc1 -fobjc-runtime=macosx-10.6.0 -triple x86_64-apple-darwin10 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=ARC-ALIEN %s
+// RUN: %clang_cc1 -fobjc-runtime=macosx-10.7.0 -triple x86_64-apple-darwin11 -Wno-objc-root-class -Wno-incompatible-pointer-types -Wno-arc-unsafe-retained-assign -emit-llvm -fblocks -fobjc-arc -fobjc-runtime-has-weak -o - %s | FileCheck -check-prefix=ARC-NATIVE %s
 
 // ARC-ALIEN: declare extern_weak void @llvm.objc.storeStrong(i8**, i8*)
 // ARC-ALIEN: declare extern_weak i8* @llvm.objc.retain(i8*)
@@ -97,7 +97,7 @@ id test1(id x) {
 @end
 
 // CHECK-LABEL: define{{.*}} void @test3_unelided()
-void test3_unelided(void) {
+void test3_unelided() {
   extern void test3_helper(void);
 
   // CHECK:      [[X:%.*]] = alloca [[TEST3:%.*]]*
@@ -132,7 +132,7 @@ void test3_unelided(void) {
 }
 
 // CHECK-LABEL: define{{.*}} void @test3()
-void test3(void) {
+void test3() {
   // CHECK:      [[X:%.*]] = alloca i8*
   // CHECK-NEXT: [[XPTR1:%.*]] = bitcast i8** [[X]] to i8*
   // CHECK-NEXT: call void @llvm.lifetime.start.p0i8(i64 8, i8* [[XPTR1]])
@@ -176,7 +176,7 @@ void test3(void) {
 }
 
 // CHECK-LABEL: define{{.*}} i8* @test4()
-id test4(void) {
+id test4() {
   // Call to +alloc.
   // CHECK:      load {{.*}}, {{.*}}* @"OBJC_CLASSLIST_REFERENCES_
   // CHECK-NEXT: bitcast
@@ -251,7 +251,7 @@ void test5(Test5 *x, id y) {
 
 id test6_helper(void) __attribute__((ns_returns_retained));
 // CHECK-LABEL: define{{.*}} void @test6()
-void test6(void) {
+void test6() {
   // CHECK:      [[X:%.*]] = alloca i8*
   // CHECK-NEXT: [[XPTR1:%.*]] = bitcast i8** [[X]] to i8*
   // CHECK-NEXT: call void @llvm.lifetime.start.p0i8(i64 8, i8* [[XPTR1]])
@@ -267,7 +267,7 @@ void test6(void) {
 
 void test7_helper(id __attribute__((ns_consumed)));
 // CHECK-LABEL: define{{.*}} void @test7()
-void test7(void) {
+void test7() {
   // CHECK:      [[X:%.*]] = alloca i8*
   // CHECK-NEXT: [[XPTR1:%.*]] = bitcast i8** [[X]] to i8*
   // CHECK-NEXT: call void @llvm.lifetime.start.p0i8(i64 8, i8* [[XPTR1]])
@@ -285,7 +285,7 @@ void test7(void) {
 }
 
 id test8_helper(void) __attribute__((ns_returns_retained));
-void test8(void) {
+void test8() {
   __unsafe_unretained id x = test8_helper();
   // CHECK:      [[X:%.*]] = alloca i8*
   // CHECK-NEXT: [[XPTR1:%.*]] = bitcast i8** [[X]] to i8*
@@ -301,7 +301,7 @@ void test8(void) {
 @interface Test10
 @property (retain) Test10 *me;
 @end
-void test10(void) {
+void test10() {
   Test10 *x;
   id y = x.me.me;
 
@@ -498,7 +498,7 @@ void test13(void) {
 - (int) x { return super.x + 1; }
 @end
 
-void test19(void) {
+void test19() {
   // CHECK-LABEL: define{{.*}} void @test19()
   // CHECK:      [[X:%.*]] = alloca [5 x i8*], align 16
   // CHECK: call void @llvm.lifetime.start
@@ -1146,7 +1146,7 @@ void test49(void) {
 }
 
 // rdar://9380136
-id x(void);
+id x();
 void test50(id y) {
   ({x();});
 // CHECK: [[T0:%.*]] = call i8* @llvm.objc.retain

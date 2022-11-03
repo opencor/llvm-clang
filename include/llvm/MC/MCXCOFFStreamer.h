@@ -32,10 +32,6 @@ public:
   void emitXCOFFSymbolLinkageWithVisibility(MCSymbol *Symbol,
                                             MCSymbolAttr Linkage,
                                             MCSymbolAttr Visibility) override;
-  void emitXCOFFRefDirective(StringRef Name) override {
-    report_fatal_error("emitXCOFFRefDirective is not implemented yet on object"
-                       "generation path");
-  }
   void emitXCOFFRenameDirective(const MCSymbol *Name,
                                 StringRef Rename) override {
     report_fatal_error("emitXCOFFRenameDirective is not implemented yet on "

@@ -23,7 +23,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/GraphWriter.h"
+#include <algorithm>
 
 using namespace llvm;
 

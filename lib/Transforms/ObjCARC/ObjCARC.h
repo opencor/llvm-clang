@@ -22,6 +22,7 @@
 #ifndef LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
 #define LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
 
+#include "ARCRuntimeEntryPoints.h"
 #include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/Analysis/ObjCARCAnalysisUtils.h"
 #include "llvm/Analysis/ObjCARCUtil.h"

@@ -19,6 +19,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
 
 using namespace llvm;
 using namespace llvm::dwarf;
@@ -290,22 +291,6 @@ DIStringType *DIBuilder::createStringType(StringRef Name, uint64_t SizeInBits) {
   assert(!Name.empty() && "Unable to create type without name");
   return DIStringType::get(VMContext, dwarf::DW_TAG_string_type, Name,
                            SizeInBits, 0);
-}
-
-DIStringType *DIBuilder::createStringType(StringRef Name,
-                                          DIVariable *StringLength,
-                                          DIExpression *StrLocationExp) {
-  assert(!Name.empty() && "Unable to create type without name");
-  return DIStringType::get(VMContext, dwarf::DW_TAG_string_type, Name,
-                           StringLength, nullptr, StrLocationExp, 0, 0, 0);
-}
-
-DIStringType *DIBuilder::createStringType(StringRef Name,
-                                          DIExpression *StringLengthExp,
-                                          DIExpression *StrLocationExp) {
-  assert(!Name.empty() && "Unable to create type without name");
-  return DIStringType::get(VMContext, dwarf::DW_TAG_string_type, Name, nullptr,
-                           StringLengthExp, StrLocationExp, 0, 0, 0);
 }
 
 DIDerivedType *DIBuilder::createQualifiedType(unsigned Tag, DIType *FromTy) {
@@ -846,15 +831,14 @@ DISubprogram *DIBuilder::createFunction(
     unsigned LineNo, DISubroutineType *Ty, unsigned ScopeLine,
     DINode::DIFlags Flags, DISubprogram::DISPFlags SPFlags,
     DITemplateParameterArray TParams, DISubprogram *Decl,
-    DITypeArray ThrownTypes, DINodeArray Annotations,
-    StringRef TargetFuncName) {
+    DITypeArray ThrownTypes, DINodeArray Annotations) {
   bool IsDefinition = SPFlags & DISubprogram::SPFlagDefinition;
   auto *Node = getSubprogram(
       /*IsDistinct=*/IsDefinition, VMContext, getNonCompileUnitScope(Context),
       Name, LinkageName, File, LineNo, Ty, ScopeLine, nullptr, 0, 0, Flags,
       SPFlags, IsDefinition ? CUNode : nullptr, TParams, Decl,
       MDTuple::getTemporary(VMContext, None).release(), ThrownTypes,
-      Annotations, TargetFuncName);
+      Annotations);
 
   if (IsDefinition)
     AllSubprograms.push_back(Node);

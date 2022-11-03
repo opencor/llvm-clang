@@ -12,16 +12,14 @@
 // Most of this code has been COPIED from LoopPass.cpp
 //
 //===----------------------------------------------------------------------===//
-
 #include "llvm/Analysis/RegionPass.h"
-#include "llvm/Analysis/RegionInfo.h"
 #include "llvm/IR/OptBisect.h"
 #include "llvm/IR/PassTimingInfo.h"
 #include "llvm/IR/PrintPasses.h"
+#include "llvm/IR/StructuralHash.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
-
 using namespace llvm;
 
 #define DEBUG_TYPE "regionpassmgr"
@@ -95,12 +93,12 @@ bool RGPassManager::runOnFunction(Function &F) {
 
         TimeRegion PassTimer(getPassTimer(P));
 #ifdef EXPENSIVE_CHECKS
-        uint64_t RefHash = P->structuralHash(F);
+        uint64_t RefHash = StructuralHash(F);
 #endif
         LocalChanged = P->runOnRegion(CurrentRegion, *this);
 
 #ifdef EXPENSIVE_CHECKS
-        if (!LocalChanged && (RefHash != P->structuralHash(F))) {
+        if (!LocalChanged && (RefHash != StructuralHash(F))) {
           llvm::errs() << "Pass modifies its input and doesn't report it: "
                        << P->getPassName() << "\n";
           llvm_unreachable("Pass modifies its input and doesn't report it");

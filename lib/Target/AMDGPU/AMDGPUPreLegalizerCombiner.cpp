@@ -16,7 +16,6 @@
 #include "AMDGPULegalizerInfo.h"
 #include "GCNSubtarget.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
-#include "llvm/CodeGen/GlobalISel/CSEInfo.h"
 #include "llvm/CodeGen/GlobalISel/Combiner.h"
 #include "llvm/CodeGen/GlobalISel/CombinerHelper.h"
 #include "llvm/CodeGen/GlobalISel/CombinerInfo.h"
@@ -126,6 +125,7 @@ void AMDGPUPreLegalizerCombinerHelper::applyClampI64ToI16(
          LLT::scalar(64));
   const LLT S32 = LLT::scalar(32);
 
+  B.setMBB(*MI.getParent());
   B.setInstrAndDebugLoc(MI);
 
   auto Unmerge = B.buildUnmerge(S32, Src);
@@ -191,8 +191,8 @@ public:
       report_fatal_error("Invalid rule identifier");
   }
 
-  bool combine(GISelChangeObserver &Observer, MachineInstr &MI,
-               MachineIRBuilder &B) const override;
+  virtual bool combine(GISelChangeObserver &Observer, MachineInstr &MI,
+                       MachineIRBuilder &B) const override;
 };
 
 bool AMDGPUPreLegalizerCombinerInfo::combine(GISelChangeObserver &Observer,

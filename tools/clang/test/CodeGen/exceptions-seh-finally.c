@@ -1,6 +1,6 @@
-// RUN: %clang_cc1 -no-opaque-pointers %s -triple x86_64-pc-win32 -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
-// RUN: %clang_cc1 -no-opaque-pointers %s -triple i686-pc-win32 -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
-// RUN: %clang_cc1 -no-opaque-pointers %s -triple aarch64-windows -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
+// RUN: %clang_cc1 %s -triple x86_64-pc-win32 -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
+// RUN: %clang_cc1 %s -triple i686-pc-win32 -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
+// RUN: %clang_cc1 %s -triple aarch64-windows -fms-extensions -emit-llvm -O1 -disable-llvm-passes -o - | FileCheck %s
 // NOTE: we're passing "-O1 -disable-llvm-passes" to avoid adding optnone and noinline everywhere.
 
 void abort(void) __attribute__((noreturn));
@@ -104,7 +104,7 @@ void use_abnormal_termination(void) {
 // CHECK: store i32 %[[abnormal_zext]], i32* @crashed
 // CHECK-NEXT: ret void
 
-void noreturn_noop_finally(void) {
+void noreturn_noop_finally() {
   __try {
     __noop();
   } __finally {
@@ -121,7 +121,7 @@ void noreturn_noop_finally(void) {
 // CHECK: call void @abort()
 // CHECK: unreachable
 
-void noreturn_finally(void) {
+void noreturn_finally() {
   __try {
     might_crash();
   } __finally {
@@ -147,7 +147,7 @@ void noreturn_finally(void) {
 // CHECK: call void @abort()
 // CHECK: unreachable
 
-int finally_with_return(void) {
+int finally_with_return() {
   __try {
     return 42;
   } __finally {
@@ -163,7 +163,7 @@ int finally_with_return(void) {
 // CHECK-NOT: br label
 // CHECK: ret void
 
-int nested___finally___finally(void) {
+int nested___finally___finally() {
   __try {
     __try {
     } __finally {
@@ -198,7 +198,7 @@ int nested___finally___finally(void) {
 
 // FIXME: Our behavior seems suspiciously different.
 
-int nested___finally___finally_with_eh_edge(void) {
+int nested___finally___finally_with_eh_edge() {
   __try {
     __try {
       might_crash();
@@ -243,7 +243,7 @@ int nested___finally___finally_with_eh_edge(void) {
 // CHECK-SAME: [[finally_attrs]]
 // CHECK: unreachable
 
-void finally_within_finally(void) {
+void finally_within_finally() {
   __try {
     might_crash();
   } __finally {
@@ -271,7 +271,7 @@ void finally_within_finally(void) {
 // CHECK-SAME: [[finally_attrs]]
 
 void cleanup_with_func(const char *);
-void finally_with_func(void) {
+void finally_with_func() {
   __try {
     might_crash();
   } __finally {

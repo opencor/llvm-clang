@@ -21,7 +21,7 @@ typedef struct objc_object {
 -(id)foo;
 @end
 
-static void func(void) {
+static void func() {
  
   id x;
 

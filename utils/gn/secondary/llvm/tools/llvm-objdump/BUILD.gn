@@ -1,5 +1,4 @@
 import("//llvm/tools/binutils_symlinks.gni")
-import("//llvm/tools/cctools_symlinks.gni")
 import("//llvm/utils/TableGen/tablegen.gni")
 import("//llvm/utils/gn/build/symlink_or_copy.gni")
 
@@ -16,9 +15,6 @@ tablegen("OtoolOpts") {
 symlinks = [ "llvm-otool" ]
 if (llvm_install_binutils_symlinks) {
   symlinks += [ "objdump" ]
-}
-if (llvm_install_cctools_symlinks) {
-  symlinks += [ "otool" ]
 }
 
 foreach(target, symlinks) {
@@ -61,7 +57,6 @@ executable("llvm-objdump") {
     "COFFDump.cpp",
     "ELFDump.cpp",
     "MachODump.cpp",
-    "OffloadDump.cpp",
     "SourcePrinter.cpp",
     "WasmDump.cpp",
     "XCOFFDump.cpp",

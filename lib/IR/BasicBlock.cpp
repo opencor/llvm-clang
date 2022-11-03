@@ -148,6 +148,12 @@ const Module *BasicBlock::getModule() const {
   return getParent()->getParent();
 }
 
+const Instruction *BasicBlock::getTerminator() const {
+  if (InstList.empty() || !InstList.back().isTerminator())
+    return nullptr;
+  return &InstList.back();
+}
+
 const CallInst *BasicBlock::getTerminatingMustTailCall() const {
   if (InstList.empty())
     return nullptr;

@@ -9,60 +9,74 @@
 #include "MetadataLoader.h"
 #include "ValueList.h"
 
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/None.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/STLFunctionalExtras.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/ADT/ilist_iterator.h"
-#include "llvm/ADT/iterator_range.h"
-#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/LLVMBitCodes.h"
 #include "llvm/Bitstream/BitstreamReader.h"
+#include "llvm/IR/Argument.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Comdat.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GVMaterializer.h"
+#include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalObject.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/ModuleSummaryIndex.h"
+#include "llvm/IR/OperandTraits.h"
 #include "llvm/IR/TrackingMDRef.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/ValueHandle.h"
+#include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/type_traits.h"
-
+#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <iterator>
 #include <limits>
+#include <map>
 #include <string>
+#include <system_error>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
-namespace llvm {
-class Argument;
-}
 
 using namespace llvm;
 
@@ -664,8 +678,8 @@ public:
 
   bool hasSeenOldLoopTags() const { return HasSeenOldLoopTags; }
 
-  Error parseMetadataAttachment(Function &F,
-                                ArrayRef<Instruction *> InstructionList);
+  Error parseMetadataAttachment(
+      Function &F, const SmallVectorImpl<Instruction *> &InstructionList);
 
   Error parseMetadataKinds();
 
@@ -1219,19 +1233,15 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       break;
     }
 
-    unsigned TyID = Record[0];
-    Type *Ty = getTypeByID(TyID);
+    Type *Ty = getTypeByID(Record[0]);
     if (Ty->isMetadataTy() || Ty->isVoidTy()) {
       dropRecord();
       break;
     }
 
-    Value *V = ValueList.getValueFwdRef(Record[1], Ty, TyID,
-                                        /*ConstExprInsertBB*/ nullptr);
-    if (!V)
-      return error("Invalid value reference from old fn metadata");
-
-    MetadataList.assignValue(LocalAsMetadata::get(V), NextMetadataNo);
+    MetadataList.assignValue(
+        LocalAsMetadata::get(ValueList.getValueFwdRef(Record[1], Ty)),
+        NextMetadataNo);
     NextMetadataNo++;
     break;
   }
@@ -1243,18 +1253,14 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     unsigned Size = Record.size();
     SmallVector<Metadata *, 8> Elts;
     for (unsigned i = 0; i != Size; i += 2) {
-      unsigned TyID = Record[i];
-      Type *Ty = getTypeByID(TyID);
+      Type *Ty = getTypeByID(Record[i]);
       if (!Ty)
         return error("Invalid record");
       if (Ty->isMetadataTy())
         Elts.push_back(getMD(Record[i + 1]));
       else if (!Ty->isVoidTy()) {
-        Value *V = ValueList.getValueFwdRef(Record[i + 1], Ty, TyID,
-                                            /*ConstExprInsertBB*/ nullptr);
-        if (!V)
-          return error("Invalid value reference from old metadata");
-        auto *MD = ValueAsMetadata::get(V);
+        auto *MD =
+            ValueAsMetadata::get(ValueList.getValueFwdRef(Record[i + 1], Ty));
         assert(isa<ConstantAsMetadata>(MD) &&
                "Expected non-function-local metadata");
         Elts.push_back(MD);
@@ -1269,17 +1275,13 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     if (Record.size() != 2)
       return error("Invalid record");
 
-    unsigned TyID = Record[0];
-    Type *Ty = getTypeByID(TyID);
+    Type *Ty = getTypeByID(Record[0]);
     if (Ty->isMetadataTy() || Ty->isVoidTy())
       return error("Invalid record");
 
-    Value *V = ValueList.getValueFwdRef(Record[1], Ty, TyID,
-                                        /*ConstExprInsertBB*/ nullptr);
-    if (!V)
-      return error("Invalid value reference from metadata");
-
-    MetadataList.assignValue(ValueAsMetadata::get(V), NextMetadataNo);
+    MetadataList.assignValue(
+        ValueAsMetadata::get(ValueList.getValueFwdRef(Record[1], Ty)),
+        NextMetadataNo);
     NextMetadataNo++;
     break;
   }
@@ -1512,15 +1514,6 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
          Tag == dwarf::DW_TAG_structure_type ||
          Tag == dwarf::DW_TAG_union_type)) {
       Flags = Flags | DINode::FlagFwdDecl;
-      if (Name) {
-        // This is a hack around preserving template parameters for simplified
-        // template names - it should probably be replaced with a
-        // DICompositeType flag specifying whether template parameters are
-        // required on declarations of this type.
-        StringRef NameStr = Name->getString();
-        if (!NameStr.contains('<') || NameStr.startswith("_STN|"))
-          TemplateParams = getMDOrNull(Record[14]);
-      }
     } else {
       BaseType = getDITypeRefOrNull(Record[6]);
       OffsetInBits = Record[9];
@@ -1707,7 +1700,6 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     bool HasThisAdj = true;
     bool HasThrownTypes = true;
     bool HasAnnotations = false;
-    bool HasTargetFuncName = false;
     unsigned OffsetA = 0;
     unsigned OffsetB = 0;
     if (!HasSPFlags) {
@@ -1721,7 +1713,6 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       HasThrownTypes = Record.size() >= 21;
     } else {
       HasAnnotations = Record.size() >= 19;
-      HasTargetFuncName = Record.size() >= 20;
     }
     Metadata *CUorFn = getMDOrNull(Record[12 + OffsetB]);
     DISubprogram *SP = GET_OR_DISTINCT(
@@ -1746,9 +1737,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
          HasThrownTypes ? getMDOrNull(Record[17 + OffsetB])
                         : nullptr, // thrownTypes
          HasAnnotations ? getMDOrNull(Record[18 + OffsetB])
-                        : nullptr, // annotations
-         HasTargetFuncName ? getMDString(Record[19 + OffsetB])
-                           : nullptr // targetFuncName
+                        : nullptr // annotations
          ));
     MetadataList.assignValue(SP, NextMetadataNo);
     NextMetadataNo++;
@@ -2058,8 +2047,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_IMPORTED_ENTITY: {
-    if (Record.size() < 6 || Record.size() > 8)
-      return error("Invalid DIImportedEntity record");
+    if (Record.size() < 6 && Record.size() > 8)
+      return error("Invalid record");
 
     IsDistinct = Record[0];
     bool HasFile = (Record.size() >= 7);
@@ -2192,7 +2181,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseGlobalObjectAttachment(
 
 /// Parse metadata attachments.
 Error MetadataLoader::MetadataLoaderImpl::parseMetadataAttachment(
-    Function &F, ArrayRef<Instruction *> InstructionList) {
+    Function &F, const SmallVectorImpl<Instruction *> &InstructionList) {
   if (Error Err = Stream.EnterSubBlock(bitc::METADATA_ATTACHMENT_ID))
     return Err;
 
@@ -2368,7 +2357,7 @@ DISubprogram *MetadataLoader::lookupSubprogramForFunction(Function *F) {
 }
 
 Error MetadataLoader::parseMetadataAttachment(
-    Function &F, ArrayRef<Instruction *> InstructionList) {
+    Function &F, const SmallVectorImpl<Instruction *> &InstructionList) {
   return Pimpl->parseMetadataAttachment(F, InstructionList);
 }
 

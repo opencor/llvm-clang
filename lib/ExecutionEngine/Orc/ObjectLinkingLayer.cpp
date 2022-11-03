@@ -78,12 +78,9 @@ private:
   }
 
   static bool hasELFInitSection(LinkGraph &G) {
-    for (auto &Sec : G.sections()) {
-      auto SecName = Sec.getName();
-      if (SecName.consume_front(".init_array") &&
-          (SecName.empty() || SecName[0] == '.'))
+    for (auto &Sec : G.sections())
+      if (Sec.getName() == ".init_array")
         return true;
-    }
     return false;
   }
 
@@ -229,13 +226,12 @@ public:
       }
 
     for (auto *Sym : G.absolute_symbols())
-      if (Sym->hasName() && Sym->getScope() != Scope::Local) {
+      if (Sym->hasName()) {
         auto InternedName = ES.intern(Sym->getName());
         JITSymbolFlags Flags;
+        Flags |= JITSymbolFlags::Absolute;
         if (Sym->isCallable())
           Flags |= JITSymbolFlags::Callable;
-        if (Sym->getScope() == Scope::Default)
-          Flags |= JITSymbolFlags::Exported;
         if (Sym->getLinkage() == Linkage::Weak)
           Flags |= JITSymbolFlags::Weak;
         InternedResult[InternedName] =
@@ -611,7 +607,7 @@ private:
   DenseMap<SymbolStringPtr, SymbolNameSet> InternalNamedSymbolDeps;
 };
 
-ObjectLinkingLayer::Plugin::~Plugin() = default;
+ObjectLinkingLayer::Plugin::~Plugin() {}
 
 char ObjectLinkingLayer::ID;
 

@@ -7,7 +7,6 @@ unittest("ClangAnalysisFlowSensitiveTests") {
     "//clang/lib/ASTMatchers",
     "//clang/lib/Analysis",
     "//clang/lib/Analysis/FlowSensitive",
-    "//clang/lib/Analysis/FlowSensitive/Models",
     "//clang/lib/Basic",
     "//clang/lib/Frontend",
     "//clang/lib/Lex",
@@ -17,19 +16,12 @@ unittest("ClangAnalysisFlowSensitiveTests") {
     "//llvm/lib/Testing/Support",
   ]
   sources = [
-    "ChromiumCheckModelTest.cpp",
-    "DataflowAnalysisContextTest.cpp",
-    "DataflowEnvironmentTest.cpp",
-    "DebugSupportTest.cpp",
     "MapLatticeTest.cpp",
-    "MatchSwitchTest.cpp",
     "MultiVarConstantPropagationTest.cpp",
     "SingleVarConstantPropagationTest.cpp",
-    "SolverTest.cpp",
     "TestingSupport.cpp",
     "TestingSupportTest.cpp",
     "TransferTest.cpp",
     "TypeErasedDataflowAnalysisTest.cpp",
-    "UncheckedOptionalAccessModelTest.cpp",
   ]
 }

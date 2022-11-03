@@ -39,6 +39,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SwapByteOrder.h"
@@ -50,7 +51,6 @@
 #include <memory>
 #include <string>
 #include <system_error>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -176,9 +176,10 @@ class InstrProfErrorCategoryType : public std::error_category {
 
 } // end anonymous namespace
 
+static ManagedStatic<InstrProfErrorCategoryType> ErrorCategory;
+
 const std::error_category &llvm::instrprof_category() {
-  static InstrProfErrorCategoryType ErrorCategory;
-  return ErrorCategory;
+  return *ErrorCategory;
 }
 
 namespace {
@@ -464,13 +465,16 @@ Error collectPGOFuncNameStrings(ArrayRef<std::string> NameStrs,
     return WriteStringToResult(0, UncompressedNameStrings);
   }
 
-  SmallVector<uint8_t, 128> CompressedNameStrings;
-  compression::zlib::compress(arrayRefFromStringRef(UncompressedNameStrings),
-                              CompressedNameStrings,
-                              compression::zlib::BestSizeCompression);
+  SmallString<128> CompressedNameStrings;
+  Error E = zlib::compress(StringRef(UncompressedNameStrings),
+                           CompressedNameStrings, zlib::BestSizeCompression);
+  if (E) {
+    consumeError(std::move(E));
+    return make_error<InstrProfError>(instrprof_error::compress_failed);
+  }
 
   return WriteStringToResult(CompressedNameStrings.size(),
-                             toStringRef(CompressedNameStrings));
+                             CompressedNameStrings);
 }
 
 StringRef getPGOFuncNameVarInitializer(GlobalVariable *NameVar) {
@@ -487,7 +491,7 @@ Error collectPGOFuncNameStrings(ArrayRef<GlobalVariable *> NameVars,
     NameStrs.push_back(std::string(getPGOFuncNameVarInitializer(NameVar)));
   }
   return collectPGOFuncNameStrings(
-      NameStrs, compression::zlib::isAvailable() && doCompression, Result);
+      NameStrs, zlib::isAvailable() && doCompression, Result);
 }
 
 Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
@@ -500,20 +504,23 @@ Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
     uint64_t CompressedSize = decodeULEB128(P, &N);
     P += N;
     bool isCompressed = (CompressedSize != 0);
-    SmallVector<uint8_t, 128> UncompressedNameStrings;
+    SmallString<128> UncompressedNameStrings;
     StringRef NameStrings;
     if (isCompressed) {
-      if (!llvm::compression::zlib::isAvailable())
+      if (!llvm::zlib::isAvailable())
         return make_error<InstrProfError>(instrprof_error::zlib_unavailable);
 
-      if (Error E = compression::zlib::uncompress(
-              makeArrayRef(P, CompressedSize), UncompressedNameStrings,
-              UncompressedSize)) {
+      StringRef CompressedNameStrings(reinterpret_cast<const char *>(P),
+                                      CompressedSize);
+      if (Error E =
+              zlib::uncompress(CompressedNameStrings, UncompressedNameStrings,
+                               UncompressedSize)) {
         consumeError(std::move(E));
         return make_error<InstrProfError>(instrprof_error::uncompress_failed);
       }
       P += CompressedSize;
-      NameStrings = toStringRef(UncompressedNameStrings);
+      NameStrings = StringRef(UncompressedNameStrings.data(),
+                              UncompressedNameStrings.size());
     } else {
       NameStrings =
           StringRef(reinterpret_cast<const char *>(P), UncompressedSize);
@@ -1303,77 +1310,5 @@ void OverlapStats::dump(raw_fd_ostream &OS) const {
        << "\n";
   }
 }
-
-namespace IndexedInstrProf {
-// A C++14 compatible version of the offsetof macro.
-template <typename T1, typename T2>
-inline size_t constexpr offsetOf(T1 T2::*Member) {
-  constexpr T2 Object{};
-  return size_t(&(Object.*Member)) - size_t(&Object);
-}
-
-static inline uint64_t read(const unsigned char *Buffer, size_t Offset) {
-  return *reinterpret_cast<const uint64_t *>(Buffer + Offset);
-}
-
-uint64_t Header::formatVersion() const {
-  using namespace support;
-  return endian::byte_swap<uint64_t, little>(Version);
-}
-
-Expected<Header> Header::readFromBuffer(const unsigned char *Buffer) {
-  using namespace support;
-  static_assert(std::is_standard_layout<Header>::value,
-                "The header should be standard layout type since we use offset "
-                "of fields to read.");
-  Header H;
-
-  H.Magic = read(Buffer, offsetOf(&Header::Magic));
-  // Check the magic number.
-  uint64_t Magic = endian::byte_swap<uint64_t, little>(H.Magic);
-  if (Magic != IndexedInstrProf::Magic)
-    return make_error<InstrProfError>(instrprof_error::bad_magic);
-
-  // Read the version.
-  H.Version = read(Buffer, offsetOf(&Header::Version));
-  if (GET_VERSION(H.formatVersion()) >
-      IndexedInstrProf::ProfVersion::CurrentVersion)
-    return make_error<InstrProfError>(instrprof_error::unsupported_version);
-
-  switch (GET_VERSION(H.formatVersion())) {
-    // When a new field is added in the header add a case statement here to
-    // populate it.
-    static_assert(
-        IndexedInstrProf::ProfVersion::CurrentVersion == Version8,
-        "Please update the reading code below if a new field has been added, "
-        "if not add a case statement to fall through to the latest version.");
-  case 8ull:
-    H.MemProfOffset = read(Buffer, offsetOf(&Header::MemProfOffset));
-    LLVM_FALLTHROUGH;
-  default: // Version7 (when the backwards compatible header was introduced).
-    H.HashType = read(Buffer, offsetOf(&Header::HashType));
-    H.HashOffset = read(Buffer, offsetOf(&Header::HashOffset));
-  }
-
-  return H;
-}
-
-size_t Header::size() const {
-  switch (GET_VERSION(formatVersion())) {
-    // When a new field is added to the header add a case statement here to
-    // compute the size as offset of the new field + size of the new field. This
-    // relies on the field being added to the end of the list.
-    static_assert(IndexedInstrProf::ProfVersion::CurrentVersion == Version8,
-                  "Please update the size computation below if a new field has "
-                  "been added to the header, if not add a case statement to "
-                  "fall through to the latest version.");
-  case 8ull:
-    return offsetOf(&Header::MemProfOffset) + sizeof(Header::MemProfOffset);
-  default: // Version7 (when the backwards compatible header was introduced).
-    return offsetOf(&Header::HashOffset) + sizeof(Header::HashOffset);
-  }
-}
-
-} // namespace IndexedInstrProf
 
 } // end namespace llvm

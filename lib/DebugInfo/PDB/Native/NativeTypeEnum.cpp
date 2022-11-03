@@ -9,15 +9,16 @@
 #include "llvm/DebugInfo/PDB/Native/NativeTypeEnum.h"
 
 #include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
-#include "llvm/DebugInfo/CodeView/LazyRandomTypeCollection.h"
 #include "llvm/DebugInfo/CodeView/TypeRecord.h"
-#include "llvm/DebugInfo/PDB/Native/NativeSession.h"
+#include "llvm/DebugInfo/PDB/Native/NativeEnumTypes.h"
 #include "llvm/DebugInfo/PDB/Native/NativeSymbolEnumerator.h"
 #include "llvm/DebugInfo/PDB/Native/NativeTypeBuiltin.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Native/SymbolCache.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeBuiltin.h"
+
+#include "llvm/Support/FormatVariadic.h"
 
 #include <cassert>
 
@@ -67,13 +68,10 @@ NativeEnumEnumEnumerators::NativeEnumEnumEnumerators(
 
   ContinuationIndex = ClassParent.getEnumRecord().FieldList;
   while (ContinuationIndex) {
-    CVType FieldListCVT = Types.getType(*ContinuationIndex);
-    assert(FieldListCVT.kind() == LF_FIELDLIST);
+    CVType FieldList = Types.getType(*ContinuationIndex);
+    assert(FieldList.kind() == LF_FIELDLIST);
     ContinuationIndex.reset();
-    FieldListRecord FieldList;
-    cantFail(TypeDeserializer::deserializeAs<FieldListRecord>(FieldListCVT,
-                                                              FieldList));
-    cantFail(visitMemberRecordStream(FieldList.Data, *this));
+    cantFail(visitMemberRecordStream(FieldList.data(), *this));
   }
 }
 
@@ -125,7 +123,7 @@ NativeTypeEnum::NativeTypeEnum(NativeSession &Session, SymIndexId Id,
     : NativeRawSymbol(Session, PDB_SymType::Enum, Id),
       UnmodifiedType(&UnmodifiedType), Modifiers(std::move(Modifier)) {}
 
-NativeTypeEnum::~NativeTypeEnum() = default;
+NativeTypeEnum::~NativeTypeEnum() {}
 
 void NativeTypeEnum::dump(raw_ostream &OS, int Indent,
                           PdbSymbolIdField ShowIdFields,
@@ -140,7 +138,7 @@ void NativeTypeEnum::dump(raw_ostream &OS, int Indent,
   dumpSymbolField(OS, "name", getName(), Indent);
   dumpSymbolIdField(OS, "typeId", getTypeId(), Indent, Session,
                     PdbSymbolIdField::Type, ShowIdFields, RecurseIdFields);
-  if (Modifiers)
+  if (Modifiers.hasValue())
     dumpSymbolIdField(OS, "unmodifiedTypeId", getUnmodifiedTypeId(), Indent,
                       Session, PdbSymbolIdField::UnmodifiedType, ShowIdFields,
                       RecurseIdFields);
@@ -208,8 +206,6 @@ PDB_BuiltinType NativeTypeEnum::getBuiltinType() const {
     return PDB_BuiltinType::Char16;
   case SimpleTypeKind::Character32:
     return PDB_BuiltinType::Char32;
-  case SimpleTypeKind::Character8:
-    return PDB_BuiltinType::Char8;
   case SimpleTypeKind::Int128:
   case SimpleTypeKind::Int128Oct:
   case SimpleTypeKind::Int16:

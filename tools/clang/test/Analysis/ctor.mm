@@ -439,16 +439,16 @@ namespace ArrayMembers {
 
     NonPOD b = a;
 
-    clang_analyzer_eval(b.values[0].x == 1); // expected-warning{{TRUE}}
-    clang_analyzer_eval(b.values[1].x == 2); // expected-warning{{TRUE}}
-    clang_analyzer_eval(b.values[2].x == 3); // expected-warning{{TRUE}}
+    clang_analyzer_eval(b.values[0].x == 1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(b.values[1].x == 2); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(b.values[2].x == 3); // expected-warning{{UNKNOWN}}
 
     NonPOD c;
     c = b;
 
-    clang_analyzer_eval(c.values[0].x == 1); // expected-warning{{TRUE}}
-    clang_analyzer_eval(c.values[1].x == 2); // expected-warning{{TRUE}}
-    clang_analyzer_eval(c.values[2].x == 3); // expected-warning{{TRUE}}
+    clang_analyzer_eval(c.values[0].x == 1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(c.values[1].x == 2); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(c.values[2].x == 3); // expected-warning{{UNKNOWN}}
   }
 
   struct NestedNonPOD {
@@ -502,16 +502,16 @@ namespace ArrayMembers {
 
     NonPODDefaulted b = a;
 
-    clang_analyzer_eval(b.values[0].x == 1); // expected-warning{{TRUE}}
-    clang_analyzer_eval(b.values[1].x == 2); // expected-warning{{TRUE}}
-    clang_analyzer_eval(b.values[2].x == 3); // expected-warning{{TRUE}}
+    clang_analyzer_eval(b.values[0].x == 1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(b.values[1].x == 2); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(b.values[2].x == 3); // expected-warning{{UNKNOWN}}
 
     NonPODDefaulted c;
     c = b;
 
-    clang_analyzer_eval(c.values[0].x == 1); // expected-warning{{TRUE}}
-    clang_analyzer_eval(c.values[1].x == 2); // expected-warning{{TRUE}}
-    clang_analyzer_eval(c.values[2].x == 3); // expected-warning{{TRUE}}
+    clang_analyzer_eval(c.values[0].x == 1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(c.values[1].x == 2); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(c.values[2].x == 3); // expected-warning{{UNKNOWN}}
   }
 };
 
@@ -581,11 +581,12 @@ namespace ZeroInitialization {
   }
 
   void testArrayNew() {
+    // FIXME: Pending proper implementation of constructors for 'new[]'.
     raw_pair *p = new raw_pair[2]();
-    clang_analyzer_eval(p[0].p1 == 0); // expected-warning{{TRUE}}
-    clang_analyzer_eval(p[0].p2 == 0); // expected-warning{{TRUE}}
-    clang_analyzer_eval(p[1].p1 == 0); // expected-warning{{TRUE}}
-    clang_analyzer_eval(p[1].p2 == 0); // expected-warning{{TRUE}}
+    clang_analyzer_eval(p[0].p1 == 0); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(p[0].p2 == 0); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(p[1].p1 == 0); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(p[1].p2 == 0); // expected-warning{{UNKNOWN}}
   }
 
   struct initializing_pair {

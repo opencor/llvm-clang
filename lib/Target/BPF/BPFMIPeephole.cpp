@@ -24,7 +24,6 @@
 #include "BPFInstrInfo.h"
 #include "BPFTargetMachine.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/Debug.h"
@@ -124,8 +123,9 @@ bool BPFMIPeephole::isPhiFrom32Def(MachineInstr *PhiMI)
     if (!PhiDef)
       return false;
     if (PhiDef->isPHI()) {
-      if (!PhiInsns.insert(PhiDef).second)
+      if (PhiInsns.find(PhiDef) != PhiInsns.end())
         return false;
+      PhiInsns.insert(PhiDef);
       if (!isPhiFrom32Def(PhiDef))
         return false;
     }
@@ -143,8 +143,9 @@ bool BPFMIPeephole::isInsnFrom32Def(MachineInstr *DefInsn)
     return false;
 
   if (DefInsn->isPHI()) {
-    if (!PhiInsns.insert(DefInsn).second)
+    if (PhiInsns.find(DefInsn) != PhiInsns.end())
       return false;
+    PhiInsns.insert(DefInsn);
     if (!isPhiFrom32Def(DefInsn))
       return false;
   } else if (DefInsn->getOpcode() == BPF::COPY) {

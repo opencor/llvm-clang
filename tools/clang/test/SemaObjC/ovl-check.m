@@ -40,7 +40,7 @@ void testTakesNSString(id x) {
   [x testStr:"someStringLiteral"];
 }
 
-id CreateSomething(void);
+id CreateSomething();
 
 @interface TakesCFTypeRef
 - (void) testCFTypeRef:(CFTypeRef)arg;

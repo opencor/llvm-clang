@@ -13,17 +13,12 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCFixup.h"
+#include "llvm/MC/MCFragment.h"
 #include "llvm/Support/Endian.h"
 #include <cstdint>
 
 namespace llvm {
 
-class MCAlignFragment;
-class MCDwarfCallFrameFragment;
-class MCDwarfLineAddrFragment;
-class MCFragment;
-class MCRelaxableFragment;
-class MCSymbol;
 class MCAsmLayout;
 class MCAssembler;
 class MCCFIInstruction;
@@ -36,7 +31,6 @@ class MCSubtargetInfo;
 class MCValue;
 class raw_pwrite_stream;
 class StringRef;
-class raw_ostream;
 
 /// Generic interface to target specific assembler backends.
 class MCAsmBackend {

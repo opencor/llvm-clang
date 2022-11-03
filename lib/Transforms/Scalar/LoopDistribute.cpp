@@ -47,6 +47,7 @@
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
@@ -230,7 +231,7 @@ public:
     // having to update as many def-use and use-def chains.
     for (auto *Inst : reverse(Unused)) {
       if (!Inst->use_empty())
-        Inst->replaceAllUsesWith(PoisonValue::get(Inst->getType()));
+        Inst->replaceAllUsesWith(UndefValue::get(Inst->getType()));
       Inst->eraseFromParent();
     }
   }
@@ -600,9 +601,9 @@ private:
         {LLVMLoopDistributeFollowupAll,
          Part->hasDepCycle() ? LLVMLoopDistributeFollowupSequential
                              : LLVMLoopDistributeFollowupCoincident});
-    if (PartitionID) {
+    if (PartitionID.hasValue()) {
       Loop *NewLoop = Part->getDistributedLoop();
-      NewLoop->setLoopID(PartitionID.value());
+      NewLoop->setLoopID(PartitionID.getValue());
     }
   }
 };
@@ -769,19 +770,19 @@ public:
 
     // Don't distribute the loop if we need too many SCEV run-time checks, or
     // any if it's illegal.
-    const SCEVPredicate &Pred = LAI->getPSE().getPredicate();
+    const SCEVUnionPredicate &Pred = LAI->getPSE().getUnionPredicate();
     if (LAI->hasConvergentOp() && !Pred.isAlwaysTrue()) {
       return fail("RuntimeCheckWithConvergent",
                   "may not insert runtime check with convergent operation");
     }
 
-    if (Pred.getComplexity() > (IsForced.value_or(false)
+    if (Pred.getComplexity() > (IsForced.getValueOr(false)
                                     ? PragmaDistributeSCEVCheckThreshold
                                     : DistributeSCEVCheckThreshold))
       return fail("TooManySCEVRuntimeChecks",
                   "too many SCEV run-time checks needed.\n");
 
-    if (!IsForced.value_or(false) && hasDisableAllTransformsHint(L))
+    if (!IsForced.getValueOr(false) && hasDisableAllTransformsHint(L))
       return fail("HeuristicDisabled", "distribution heuristic disabled");
 
     LLVM_DEBUG(dbgs() << "\nDistributing loop: " << *L << "\n");
@@ -826,7 +827,7 @@ public:
                              {LLVMLoopDistributeFollowupAll,
                               LLVMLoopDistributeFollowupFallback},
                              "llvm.loop.distribute.", true)
-              .value();
+              .getValue();
       LVer.getNonVersionedLoop()->setLoopID(UnversionedLoopID);
     }
 
@@ -858,7 +859,7 @@ public:
   /// Provide diagnostics then \return with false.
   bool fail(StringRef RemarkName, StringRef Message) {
     LLVMContext &Ctx = F->getContext();
-    bool Forced = isForced().value_or(false);
+    bool Forced = isForced().getValueOr(false);
 
     LLVM_DEBUG(dbgs() << "Skipping; " << Message << "\n");
 
@@ -990,7 +991,7 @@ static bool runImpl(Function &F, LoopInfo *LI, DominatorTree *DT,
 
     // If distribution was forced for the specific loop to be
     // enabled/disabled, follow that.  Otherwise use the global flag.
-    if (LDL.isForced().value_or(EnableLoopDistribute))
+    if (LDL.isForced().getValueOr(EnableLoopDistribute))
       Changed |= LDL.processLoop(GetLAA);
   }
 

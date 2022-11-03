@@ -23,7 +23,6 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/VirtualFileSystem.h"
 #include <memory>
 
 using namespace clang;
@@ -33,7 +32,6 @@ namespace {
   class CodeGeneratorImpl : public CodeGenerator {
     DiagnosticsEngine &Diags;
     ASTContext *Ctx;
-    IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS; // Only used for debug info.
     const HeaderSearchOptions &HeaderSearchOpts; // Only used for debug info.
     const PreprocessorOptions &PreprocessorOpts; // Only used for debug info.
     const CodeGenOptions CodeGenOpts;  // Intentionally copied in.
@@ -76,12 +74,11 @@ namespace {
 
   public:
     CodeGeneratorImpl(DiagnosticsEngine &diags, llvm::StringRef ModuleName,
-                      IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
                       const HeaderSearchOptions &HSO,
                       const PreprocessorOptions &PPO, const CodeGenOptions &CGO,
                       llvm::LLVMContext &C,
                       CoverageSourceInfo *CoverageInfo = nullptr)
-        : Diags(diags), Ctx(nullptr), FS(std::move(FS)), HeaderSearchOpts(HSO),
+        : Diags(diags), Ctx(nullptr), HeaderSearchOpts(HSO),
           PreprocessorOpts(PPO), CodeGenOpts(CGO), HandlingTopLevelDecls(0),
           CoverageInfo(CoverageInfo),
           M(new llvm::Module(ExpandModuleName(ModuleName, CGO), C)) {
@@ -137,14 +134,7 @@ namespace {
                               llvm::LLVMContext &C) {
       assert(!M && "Replacing existing Module?");
       M.reset(new llvm::Module(ExpandModuleName(ModuleName, CodeGenOpts), C));
-
-      std::unique_ptr<CodeGenModule> OldBuilder = std::move(Builder);
-
       Initialize(*Ctx);
-
-      if (OldBuilder)
-        OldBuilder->moveLazyEmissionStates(Builder.get());
-
       return M.get();
     }
 
@@ -156,12 +146,7 @@ namespace {
       const auto &SDKVersion = Ctx->getTargetInfo().getSDKVersion();
       if (!SDKVersion.empty())
         M->setSDKVersion(SDKVersion);
-      if (const auto *TVT = Ctx->getTargetInfo().getDarwinTargetVariantTriple())
-        M->setDarwinTargetVariantTriple(TVT->getTriple());
-      if (auto TVSDKVersion =
-              Ctx->getTargetInfo().getDarwinTargetVariantSDKVersion())
-        M->setDarwinTargetVariantSDKVersion(*TVSDKVersion);
-      Builder.reset(new CodeGen::CodeGenModule(Context, FS, HeaderSearchOpts,
+      Builder.reset(new CodeGen::CodeGenModule(Context, HeaderSearchOpts,
                                                PreprocessorOpts, CodeGenOpts,
                                                *M, Diags, CoverageInfo));
 
@@ -359,14 +344,11 @@ llvm::Module *CodeGenerator::StartModule(llvm::StringRef ModuleName,
   return static_cast<CodeGeneratorImpl*>(this)->StartModule(ModuleName, C);
 }
 
-CodeGenerator *
-clang::CreateLLVMCodeGen(DiagnosticsEngine &Diags, llvm::StringRef ModuleName,
-                         IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
-                         const HeaderSearchOptions &HeaderSearchOpts,
-                         const PreprocessorOptions &PreprocessorOpts,
-                         const CodeGenOptions &CGO, llvm::LLVMContext &C,
-                         CoverageSourceInfo *CoverageInfo) {
-  return new CodeGeneratorImpl(Diags, ModuleName, std::move(FS),
-                               HeaderSearchOpts, PreprocessorOpts, CGO, C,
-                               CoverageInfo);
+CodeGenerator *clang::CreateLLVMCodeGen(
+    DiagnosticsEngine &Diags, llvm::StringRef ModuleName,
+    const HeaderSearchOptions &HeaderSearchOpts,
+    const PreprocessorOptions &PreprocessorOpts, const CodeGenOptions &CGO,
+    llvm::LLVMContext &C, CoverageSourceInfo *CoverageInfo) {
+  return new CodeGeneratorImpl(Diags, ModuleName, HeaderSearchOpts,
+                               PreprocessorOpts, CGO, C, CoverageInfo);
 }

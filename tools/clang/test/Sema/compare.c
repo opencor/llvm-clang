@@ -262,7 +262,7 @@ int test2(int i32) {
 }
 
 // PR5887
-void test3(void) {
+void test3() {
   unsigned short x, y;
   unsigned int z;
   if ((x > y ? x : y) > z)
@@ -271,7 +271,7 @@ void test3(void) {
 
 // PR5961
 extern char *ptr4;
-void test4(void) {
+void test4() {
   long value;
   if (value < (unsigned long) &ptr4) // expected-warning {{comparison of integers of different signs}}
     return;
@@ -320,7 +320,7 @@ int rdar8414119_bar(unsigned x) {
 #undef ZERO
 #undef CHECK
 
-int rdar8511238(void) {
+int rdar8511238() {
   enum A { A_foo, A_bar };
   enum A a;
 

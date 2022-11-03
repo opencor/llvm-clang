@@ -11,6 +11,10 @@
 
 namespace llvm {
 
+class User;
+template <typename> struct simplify_type;
+class Value;
+
 void Use::swap(Use &RHS) {
   if (Val == RHS.Val)
     return;

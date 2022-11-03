@@ -9,11 +9,14 @@
 #ifndef LLVM_DEBUGINFO_CODEVIEW_CODEVIEWRECORDIO_H
 #define LLVM_DEBUGINFO_CODEVIEW_CODEVIEWRECORDIO_H
 
+#include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/DebugInfo/CodeView/CodeViewError.h"
+#include "llvm/DebugInfo/CodeView/GUID.h"
+#include "llvm/DebugInfo/CodeView/TypeIndex.h"
 #include "llvm/Support/BinaryStreamReader.h"
 #include "llvm/Support/BinaryStreamWriter.h"
 #include "llvm/Support/Error.h"
@@ -23,12 +26,7 @@
 
 namespace llvm {
 
-template <typename T> class ArrayRef;
-class APSInt;
-
 namespace codeview {
-class TypeIndex;
-struct GUID;
 
 class CodeViewRecordStreamer {
 public:
@@ -248,7 +246,7 @@ private:
     Optional<uint32_t> MaxLength;
 
     Optional<uint32_t> bytesRemaining(uint32_t CurrentOffset) const {
-      if (!MaxLength)
+      if (!MaxLength.hasValue())
         return None;
       assert(CurrentOffset >= BeginOffset);
 

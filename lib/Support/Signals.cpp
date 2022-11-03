@@ -15,6 +15,7 @@
 
 #include "DebugOptions.h"
 
+#include "llvm/ADT/STLArrayExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
@@ -22,14 +23,15 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/FormatAdapters.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Mutex.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Support/raw_ostream.h"
-#include <array>
 #include <vector>
 
 //===----------------------------------------------------------------------===//
@@ -81,20 +83,12 @@ struct CallbackAndCookie {
   enum class Status { Empty, Initializing, Initialized, Executing };
   std::atomic<Status> Flag;
 };
-
 static constexpr size_t MaxSignalHandlerCallbacks = 8;
-
-// A global array of CallbackAndCookie may not compile with
-// -Werror=global-constructors in c++20 and above
-static std::array<CallbackAndCookie, MaxSignalHandlerCallbacks> &
-CallBacksToRun() {
-  static std::array<CallbackAndCookie, MaxSignalHandlerCallbacks> callbacks;
-  return callbacks;
-}
+static CallbackAndCookie CallBacksToRun[MaxSignalHandlerCallbacks];
 
 // Signal-safe.
 void sys::RunSignalHandlers() {
-  for (CallbackAndCookie &RunMe : CallBacksToRun()) {
+  for (CallbackAndCookie &RunMe : CallBacksToRun) {
     auto Expected = CallbackAndCookie::Status::Initialized;
     auto Desired = CallbackAndCookie::Status::Executing;
     if (!RunMe.Flag.compare_exchange_strong(Expected, Desired))
@@ -109,7 +103,7 @@ void sys::RunSignalHandlers() {
 // Signal-safe.
 static void insertSignalHandler(sys::SignalHandlerCallback FnPtr,
                                 void *Cookie) {
-  for (CallbackAndCookie &SetMe : CallBacksToRun()) {
+  for (CallbackAndCookie &SetMe : CallBacksToRun) {
     auto Expected = CallbackAndCookie::Status::Empty;
     auto Desired = CallbackAndCookie::Status::Initializing;
     if (!SetMe.Flag.compare_exchange_strong(Expected, Desired))

@@ -105,15 +105,6 @@
 // RUN:   | FileCheck %s -check-prefix=REFERENCE-TYPES
 //
 // REFERENCE-TYPES:#define __wasm_reference_types__ 1{{$}}
-//
-// RUN: %clang -E -dM %s -o - 2>&1 \
-// RUN:     -target wasm32-unknown-unknown -mextended-const \
-// RUN:   | FileCheck %s -check-prefix=EXTENDED-CONST
-// RUN: %clang -E -dM %s -o - 2>&1 \
-// RUN:     -target wasm64-unknown-unknown -mextended-const \
-// RUN:   | FileCheck %s -check-prefix=EXTENDED-CONST
-//
-// EXTENDED-CONST:#define __wasm_extended_const__ 1{{$}}
 
 // RUN: %clang -E -dM %s -o - 2>&1 \
 // RUN:     -target wasm32-unknown-unknown -mcpu=mvp \
@@ -132,7 +123,6 @@
 // MVP-NOT:#define __wasm_multivalue__
 // MVP-NOT:#define __wasm_tail_call__
 // MVP-NOT:#define __wasm_reference_types__
-// MVP-NOT:#define __wasm_extended_const__
 
 // RUN: %clang -E -dM %s -o - 2>&1 \
 // RUN:     -target wasm32-unknown-unknown -mcpu=bleeding-edge \
@@ -152,7 +142,6 @@
 // BLEEDING-EDGE-NOT:#define __wasm_exception_handling__ 1{{$}}
 // BLEEDING-EDGE-NOT:#define __wasm_multivalue__ 1{{$}}
 // BLEEDING-EDGE-NOT:#define __wasm_reference_types__ 1{{$}}
-// BLEEDING-EDGE-NOT:#define __wasm_extended_const__ 1{{$}}
 
 // RUN: %clang -E -dM %s -o - 2>&1 \
 // RUN:     -target wasm32-unknown-unknown -mcpu=bleeding-edge -mno-simd128 \

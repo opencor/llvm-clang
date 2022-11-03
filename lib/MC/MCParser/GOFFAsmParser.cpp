@@ -6,7 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
+#include "llvm/MC/MCSectionGOFF.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbolGOFF.h"
 
 using namespace llvm;
 
@@ -22,7 +31,7 @@ class GOFFAsmParser : public MCAsmParserExtension {
   }
 
 public:
-  GOFFAsmParser() = default;
+  GOFFAsmParser() {}
 
   void Initialize(MCAsmParser &Parser) override {
     // Call the base implementation.

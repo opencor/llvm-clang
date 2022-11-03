@@ -11,8 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/CodeGen/LiveIntervals.h"
-#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -26,10 +26,12 @@
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/ModuleSlotTracker.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/Support/DataTypes.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -51,7 +53,8 @@ MachineBasicBlock::MachineBasicBlock(MachineFunction &MF, const BasicBlock *B)
     IrrLoopHeaderWeight = B->getIrrLoopHeaderWeight();
 }
 
-MachineBasicBlock::~MachineBasicBlock() = default;
+MachineBasicBlock::~MachineBasicBlock() {
+}
 
 /// Return the MCSymbol for this basic block.
 MCSymbol *MachineBasicBlock::getSymbol() const {
@@ -132,7 +135,7 @@ void ilist_callback_traits<MachineBasicBlock>::addNodeToList(
   // Make sure the instructions have their operands in the reginfo lists.
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   for (MachineInstr &MI : N->instrs())
-    MI.addRegOperandsToUseLists(RegInfo);
+    MI.AddRegOperandsToUseLists(RegInfo);
 }
 
 void ilist_callback_traits<MachineBasicBlock>::removeNodeFromList(
@@ -150,7 +153,7 @@ void ilist_traits<MachineInstr>::addNodeToList(MachineInstr *N) {
   // Add the instruction's register operands to their corresponding
   // use/def lists.
   MachineFunction *MF = Parent->getParent();
-  N->addRegOperandsToUseLists(MF->getRegInfo());
+  N->AddRegOperandsToUseLists(MF->getRegInfo());
   MF->handleInsertion(*N);
 }
 
@@ -162,7 +165,7 @@ void ilist_traits<MachineInstr>::removeNodeFromList(MachineInstr *N) {
   // Remove from the use/def lists.
   if (MachineFunction *MF = N->getMF()) {
     MF->handleRemoval(*N);
-    N->removeRegOperandsFromUseLists(MF->getRegInfo());
+    N->RemoveRegOperandsFromUseLists(MF->getRegInfo());
   }
 
   N->setParent(nullptr);
@@ -451,7 +454,7 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
   if (IrrLoopHeaderWeight && IsStandalone) {
     if (Indexes) OS << '\t';
     OS.indent(2) << "; Irreducible loop header weight: "
-                 << IrrLoopHeaderWeight.value() << '\n';
+                 << IrrLoopHeaderWeight.getValue() << '\n';
   }
 }
 
@@ -913,10 +916,6 @@ bool MachineBasicBlock::isSuccessor(const MachineBasicBlock *MBB) const {
 bool MachineBasicBlock::isLayoutSuccessor(const MachineBasicBlock *MBB) const {
   MachineFunction::const_iterator I(this);
   return std::next(I) == MachineFunction::const_iterator(MBB);
-}
-
-const MachineBasicBlock *MachineBasicBlock::getSingleSuccessor() const {
-  return Successors.size() == 1 ? Successors[0] : nullptr;
 }
 
 MachineBasicBlock *MachineBasicBlock::getFallThrough() {
@@ -1436,7 +1435,7 @@ MachineBasicBlock::getSuccProbability(const_succ_iterator Succ) const {
     // ditribute the complemental of the sum to each unknown probability.
     unsigned KnownProbNum = 0;
     auto Sum = BranchProbability::getZero();
-    for (const auto &P : Probs) {
+    for (auto &P : Probs) {
       if (!P.isUnknown()) {
         Sum += P;
         KnownProbNum++;
@@ -1619,16 +1618,6 @@ MachineBasicBlock::liveout_iterator MachineBasicBlock::liveout_begin() const {
   }
 
   return liveout_iterator(*this, ExceptionPointer, ExceptionSelector, false);
-}
-
-bool MachineBasicBlock::sizeWithoutDebugLargerThan(unsigned Limit) const {
-  unsigned Cntr = 0;
-  auto R = instructionsWithoutDebug(begin(), end());
-  for (auto I = R.begin(), E = R.end(); I != E; ++I) {
-    if (++Cntr > Limit)
-      return true;
-  }
-  return false;
 }
 
 const MBBSectionID MBBSectionID::ColdSectionID(MBBSectionID::SectionType::Cold);

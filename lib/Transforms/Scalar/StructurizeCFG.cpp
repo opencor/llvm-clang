@@ -18,8 +18,10 @@
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/RegionPass.h"
+#include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
@@ -31,6 +33,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Use.h"
+#include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/InitializePasses.h"
@@ -38,6 +41,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
@@ -681,7 +685,7 @@ void StructurizeCFG::simplifyAffectedPhis() {
     Q.DT = DT;
     for (WeakVH VH : AffectedPhis) {
       if (auto Phi = dyn_cast_or_null<PHINode>(VH)) {
-        if (auto NewValue = simplifyInstruction(Phi, Q)) {
+        if (auto NewValue = SimplifyInstruction(Phi, Q)) {
           Phi->replaceAllUsesWith(NewValue);
           Phi->eraseFromParent();
           Changed = true;
@@ -1085,8 +1089,8 @@ bool StructurizeCFG::run(Region *R, DominatorTree *DT) {
   createFlow();
   insertConditions(false);
   insertConditions(true);
-  setPhiValues();
   simplifyConditions();
+  setPhiValues();
   simplifyAffectedPhis();
   rebuildSSA();
 

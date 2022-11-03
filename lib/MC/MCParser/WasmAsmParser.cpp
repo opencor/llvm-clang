@@ -21,11 +21,11 @@
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCAsmParserExtension.h"
-#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolWasm.h"
-#include "llvm/Support/Casting.h"
+#include "llvm/Support/MachineValueType.h"
 
 using namespace llvm;
 
@@ -53,7 +53,6 @@ public:
     this->MCAsmParserExtension::Initialize(*Parser);
 
     addDirectiveHandler<&WasmAsmParser::parseSectionDirectiveText>(".text");
-    addDirectiveHandler<&WasmAsmParser::parseSectionDirectiveData>(".data");
     addDirectiveHandler<&WasmAsmParser::parseSectionDirective>(".section");
     addDirectiveHandler<&WasmAsmParser::parseDirectiveSize>(".size");
     addDirectiveHandler<&WasmAsmParser::parseDirectiveType>(".type");
@@ -88,12 +87,6 @@ public:
 
   bool parseSectionDirectiveText(StringRef, SMLoc) {
     // FIXME: .text currently no-op.
-    return false;
-  }
-
-  bool parseSectionDirectiveData(StringRef, SMLoc) {
-    auto *S = getContext().getObjectFileInfo()->getDataSection();
-    getStreamer().switchSection(S);
     return false;
   }
 
@@ -188,7 +181,7 @@ public:
 
     // TODO: Parse UniqueID
     MCSectionWasm *WS = getContext().getWasmSection(
-        Name, *Kind, Flags, GroupName, MCContext::GenericSectionID);
+        Name, Kind.getValue(), Flags, GroupName, MCContext::GenericSectionID);
 
     if (WS->getSegmentFlags() != Flags)
       Parser->Error(loc, "changed section flags for " + Name +
@@ -201,7 +194,7 @@ public:
       WS->setPassive();
     }
 
-    getStreamer().switchSection(WS);
+    getStreamer().SwitchSection(WS);
     return false;
   }
 

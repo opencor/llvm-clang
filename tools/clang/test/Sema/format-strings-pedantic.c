@@ -5,7 +5,7 @@
 __attribute__((format(printf, 1, 2)))
 int printf(const char *restrict, ...);
 
-int main(void) {
+int main() {
   printf("%p", (int *)0); // expected-warning {{format specifies type 'void *' but the argument has type 'int *'}}
   printf("%p", (void *)0);
 

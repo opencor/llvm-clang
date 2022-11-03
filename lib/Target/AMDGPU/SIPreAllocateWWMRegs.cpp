@@ -18,10 +18,7 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveRegMatrix.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/RegisterClassInfo.h"
-#include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/InitializePasses.h"
 
 using namespace llvm;
@@ -88,6 +85,9 @@ FunctionPass *llvm::createSIPreAllocateWWMRegsPass() {
 }
 
 bool SIPreAllocateWWMRegs::processDef(MachineOperand &MO) {
+  if (!MO.isReg())
+    return false;
+
   Register Reg = MO.getReg();
   if (Reg.isPhysical())
     return false;
@@ -111,6 +111,7 @@ bool SIPreAllocateWWMRegs::processDef(MachineOperand &MO) {
   }
 
   llvm_unreachable("physreg not found for WWM expression");
+  return false;
 }
 
 void SIPreAllocateWWMRegs::rewriteRegs(MachineFunction &MF) {
@@ -141,6 +142,7 @@ void SIPreAllocateWWMRegs::rewriteRegs(MachineFunction &MF) {
   }
 
   SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
+  MachineFrameInfo &FrameInfo = MF.getFrameInfo();
 
   for (unsigned Reg : RegsToRewrite) {
     LIS->removeInterval(Reg);
@@ -148,7 +150,18 @@ void SIPreAllocateWWMRegs::rewriteRegs(MachineFunction &MF) {
     const Register PhysReg = VRM->getPhys(Reg);
     assert(PhysReg != 0);
 
-    MFI->reserveWWMRegister(PhysReg);
+    // Check if PhysReg is already reserved
+    if (!MFI->WWMReservedRegs.count(PhysReg)) {
+      Optional<int> FI;
+      if (!MFI->isEntryFunction()) {
+        // Create a stack object for a possible spill in the function prologue.
+        // Note: Non-CSR VGPR also need this as we may overwrite inactive lanes.
+        const TargetRegisterClass *RC = TRI->getPhysRegClass(PhysReg);
+        FI = FrameInfo.CreateSpillStackObject(TRI->getSpillSize(*RC),
+                                              TRI->getSpillAlign(*RC));
+      }
+      MFI->reserveWWMRegister(PhysReg, FI);
+    }
   }
 
   RegsToRewrite.clear();

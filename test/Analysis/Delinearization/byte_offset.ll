@@ -1,3 +1,4 @@
+; RUN: opt < %s -analyze -enable-new-pm=0 -delinearize | FileCheck %s
 ; RUN: opt < %s -passes='print<delinearization>' -disable-output 2>&1 | FileCheck %s
 
 ; CHECK: AccessFunction: ({0,+,%i2}<%outer.loop> + %unknown)

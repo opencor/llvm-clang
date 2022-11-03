@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm-c/Core.h"
+#include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
@@ -19,10 +20,13 @@
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/CodeGenCWrappers.h"
 #include "llvm/Target/TargetMachine.h"
+#include <cassert>
+#include <cstdlib>
 #include <cstring>
 
 using namespace llvm;
@@ -213,9 +217,7 @@ static LLVMBool LLVMTargetMachineEmit(LLVMTargetMachineRef T, LLVMModuleRef M,
 }
 
 LLVMBool LLVMTargetMachineEmitToFile(LLVMTargetMachineRef T, LLVMModuleRef M,
-                                     const char *Filename,
-                                     LLVMCodeGenFileType codegen,
-                                     char **ErrorMessage) {
+  char* Filename, LLVMCodeGenFileType codegen, char** ErrorMessage) {
   std::error_code EC;
   raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
   if (EC) {

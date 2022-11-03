@@ -17,7 +17,6 @@
 #include "SystemZInstrInfo.h"
 #include "SystemZSubtarget.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 using namespace llvm;
@@ -254,7 +253,7 @@ bool SystemZPostRewrite::selectMBB(MachineBasicBlock &MBB) {
 }
 
 bool SystemZPostRewrite::runOnMachineFunction(MachineFunction &MF) {
-  TII = MF.getSubtarget<SystemZSubtarget>().getInstrInfo();
+  TII = static_cast<const SystemZInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
   bool Modified = false;
   for (auto &MBB : MF)

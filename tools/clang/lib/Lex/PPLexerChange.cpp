@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Basic/FileManager.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/LexDiagnostic.h"
@@ -65,7 +66,7 @@ PreprocessorLexer *Preprocessor::getCurrentFileLexer() const {
 
 /// EnterSourceFile - Add a source file to the top of the include stack and
 /// start lexing tokens from it instead of the current buffer.
-bool Preprocessor::EnterSourceFile(FileID FID, ConstSearchDirIterator CurDir,
+bool Preprocessor::EnterSourceFile(FileID FID, const DirectoryLookup *CurDir,
                                    SourceLocation Loc,
                                    bool IsFirstIncludeOfFile) {
   assert(!CurTokenLexer && "Cannot #include a file inside a macro!");
@@ -91,27 +92,15 @@ bool Preprocessor::EnterSourceFile(FileID FID, ConstSearchDirIterator CurDir,
         CodeCompletionFileLoc.getLocWithOffset(CodeCompletionOffset);
   }
 
-  Lexer *TheLexer = new Lexer(FID, *InputFile, *this, IsFirstIncludeOfFile);
-  if (getPreprocessorOpts().DependencyDirectivesForFile &&
-      FID != PredefinesFileID) {
-    if (Optional<FileEntryRef> File = SourceMgr.getFileEntryRefForID(FID)) {
-      if (Optional<ArrayRef<dependency_directives_scan::Directive>>
-              DepDirectives =
-                  getPreprocessorOpts().DependencyDirectivesForFile(*File)) {
-        TheLexer->DepDirectives = *DepDirectives;
-      }
-    }
-  }
-
-  EnterSourceFileWithLexer(TheLexer, CurDir);
+  EnterSourceFileWithLexer(
+      new Lexer(FID, *InputFile, *this, IsFirstIncludeOfFile), CurDir);
   return false;
 }
 
 /// EnterSourceFileWithLexer - Add a source file to the top of the include stack
 ///  and start lexing tokens from it instead of the current buffer.
 void Preprocessor::EnterSourceFileWithLexer(Lexer *TheLexer,
-                                            ConstSearchDirIterator CurDir) {
-  PreprocessorLexer *PrevPPLexer = CurPPLexer;
+                                            const DirectoryLookup *CurDir) {
 
   // Add the current lexer to the include stack.
   if (CurPPLexer || CurTokenLexer)
@@ -122,26 +111,15 @@ void Preprocessor::EnterSourceFileWithLexer(Lexer *TheLexer,
   CurDirLookup = CurDir;
   CurLexerSubmodule = nullptr;
   if (CurLexerKind != CLK_LexAfterModuleImport)
-    CurLexerKind = TheLexer->isDependencyDirectivesLexer()
-                       ? CLK_DependencyDirectivesLexer
-                       : CLK_Lexer;
+    CurLexerKind = CLK_Lexer;
 
   // Notify the client, if desired, that we are in a new source file.
   if (Callbacks && !CurLexer->Is_PragmaLexer) {
     SrcMgr::CharacteristicKind FileType =
        SourceMgr.getFileCharacteristic(CurLexer->getFileLoc());
 
-    FileID PrevFID;
-    SourceLocation EnterLoc;
-    if (PrevPPLexer) {
-      PrevFID = PrevPPLexer->getFileID();
-      EnterLoc = PrevPPLexer->getSourceLocation();
-    }
-    Callbacks->FileChanged(CurLexer->getFileLoc(), PPCallbacks::EnterFile,
-                           FileType, PrevFID);
-    Callbacks->LexedFileChanged(CurLexer->getFileID(),
-                                PPCallbacks::LexedFileChangeReason::EnterFile,
-                                FileType, PrevFID, EnterLoc);
+    Callbacks->FileChanged(CurLexer->getFileLoc(),
+                           PPCallbacks::EnterFile, FileType);
   }
 }
 
@@ -325,10 +303,46 @@ void Preprocessor::diagnoseMissingHeaderInUmbrellaDir(const Module &Mod) {
   }
 }
 
+void Preprocessor::ResolvePragmaIncludeInstead(
+    const SourceLocation Location) const {
+  assert(Location.isValid());
+  if (CurLexer == nullptr)
+    return;
+
+  if (SourceMgr.isInSystemHeader(Location))
+    return;
+
+  for (const auto &Include : CurLexer->getIncludeHistory()) {
+    StringRef Filename = Include.getKey();
+    const PreprocessorLexer::IncludeInfo &Info = Include.getValue();
+    ArrayRef<SmallString<32>> Aliases =
+        HeaderInfo.getFileInfo(Info.File).Aliases.getArrayRef();
+
+    if (Aliases.empty())
+      continue;
+
+    switch (Aliases.size()) {
+    case 1:
+      Diag(Info.Location, diag::err_pragma_include_instead_system_reserved)
+          << Filename << 0 << Aliases[0];
+      continue;
+    case 2:
+      Diag(Info.Location, diag::err_pragma_include_instead_system_reserved)
+          << Filename << 1 << Aliases[0] << Aliases[1];
+      continue;
+    default: {
+      Diag(Info.Location, diag::err_pragma_include_instead_system_reserved)
+          << Filename << 2 << ("{'" + llvm::join(Aliases, "', '") + "'}");
+    }
+    }
+  }
+}
+
 /// HandleEndOfFile - This callback is invoked when the lexer hits the end of
 /// the current file.  This either returns the EOF token or pops a level off
 /// the include stack and keeps going.
-bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
+bool Preprocessor::HandleEndOfFile(Token &Result, SourceLocation EndLoc,
+                                   bool isEndOfMacro) {
   assert(!CurTokenLexer &&
          "Ending a file when currently in a macro!");
 
@@ -398,6 +412,9 @@ bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
     }
   }
 
+  if (EndLoc.isValid())
+    ResolvePragmaIncludeInstead(EndLoc);
+
   // Complain about reaching a true EOF within arc_cf_code_audited.
   // We don't want to complain about reaching the end of a macro
   // instantiation or a _Pragma.
@@ -415,13 +432,8 @@ bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
   // instantiation or a _Pragma.
   if (PragmaAssumeNonNullLoc.isValid() &&
       !isEndOfMacro && !(CurLexer && CurLexer->Is_PragmaLexer)) {
-    // If we're at the end of generating a preamble, we should record the
-    // unterminated \#pragma clang assume_nonnull so we can restore it later
-    // when the preamble is loaded into the main file.
-    if (isRecordingPreamble() && isInPrimaryFile())
-      PreambleRecordedPragmaAssumeNonNullLoc = PragmaAssumeNonNullLoc;
-    else
-      Diag(PragmaAssumeNonNullLoc, diag::err_pp_eof_in_assume_nonnull);
+    Diag(PragmaAssumeNonNullLoc, diag::err_pp_eof_in_assume_nonnull);
+
     // Recover by leaving immediately.
     PragmaAssumeNonNullLoc = SourceLocation();
   }
@@ -496,23 +508,16 @@ bool Preprocessor::HandleEndOfFile(Token &Result, bool isEndOfMacro) {
 
     // Notify the client, if desired, that we are in a new source file.
     if (Callbacks && !isEndOfMacro && CurPPLexer) {
-      SourceLocation Loc = CurPPLexer->getSourceLocation();
       SrcMgr::CharacteristicKind FileType =
-          SourceMgr.getFileCharacteristic(Loc);
-      Callbacks->FileChanged(Loc, PPCallbacks::ExitFile, FileType, ExitedFID);
-      Callbacks->LexedFileChanged(CurPPLexer->getFileID(),
-                                  PPCallbacks::LexedFileChangeReason::ExitFile,
-                                  FileType, ExitedFID, Loc);
+        SourceMgr.getFileCharacteristic(CurPPLexer->getSourceLocation());
+      Callbacks->FileChanged(CurPPLexer->getSourceLocation(),
+                             PPCallbacks::ExitFile, FileType, ExitedFID);
     }
 
-    // Restore conditional stack as well as the recorded
-    // \#pragma clang assume_nonnull from the preamble right after exiting
-    // from the predefines file.
-    if (ExitedFromPredefinesFile) {
+    // Restore conditional stack from the preamble right after exiting from the
+    // predefines file.
+    if (ExitedFromPredefinesFile)
       replayPreambleConditionalStack();
-      if (PreambleRecordedPragmaAssumeNonNullLoc.isValid())
-        PragmaAssumeNonNullLoc = PreambleRecordedPragmaAssumeNonNullLoc;
-    }
 
     if (!isEndOfMacro && CurPPLexer && FoundPCHThroughHeader &&
         (isInPrimaryFile() ||
@@ -598,7 +603,7 @@ bool Preprocessor::HandleEndOfTokenLexer(Token &Result) {
     TokenLexerCache[NumCachedTokenLexers++] = std::move(CurTokenLexer);
 
   // Handle this like a #include file being popped off the stack.
-  return HandleEndOfFile(Result, true);
+  return HandleEndOfFile(Result, {}, true);
 }
 
 /// RemoveTopOfLexerStack - Pop the current lexer/macro exp off the top of the

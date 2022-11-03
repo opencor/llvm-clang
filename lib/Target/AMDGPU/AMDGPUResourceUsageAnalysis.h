@@ -24,7 +24,7 @@ class GCNSubtarget;
 class MachineFunction;
 class TargetMachine;
 
-struct AMDGPUResourceUsageAnalysis : public ModulePass {
+struct AMDGPUResourceUsageAnalysis : public CallGraphSCCPass {
   static char ID;
 
 public:
@@ -50,14 +50,14 @@ public:
     int32_t getTotalNumVGPRs(const GCNSubtarget &ST) const;
   };
 
-  AMDGPUResourceUsageAnalysis() : ModulePass(ID) {}
+  AMDGPUResourceUsageAnalysis() : CallGraphSCCPass(ID) {}
 
-  bool doInitialization(Module &M) override {
+  bool runOnSCC(CallGraphSCC &SCC) override;
+
+  bool doInitialization(CallGraph &CG) override {
     CallGraphResourceInfo.clear();
-    return ModulePass::doInitialization(M);
+    return CallGraphSCCPass::doInitialization(CG);
   }
-
-  bool runOnModule(Module &M) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineModuleInfoWrapperPass>();

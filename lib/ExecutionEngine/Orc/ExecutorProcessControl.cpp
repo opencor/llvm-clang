@@ -19,9 +19,9 @@
 namespace llvm {
 namespace orc {
 
-ExecutorProcessControl::MemoryAccess::~MemoryAccess() = default;
+ExecutorProcessControl::MemoryAccess::~MemoryAccess() {}
 
-ExecutorProcessControl::~ExecutorProcessControl() = default;
+ExecutorProcessControl::~ExecutorProcessControl() {}
 
 SelfExecutorProcessControl::SelfExecutorProcessControl(
     std::shared_ptr<SymbolStringPool> SSP, std::unique_ptr<TaskDispatcher> D,

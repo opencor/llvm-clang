@@ -92,10 +92,9 @@ static cl::opt<std::string>
          cl::desc("Target a specific cpu type (-mcpu=help for details)"),
          cl::value_desc("cpu-name"), cl::cat(ToolOptions), cl::init("native"));
 
-static cl::list<std::string>
-    MATTRS("mattr", cl::CommaSeparated,
-           cl::desc("Target specific attributes (-mattr=help for details)"),
-           cl::value_desc("a1,+a2,-a3,..."), cl::cat(ToolOptions));
+static cl::opt<std::string> MATTR("mattr",
+                                  cl::desc("Additional target features."),
+                                  cl::cat(ToolOptions));
 
 static cl::opt<bool> PrintJson("json",
                                cl::desc("Print the output in json format"),
@@ -347,17 +346,8 @@ int main(int argc, char **argv) {
   if (MCPU == "native")
     MCPU = std::string(llvm::sys::getHostCPUName());
 
-  // Package up features to be passed to target/subtarget
-  std::string FeaturesStr;
-  if (MATTRS.size()) {
-    SubtargetFeatures Features;
-    for (std::string &MAttr : MATTRS)
-      Features.AddFeature(MAttr);
-    FeaturesStr = Features.getString();
-  }
-
   std::unique_ptr<MCSubtargetInfo> STI(
-      TheTarget->createMCSubtargetInfo(TripleName, MCPU, FeaturesStr));
+      TheTarget->createMCSubtargetInfo(TripleName, MCPU, MATTR));
   assert(STI && "Unable to create subtarget info!");
   if (!STI->isCPUStringValid(MCPU))
     return 1;
@@ -475,21 +465,6 @@ int main(int argc, char **argv) {
 
   const MCSchedModel &SM = STI->getSchedModel();
 
-  std::unique_ptr<mca::InstrPostProcess> IPP;
-  if (!DisableCustomBehaviour) {
-    // TODO: It may be a good idea to separate CB and IPP so that they can
-    // be used independently of each other. What I mean by this is to add
-    // an extra command-line arg --disable-ipp so that CB and IPP can be
-    // toggled without needing to toggle both of them together.
-    IPP = std::unique_ptr<mca::InstrPostProcess>(
-        TheTarget->createInstrPostProcess(*STI, *MCII));
-  }
-  if (!IPP) {
-    // If the target doesn't have its own IPP implemented (or the -disable-cb
-    // flag is set) then we use the base class (which does nothing).
-    IPP = std::make_unique<mca::InstrPostProcess>(*STI, *MCII);
-  }
-
   // Create an instruction builder.
   mca::InstrBuilder IB(*STI, *MCII, *MRI, MCIA.get());
 
@@ -504,7 +479,7 @@ int main(int argc, char **argv) {
   unsigned RegionIdx = 0;
 
   std::unique_ptr<MCCodeEmitter> MCE(
-      TheTarget->createMCCodeEmitter(*MCII, Ctx));
+      TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
   assert(MCE && "Unable to create code emitter!");
 
   std::unique_ptr<MCAsmBackend> MAB(TheTarget->createMCAsmBackend(
@@ -523,7 +498,16 @@ int main(int argc, char **argv) {
     ArrayRef<MCInst> Insts = Region->getInstructions();
     mca::CodeEmitter CE(*STI, *MAB, *MCE, Insts);
 
-    IPP->resetState();
+    std::unique_ptr<mca::InstrPostProcess> IPP;
+    if (!DisableCustomBehaviour) {
+      IPP = std::unique_ptr<mca::InstrPostProcess>(
+          TheTarget->createInstrPostProcess(*STI, *MCII));
+    }
+    if (!IPP)
+      // If the target doesn't have its own IPP implemented (or the
+      // -disable-cb flag is set) then we use the base class
+      // (which does nothing).
+      IPP = std::make_unique<mca::InstrPostProcess>(*STI, *MCII);
 
     SmallVector<std::unique_ptr<mca::Instruction>> LoweredSequence;
     for (const MCInst &MCI : Insts) {
@@ -552,8 +536,7 @@ int main(int argc, char **argv) {
       LoweredSequence.emplace_back(std::move(Inst.get()));
     }
 
-    mca::CircularSourceMgr S(LoweredSequence,
-                             PrintInstructionTables ? 1 : Iterations);
+    mca::SourceMgr S(LoweredSequence, PrintInstructionTables ? 1 : Iterations);
 
     if (PrintInstructionTables) {
       //  Create a pipeline, stages, and a printer.

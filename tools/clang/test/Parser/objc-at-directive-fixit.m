@@ -5,7 +5,7 @@
 
 void bar(int x);
 
-void f(void) {
+void f() {
   @try { }
   @finally { }
   @autoreleasepool { }

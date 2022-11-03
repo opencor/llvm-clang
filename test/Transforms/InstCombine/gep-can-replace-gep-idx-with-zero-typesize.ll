@@ -1,4 +1,4 @@
-; RUN: opt -S -passes=instcombine < %s
+; RUN: opt -S -instcombine < %s
 
 ; This regression test is verifying that the optimization defined by
 ; canReplaceGEPIdxWithZero, which replaces a GEP index with zero iff we can show

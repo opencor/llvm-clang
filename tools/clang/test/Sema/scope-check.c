@@ -17,7 +17,7 @@ int test2(int x) {
 
 void test3clean(int*);
 
-int test3(void) {
+int test3() {
   goto L;            // expected-error{{cannot jump from this goto statement to its label}}
 int a __attribute((cleanup(test3clean))); // expected-note {{jump bypasses initialization of variable with __attribute__((cleanup))}}
 L:
@@ -41,7 +41,7 @@ L:
   return sizeof a;
 }
 
-int test6(void) { 
+int test6() { 
   // just plain invalid.
   goto x;  // expected-error {{use of undeclared label 'x'}}
 }

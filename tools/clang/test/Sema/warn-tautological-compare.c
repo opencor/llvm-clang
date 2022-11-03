@@ -8,10 +8,10 @@ struct {
 } c;
 const char str[] = "text";
 
-void ignore(void) {
+void ignore() {
   if (!a) {}
 }
-void test(void) {
+void test() {
   if (!b) {} // expected-warning {{address of array 'b' will always evaluate to 'true'}}
   if (b == 0) {} // expected-warning {{comparison of array 'b' equal to a null pointer is always false}}
   if (!c.x) {} // expected-warning {{address of array 'c.x' will always evaluate to 'true'}}
@@ -21,7 +21,7 @@ void test(void) {
 }
 
 int array[2];
-int test1(void)
+int test1()
 {
   if (!array) { // expected-warning {{address of array 'array' will always evaluate to 'true'}}
     return array[0];
@@ -51,7 +51,7 @@ int test2(int* pointer, char ch, void * pv) {
    return 1;
 }
 
-void test3(void) {
+void test3() {
    if (array) { } // expected-warning {{address of array 'array' will always evaluate to 'true'}}
    if (array != 0) {} // expected-warning {{comparison of array 'array' not equal to a null pointer is always true}}
    if (!array) { } // expected-warning {{address of array 'array' will always evaluate to 'true'}}
@@ -85,7 +85,7 @@ void _HTTPClientErrorHandler(int me)
   SAVE_READ(&me);
 }
 
-void test_conditional_operator(void) {
+void test_conditional_operator() {
   int x;
   x = b ? 1 : 0;     // expected-warning {{address of array}}
   x = c.x ? 1 : 0;   // expected-warning {{address of array}}

@@ -76,6 +76,5 @@ GloballyHashedType::hashType(ArrayRef<uint8_t> RecordData,
   auto TrailingBytes = RecordData.drop_front(Off);
   S.update(TrailingBytes);
 
-  std::array<uint8_t, 20> Hash = S.final();
-  return {ArrayRef<uint8_t>(Hash).take_back(8)};
+  return {S.final().take_back(8)};
 }

@@ -92,7 +92,7 @@ public:
   // When this parameter is set to true, the checker assumes all
   // methods that return NSStrings are unlocalized. Thus, more false
   // positives will be reported.
-  bool IsAggressive = false;
+  DefaultBool IsAggressive;
 
   void checkPreObjCMessage(const ObjCMethodCall &msg, CheckerContext &C) const;
   void checkPostObjCMessage(const ObjCMethodCall &msg, CheckerContext &C) const;
@@ -1005,7 +1005,7 @@ NonLocalizedStringBRVisitor::VisitNode(const ExplodedNode *Succ,
     return nullptr;
 
   Optional<StmtPoint> Point = Succ->getLocation().getAs<StmtPoint>();
-  if (!Point)
+  if (!Point.hasValue())
     return nullptr;
 
   auto *LiteralExpr = dyn_cast<ObjCStringLiteral>(Point->getStmt());
@@ -1145,8 +1145,8 @@ void EmptyLocalizationContextChecker::MethodCrawler::VisitObjCMessageExpr(
       Mgr.getSourceManager().getBufferOrNone(SLInfo.first, SL);
   if (!BF)
     return;
-  LangOptions LangOpts;
-  Lexer TheLexer(SL, LangOpts, BF->getBufferStart(),
+
+  Lexer TheLexer(SL, LangOptions(), BF->getBufferStart(),
                  BF->getBufferStart() + SLInfo.second, BF->getBufferEnd());
 
   Token I;

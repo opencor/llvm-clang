@@ -138,11 +138,7 @@ def GetOptionalValue(valobj):
 
 def OptionalSummaryProvider(valobj, internal_dict):
     val = GetOptionalValue(valobj)
-    if val is None:
-        return 'None'
-    if val.summary:
-        return val.summary
-    return ''
+    return val.summary if val else 'None'
 
 class OptionalSynthProvider:
     """Provides deref support to llvm::Optional<T>"""

@@ -62,7 +62,7 @@ extern NSString *const NSUndoManagerCheckpointNotification;
 // Test cases.
 //===----------------------------------------------------------------------===//
 
-unsigned f1(void) {
+unsigned f1() {
   NSString *aString;
   return [aString length]; // expected-warning {{Receiver in message expression is an uninitialized value [core.CallAndMessage]}}
 }

@@ -453,8 +453,8 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
       bool IsCorrectedToColon = false;
       bool *CorrectionFlagPtr = ColonIsSacred ? &IsCorrectedToColon : nullptr;
       if (Actions.ActOnCXXNestedNameSpecifier(
-              getCurScope(), IdInfo, EnteringContext, SS, CorrectionFlagPtr,
-              OnlyNamespace)) {
+              getCurScope(), IdInfo, EnteringContext, SS, false,
+              CorrectionFlagPtr, OnlyNamespace)) {
         // Identifier is not recognized as a nested name, but we can have
         // mistyped '::' instead of ':'.
         if (CorrectionFlagPtr && IsCorrectedToColon) {
@@ -1248,7 +1248,7 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
 
   // Parse lambda-declarator[opt].
   DeclSpec DS(AttrFactory);
-  Declarator D(DS, ParsedAttributesView::none(), DeclaratorContext::LambdaExpr);
+  Declarator D(DS, DeclaratorContext::LambdaExpr);
   TemplateParameterDepthRAII CurTemplateDepthTracker(TemplateParameterDepth);
   Actions.PushLambdaScope();
 
@@ -1355,8 +1355,7 @@ ExprResult Parser::ParseLambdaExpressionAfterIntroducer(
           DeclEndLoc = ESpecRange.getEnd();
 
         // Parse attribute-specifier[opt].
-        if (MaybeParseCXX11Attributes(Attr))
-          DeclEndLoc = Attr.Range.getEnd();
+        MaybeParseCXX11Attributes(Attr, &DeclEndLoc);
 
         // Parse OpenCL addr space attribute.
         if (Tok.isOneOf(tok::kw___private, tok::kw___global, tok::kw___local,
@@ -1523,8 +1522,7 @@ ExprResult Parser::ParseCXXCasts() {
   ParseSpecifierQualifierList(DS);
 
   // Parse the abstract-declarator, if present.
-  Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                            DeclaratorContext::TypeName);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::TypeName);
   ParseDeclarator(DeclaratorInfo);
 
   SourceLocation RAngleBracketLoc = Tok.getLocation();
@@ -1850,8 +1848,7 @@ ExprResult Parser::ParseCXXThis() {
 /// In C++1z onwards, the type specifier can also be a template-name.
 ExprResult
 Parser::ParseCXXTypeConstructExpression(const DeclSpec &DS) {
-  Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                            DeclaratorContext::FunctionalCast);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::FunctionalCast);
   ParsedType TypeRep = Actions.ActOnTypeName(getCurScope(), DeclaratorInfo).get();
 
   assert((Tok.is(tok::l_paren) ||
@@ -1915,7 +1912,7 @@ Parser::ParseCXXTypeConstructExpression(const DeclSpec &DS) {
 
 Parser::DeclGroupPtrTy
 Parser::ParseAliasDeclarationInInitStatement(DeclaratorContext Context,
-                                             ParsedAttributes &Attrs) {
+                                             ParsedAttributesWithRange &Attrs) {
   assert(Tok.is(tok::kw_using) && "Expected using");
   assert((Context == DeclaratorContext::ForInit ||
           Context == DeclaratorContext::SelectionInit) &&
@@ -1994,7 +1991,7 @@ Parser::ParseCXXCondition(StmtResult *InitStmt, SourceLocation Loc,
     return Sema::ConditionError();
   }
 
-  ParsedAttributes attrs(AttrFactory);
+  ParsedAttributesWithRange attrs(AttrFactory);
   MaybeParseCXX11Attributes(attrs);
 
   const auto WarnOnInit = [this, &CK] {
@@ -2050,11 +2047,9 @@ Parser::ParseCXXCondition(StmtResult *InitStmt, SourceLocation Loc,
     if (Tok.is(tok::kw_using))
       DG = ParseAliasDeclarationInInitStatement(
           DeclaratorContext::SelectionInit, attrs);
-    else {
-      ParsedAttributes DeclSpecAttrs(AttrFactory);
+    else
       DG = ParseSimpleDeclaration(DeclaratorContext::SelectionInit, DeclEnd,
-                                  attrs, DeclSpecAttrs, /*RequireSemi=*/true);
-    }
+                                  attrs, /*RequireSemi=*/true);
     *InitStmt = Actions.ActOnDeclStmt(DG, DeclStart, DeclEnd);
     return ParseCXXCondition(nullptr, Loc, CK, MissingOK);
   }
@@ -2065,9 +2060,8 @@ Parser::ParseCXXCondition(StmtResult *InitStmt, SourceLocation Loc,
     // permitted here.
     assert(FRI && "should not parse a for range declaration here");
     SourceLocation DeclStart = Tok.getLocation(), DeclEnd;
-    ParsedAttributes DeclSpecAttrs(AttrFactory);
-    DeclGroupPtrTy DG = ParseSimpleDeclaration(
-        DeclaratorContext::ForInit, DeclEnd, attrs, DeclSpecAttrs, false, FRI);
+    DeclGroupPtrTy DG = ParseSimpleDeclaration(DeclaratorContext::ForInit,
+                                               DeclEnd, attrs, false, FRI);
     FRI->LoopVar = Actions.ActOnDeclStmt(DG, DeclStart, Tok.getLocation());
     assert((FRI->ColonLoc.isValid() || !DG) &&
            "cannot find for range declaration");
@@ -2084,10 +2078,11 @@ Parser::ParseCXXCondition(StmtResult *InitStmt, SourceLocation Loc,
 
   // type-specifier-seq
   DeclSpec DS(AttrFactory);
+  DS.takeAttributesFrom(attrs);
   ParseSpecifierQualifierList(DS, AS_none, DeclSpecContext::DSC_condition);
 
   // declarator
-  Declarator DeclaratorInfo(DS, attrs, DeclaratorContext::Condition);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::Condition);
   ParseDeclarator(DeclaratorInfo);
 
   // simple-asm-expr[opt]
@@ -2235,9 +2230,6 @@ void Parser::ParseCXXSimpleTypeSpecifier(DeclSpec &DS) {
     break;
   case tok::kw_void:
     DS.SetTypeSpecType(DeclSpec::TST_void, Loc, PrevSpec, DiagID, Policy);
-    break;
-  case tok::kw_auto:
-    DS.SetTypeSpecType(DeclSpec::TST_auto, Loc, PrevSpec, DiagID, Policy);
     break;
   case tok::kw_char:
     DS.SetTypeSpecType(DeclSpec::TST_char, Loc, PrevSpec, DiagID, Policy);
@@ -2740,8 +2732,7 @@ bool Parser::ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
 
   // Parse the conversion-declarator, which is merely a sequence of
   // ptr-operators.
-  Declarator D(DS, ParsedAttributesView::none(),
-               DeclaratorContext::ConversionId);
+  Declarator D(DS, DeclaratorContext::ConversionId);
   ParseDeclaratorInternal(D, /*DirectDeclParser=*/nullptr);
 
   // Finish up the type.
@@ -3099,8 +3090,7 @@ Parser::ParseCXXNewExpression(bool UseGlobal, SourceLocation Start) {
 
   SourceRange TypeIdParens;
   DeclSpec DS(AttrFactory);
-  Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                            DeclaratorContext::CXXNew);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::CXXNew);
   if (Tok.is(tok::l_paren)) {
     // If it turns out to be a placement, we change the type location.
     BalancedDelimiterTracker T(*this, tok::l_paren);
@@ -3951,8 +3941,7 @@ Parser::ParseCXXAmbiguousParenExpression(ParenParseOption &ExprType,
   if (ParseAs >= CompoundLiteral) {
     // Parse the type declarator.
     DeclSpec DS(AttrFactory);
-    Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                              DeclaratorContext::TypeName);
+    Declarator DeclaratorInfo(DS, DeclaratorContext::TypeName);
     {
       ColonProtectionRAIIObject InnerColonProtection(*this);
       ParseSpecifierQualifierList(DS);
@@ -4030,8 +4019,7 @@ ExprResult Parser::ParseBuiltinBitCast() {
   ParseSpecifierQualifierList(DS);
 
   // Parse the abstract-declarator, if present.
-  Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
-                            DeclaratorContext::TypeName);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::TypeName);
   ParseDeclarator(DeclaratorInfo);
 
   if (ExpectAndConsume(tok::comma)) {

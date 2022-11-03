@@ -1,9 +1,9 @@
-// RUN: %clang_cc1 -fsyntax-only -Wno-strict-prototypes -verify %s -fblocks
-void donotwarn(void);
+// RUN: %clang_cc1 -fsyntax-only -verify %s -fblocks
+void donotwarn();
 
 int (^IFP) ();
 int (^II) (int);
-int test1(void) {
+int test1() {
   int (^PFR) (int) = 0; // OK
   PFR = II;             // OK
 
@@ -44,7 +44,7 @@ int test2(double (^S)()) {
 int^ x; // expected-error {{block pointer to non-function type is invalid}}
 int^^ x1; // expected-error {{block pointer to non-function type is invalid}} expected-error {{block pointer to non-function type is invalid}}
 
-void test3(void) {
+void test3() {
   char *^ y; // expected-error {{block pointer to non-function type is invalid}}
 }
 
@@ -72,7 +72,7 @@ void test5() {
 }
 
 // rdar://6405429 - __func__ in a block refers to the containing function name.
-const char*test6(void) {
+const char*test6() {
   return ^{
     return __func__;
   } ();
@@ -85,12 +85,12 @@ int test7(void (^p)()) {
 }
 
 
-void test8(void) {
+void test8() {
 somelabel:
   ^{ goto somelabel; }();   // expected-error {{use of undeclared label 'somelabel'}}
 }
 
-void test9(void) {
+void test9() {
   goto somelabel;       // expected-error {{use of undeclared label 'somelabel'}}
   ^{ somelabel: ; }();
 }
@@ -126,7 +126,7 @@ void *test13 = ^{
   };
 };
 
-void test14(void) {
+void test14() {
   int X = 32;
   static void *P = ^{  // expected-error {{initializer element is not a compile-time constant}}
 
@@ -143,7 +143,7 @@ void foo(long (^comp)()) { // expected-note{{passing argument to parameter 'comp
 }
 
 void (^test15f)(void);
-void test15(void) {
+void test15() {
   foo(^{ return LESS; }); // expected-error {{incompatible block pointer types passing 'int (^)(void)' to parameter of type 'long (^)()'}}
 }
 
@@ -159,7 +159,7 @@ void test16(__block int i) { // expected-error {{__block attribute not allowed, 
 
 void f();
 
-void test17(void) {
+void test17() {
   void (^bp)(int);
   void (*rp)(int);
   void (^bp1)();
@@ -183,13 +183,13 @@ void test17(void) {
   (void)(0 < bp); // expected-error {{invalid operands to binary expression}}
 }
 
-void test18(void) {
+void test18() {
   void (^const  blockA)(void) = ^{ };  // expected-note {{variable 'blockA' declared const here}}
   blockA = ^{ }; // expected-error {{cannot assign to variable 'blockA' with const-qualified type 'void (^const)(void)}}
 }
 
 // rdar://7072507
-int test19(void) {
+int test19() {
   goto L0;       // expected-error {{cannot jump}}
   
   __block int x; // expected-note {{jump bypasses setup of __block variable}}
@@ -200,7 +200,7 @@ L0:
 }
 
 // radr://7438948
-void test20(void) {
+void test20() {
   int n = 7;
   int vla[n]; // expected-note {{declared here}}
   int (*vm)[n] = 0; // expected-note {{declared here}}
@@ -212,7 +212,7 @@ void test20(void) {
 }
 
 // radr://7438948
-void test21(void) {
+void test21() {
   int a[7]; // expected-note {{declared here}}
   __block int b[10]; // expected-note {{declared here}}
   a[1] = 1;

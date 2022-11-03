@@ -160,7 +160,6 @@ private:
     NKI_Attr,
 #define ATTR(A) NKI_##A##Attr,
 #include "clang/Basic/AttrList.inc"
-    NKI_ObjCProtocolLoc,
     NKI_NumberOfKinds
   };
 
@@ -214,7 +213,6 @@ KIND_TO_KIND_ID(Stmt)
 KIND_TO_KIND_ID(Type)
 KIND_TO_KIND_ID(OMPClause)
 KIND_TO_KIND_ID(Attr)
-KIND_TO_KIND_ID(ObjCProtocolLoc)
 KIND_TO_KIND_ID(CXXBaseSpecifier)
 #define DECL(DERIVED, BASE) KIND_TO_KIND_ID(DERIVED##Decl)
 #include "clang/AST/DeclNodes.inc"
@@ -501,7 +499,7 @@ private:
   /// have storage or unique pointers and thus need to be stored by value.
   llvm::AlignedCharArrayUnion<const void *, TemplateArgument,
                               TemplateArgumentLoc, NestedNameSpecifierLoc,
-                              QualType, TypeLoc, ObjCProtocolLoc>
+                              QualType, TypeLoc>
       Storage;
 };
 
@@ -571,10 +569,6 @@ struct DynTypedNode::BaseConverter<
 template <>
 struct DynTypedNode::BaseConverter<CXXBaseSpecifier, void>
     : public PtrConverter<CXXBaseSpecifier> {};
-
-template <>
-struct DynTypedNode::BaseConverter<ObjCProtocolLoc, void>
-    : public ValueConverter<ObjCProtocolLoc> {};
 
 // The only operation we allow on unsupported types is \c get.
 // This allows to conveniently use \c DynTypedNode when having an arbitrary

@@ -86,14 +86,15 @@ namespace {
             lvalue.getAlignment();
         VoidPtrAddr = CGF.Builder.CreateConstGEP1_64(
             CGF.Int8Ty, VoidPtrAddr, OffsetInChars.getQuantity());
-        llvm::Type *IntTy = CGF.Builder.getIntNTy(AtomicSizeInBits);
         auto Addr = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
-            VoidPtrAddr, IntTy->getPointerTo(), "atomic_bitfield_base");
+            VoidPtrAddr,
+            CGF.Builder.getIntNTy(AtomicSizeInBits)->getPointerTo(),
+            "atomic_bitfield_base");
         BFI = OrigBFI;
         BFI.Offset = Offset;
         BFI.StorageSize = AtomicSizeInBits;
         BFI.StorageOffset += OffsetInChars;
-        LVal = LValue::MakeBitfield(Address(Addr, IntTy, lvalue.getAlignment()),
+        LVal = LValue::MakeBitfield(Address(Addr, lvalue.getAlignment()),
                                     BFI, lvalue.getType(), lvalue.getBaseInfo(),
                                     lvalue.getTBAAInfo());
         AtomicTy = C.getIntTypeForBitwidth(AtomicSizeInBits, OrigBFI.IsSigned);
@@ -148,16 +149,7 @@ namespace {
       return LVal.getExtVectorPointer();
     }
     Address getAtomicAddress() const {
-      llvm::Type *ElTy;
-      if (LVal.isSimple())
-        ElTy = LVal.getAddress(CGF).getElementType();
-      else if (LVal.isBitField())
-        ElTy = LVal.getBitFieldAddress().getElementType();
-      else if (LVal.isVectorElt())
-        ElTy = LVal.getVectorAddress().getElementType();
-      else
-        ElTy = LVal.getExtVectorAddress().getElementType();
-      return Address(getAtomicPointer(), ElTy, getAtomicAlignment());
+      return Address(getAtomicPointer(), getAtomicAlignment());
     }
 
     Address getAtomicAddressAsAtomicIntPointer() const {
@@ -304,8 +296,7 @@ Address AtomicInfo::CreateTempAlloca() const {
   // Cast to pointer to value type for bitfields.
   if (LVal.isBitField())
     return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
-        TempAlloca, getAtomicAddress().getType(),
-        getAtomicAddress().getElementType());
+        TempAlloca, getAtomicAddress().getType());
   return TempAlloca;
 }
 
@@ -788,9 +779,9 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
     ValTy =
         CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
-    llvm::Type *ITy = llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits);
-    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, ITy->getPointerTo()),
-                          ITy, Align);
+    llvm::Type *IPtrTy = llvm::IntegerType::get(CGF.getLLVMContext(),
+                                                SizeInBits)->getPointerTo();
+    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
                                CGF.getContext().getPointerType(ValTy),
                                Loc);

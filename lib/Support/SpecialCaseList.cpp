@@ -198,7 +198,7 @@ bool SpecialCaseList::parse(const MemoryBuffer *MB,
   return true;
 }
 
-SpecialCaseList::~SpecialCaseList() = default;
+SpecialCaseList::~SpecialCaseList() {}
 
 bool SpecialCaseList::inSection(StringRef Section, StringRef Prefix,
                                 StringRef Query, StringRef Category) const {

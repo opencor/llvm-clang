@@ -9,34 +9,44 @@
 #ifndef LLVM_DWARFLINKER_DWARFLINKER_H
 #define LLVM_DWARFLINKER_DWARFLINKER_H
 
-#include "llvm/ADT/AddressRanges.h"
 #include "llvm/CodeGen/AccelTable.h"
 #include "llvm/CodeGen/NonRelocatableStringpool.h"
-#include "llvm/DWARFLinker/DWARFLinkerCompileUnit.h"
-#include "llvm/DebugInfo/DWARF/DWARFDebugLine.h"
-#include "llvm/DebugInfo/DWARF/DWARFDebugRangeList.h"
-#include "llvm/DebugInfo/DWARF/DWARFDie.h"
+#include "llvm/DWARFLinker/DWARFLinkerDeclContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFCompileUnit.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include "llvm/MC/MCDwarf.h"
 #include <map>
 
 namespace llvm {
-class DWARFContext;
-class DWARFExpression;
-class DWARFUnit;
-class DataExtractor;
-class DeclContextTree;
-struct MCDwarfLineTableParams;
-template <typename T> class SmallVectorImpl;
 
 enum class DwarfLinkerClient { Dsymutil, LLD, General };
 
 /// The kind of accelerator tables we should emit.
-enum class DwarfLinkerAccelTableKind : uint8_t {
-  None,
+enum class AccelTableKind {
   Apple,   ///< .apple_names, .apple_namespaces, .apple_types, .apple_objc.
   Dwarf,   ///< DWARF v5 .debug_names.
   Default, ///< Dwarf for DWARF5 or later, Apple otherwise.
   Pub,     ///< .debug_pubnames, .debug_pubtypes
 };
+
+/// Partial address range. Besides an offset, only the
+/// HighPC is stored. The structure is stored in a map where the LowPC is the
+/// key.
+struct ObjFileAddressRange {
+  /// Function HighPC.
+  uint64_t HighPC;
+  /// Offset to apply to the linked address.
+  /// should be 0 for not-linked object file.
+  int64_t Offset;
+
+  ObjFileAddressRange(uint64_t EndPC, int64_t Offset)
+      : HighPC(EndPC), Offset(Offset) {}
+
+  ObjFileAddressRange() : HighPC(0), Offset(0) {}
+};
+
+/// Map LowPC to ObjFileAddressRange.
+using RangesTy = std::map<uint64_t, ObjFileAddressRange>;
 
 /// AddressesMap represents information about valid addresses used
 /// by debug information. Valid addresses are those which points to
@@ -46,21 +56,28 @@ class AddressesMap {
 public:
   virtual ~AddressesMap();
 
+  /// Returns true if represented addresses are from linked file.
+  /// Returns false if represented addresses are from not-linked
+  /// object file.
+  virtual bool areRelocationsResolved() const = 0;
+
   /// Checks that there are valid relocations against a .debug_info
   /// section.
   virtual bool hasValidRelocs() = 0;
 
-  /// Checks that the specified variable \p DIE references live code section.
-  /// Allowed kind of input die: DW_TAG_variable, DW_TAG_constant.
+  /// Checks that the specified DIE has a DW_AT_Location attribute
+  /// that references into a live code section.
+  ///
   /// \returns true and sets Info.InDebugMap if it is the case.
-  virtual bool isLiveVariable(const DWARFDie &DIE,
-                              CompileUnit::DIEInfo &Info) = 0;
+  virtual bool hasLiveMemoryLocation(const DWARFDie &DIE,
+                                     CompileUnit::DIEInfo &Info) = 0;
 
-  /// Checks that the specified subprogram \p DIE references live code section.
-  /// Allowed kind of input die: DW_TAG_subprogram, DW_TAG_label.
+  /// Checks that the specified DIE has a DW_AT_Low_pc attribute
+  /// that references into a live code section.
+  ///
   /// \returns true and sets Info.InDebugMap if it is the case.
-  virtual bool isLiveSubprogram(const DWARFDie &DIE,
-                                CompileUnit::DIEInfo &Info) = 0;
+  virtual bool hasLiveAddressRange(const DWARFDie &DIE,
+                                   CompileUnit::DIEInfo &Info) = 0;
 
   /// Apply the valid relocations to the buffer \p Data, taking into
   /// account that Data is at \p BaseOffset in the .debug_info section.
@@ -124,7 +141,7 @@ public:
   /// original \p Entries.
   virtual void emitRangesEntries(
       int64_t UnitPcOffset, uint64_t OrigLowPc,
-      Optional<std::pair<AddressRange, int64_t>> FuncRange,
+      const FunctionIntervals::const_iterator &FuncRange,
       const std::vector<DWARFDebugRangeList::RangeListEntry> &Entries,
       unsigned AddressSize) = 0;
 
@@ -245,7 +262,7 @@ public:
 
   /// Link debug info for added objFiles. Object
   /// files are linked all together.
-  Error link();
+  bool link();
 
   /// A number of methods setting various linking options:
 
@@ -254,9 +271,6 @@ public:
 
   /// Print statistics to standard output.
   void setStatistics(bool Statistics) { Options.Statistics = Statistics; }
-
-  /// Verify the input DWARF.
-  void setVerifyInputDWARF(bool Verify) { Options.VerifyInputDWARF = Verify; }
 
   /// Do not emit linked dwarf info.
   void setNoOutput(bool NoOut) { Options.NoOutput = NoOut; }
@@ -276,7 +290,7 @@ public:
   void setNumThreads(unsigned NumThreads) { Options.Threads = NumThreads; }
 
   /// Set kind of accelerator tables to be generated.
-  void setAccelTableKind(DwarfLinkerAccelTableKind Kind) {
+  void setAccelTableKind(AccelTableKind Kind) {
     Options.TheAccelTableKind = Kind;
   }
 
@@ -347,8 +361,6 @@ private:
     /// Given a DIE, update its incompleteness based on whether the DIEs it
     /// references are incomplete.
     UpdateRefIncompleteness,
-    /// Given a DIE, mark it as ODR Canonical if applicable.
-    MarkODRCanonicalDie,
   };
 
   /// This class represents an item in the work list. The type defines what kind
@@ -376,9 +388,6 @@ private:
         : Type(WorklistItemType::LookForParentDIEsToKeep), CU(CU), Flags(Flags),
           AncestorIdx(AncestorIdx) {}
   };
-
-  /// Verify the given DWARF file.
-  bool verify(const DWARFFile &File);
 
   /// returns true if we need to translate strings.
   bool needToTranslateStrings() { return StringsTranslator != nullptr; }
@@ -447,10 +456,6 @@ private:
                             unsigned Flags, const UnitListTy &Units,
                             const DWARFFile &File,
                             SmallVectorImpl<WorklistItem> &Worklist);
-
-  /// Mark context corresponding to the specified \p Die as having canonical
-  /// die, if applicable.
-  void markODRCanonicalDie(const DWARFDie &Die, CompileUnit &CU);
 
   /// \defgroup FindRootDIEs Find DIEs corresponding to Address map entries.
   ///
@@ -674,6 +679,9 @@ private:
     bool getDIENames(const DWARFDie &Die, AttributesInfo &Info,
                      OffsetsStringPool &StringPool, bool StripTemplate = false);
 
+    /// Create a copy of abbreviation Abbrev.
+    void copyAbbrev(const DWARFAbbreviationDeclaration &Abbrev, bool hasODR);
+
     uint32_t hashFullyQualifiedName(DWARFDie DIE, CompileUnit &U,
                                     const DWARFFile &File,
                                     int RecurseDepth = 0);
@@ -770,9 +778,6 @@ private:
     /// Print statistics.
     bool Statistics = false;
 
-    /// Verify the input DWARF.
-    bool VerifyInputDWARF = false;
-
     /// Skip emitting output
     bool NoOutput = false;
 
@@ -790,8 +795,7 @@ private:
     unsigned Threads = 1;
 
     /// The accelerator table kind
-    DwarfLinkerAccelTableKind TheAccelTableKind =
-        DwarfLinkerAccelTableKind::Default;
+    AccelTableKind TheAccelTableKind = AccelTableKind::Default;
 
     /// Prepend path for the clang modules.
     std::string PrependPath;

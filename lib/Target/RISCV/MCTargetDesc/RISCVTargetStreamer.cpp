@@ -22,7 +22,6 @@ using namespace llvm;
 RISCVTargetStreamer::RISCVTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
 
 void RISCVTargetStreamer::finish() { finishAttributeSection(); }
-void RISCVTargetStreamer::reset() {}
 
 void RISCVTargetStreamer::emitDirectiveOptionPush() {}
 void RISCVTargetStreamer::emitDirectiveOptionPop() {}
@@ -39,10 +38,6 @@ void RISCVTargetStreamer::emitTextAttribute(unsigned Attribute,
 void RISCVTargetStreamer::emitIntTextAttribute(unsigned Attribute,
                                                unsigned IntValue,
                                                StringRef StringValue) {}
-void RISCVTargetStreamer::setTargetABI(RISCVABI::ABI ABI) {
-  assert(ABI != RISCVABI::ABI_Unknown && "Improperly initialized target ABI");
-  TargetABI = ABI;
-}
 
 void RISCVTargetStreamer::emitTargetAttributes(const MCSubtargetInfo &STI) {
   if (STI.hasFeature(RISCV::FeatureRV32E))
@@ -50,10 +45,15 @@ void RISCVTargetStreamer::emitTargetAttributes(const MCSubtargetInfo &STI) {
   else
     emitAttribute(RISCVAttrs::STACK_ALIGN, RISCVAttrs::ALIGN_16);
 
-  auto ParseResult = RISCVFeatures::parseFeatureBits(
-      STI.hasFeature(RISCV::Feature64Bit), STI.getFeatureBits());
+  unsigned XLen = STI.hasFeature(RISCV::Feature64Bit) ? 64 : 32;
+  std::vector<std::string> FeatureVector;
+  RISCVFeatures::toFeatureVector(FeatureVector, STI.getFeatureBits());
+
+  auto ParseResult = llvm::RISCVISAInfo::parseFeatures(XLen, FeatureVector);
   if (!ParseResult) {
-    report_fatal_error(ParseResult.takeError());
+    /* Assume any error about features should handled earlier.  */
+    consumeError(ParseResult.takeError());
+    llvm_unreachable("Parsing feature error when emitTargetAttributes?");
   } else {
     auto &ISAInfo = *ParseResult;
     emitTextAttribute(RISCVAttrs::ARCH, ISAInfo->toString());

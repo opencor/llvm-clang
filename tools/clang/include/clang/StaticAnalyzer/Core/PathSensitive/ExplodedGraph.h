@@ -161,13 +161,15 @@ public:
     return getLocationContext()->getParentMap();
   }
 
-  template <typename T> T &getAnalysis() const {
+  template <typename T>
+  T &getAnalysis() const {
     return *getLocationContext()->getAnalysis<T>();
   }
 
   const ProgramStateRef &getState() const { return State; }
 
-  template <typename T> Optional<T> getLocationAs() const & {
+  template <typename T>
+  Optional<T> getLocationAs() const LLVM_LVALUE_FUNCTION {
     return Location.getAs<T>();
   }
 

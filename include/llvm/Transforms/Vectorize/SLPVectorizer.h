@@ -20,6 +20,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/PassManager.h"
 
@@ -29,6 +30,7 @@ class AAResults;
 class AssumptionCache;
 class BasicBlock;
 class CmpInst;
+class DataLayout;
 class DemandedBits;
 class DominatorTree;
 class Function;
@@ -133,7 +135,7 @@ private:
   bool vectorizeChainsInBlock(BasicBlock *BB, slpvectorizer::BoUpSLP &R);
 
   bool vectorizeStoreChain(ArrayRef<Value *> Chain, slpvectorizer::BoUpSLP &R,
-                           unsigned Idx, unsigned MinVF);
+                           unsigned Idx);
 
   bool vectorizeStores(ArrayRef<StoreInst *> Stores, slpvectorizer::BoUpSLP &R);
 

@@ -8,6 +8,9 @@
 
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/raw_ostream.h"
+#include <algorithm>
 
 using namespace llvm;
 
@@ -20,19 +23,13 @@ MCDisassembler::onSymbolStart(SymbolInfoTy &Symbol, uint64_t &Size,
   return None;
 }
 
-uint64_t MCDisassembler::suggestBytesToSkip(ArrayRef<uint8_t> Bytes,
-                                            uint64_t Address) const {
-  return 1;
-}
-
 bool MCDisassembler::tryAddingSymbolicOperand(MCInst &Inst, int64_t Value,
                                               uint64_t Address, bool IsBranch,
-                                              uint64_t Offset, uint64_t OpSize,
+                                              uint64_t Offset,
                                               uint64_t InstSize) const {
   if (Symbolizer)
-    return Symbolizer->tryAddingSymbolicOperand(Inst, *CommentStream, Value,
-                                                Address, IsBranch, Offset,
-                                                OpSize, InstSize);
+    return Symbolizer->tryAddingSymbolicOperand(
+        Inst, *CommentStream, Value, Address, IsBranch, Offset, InstSize);
   return false;
 }
 
@@ -88,13 +85,12 @@ bool XCOFFSymbolInfo::operator<(const XCOFFSymbolInfo &SymInfo) const {
     return SymInfo.IsLabel;
 
   // Symbols with a StorageMappingClass have higher priority than those without.
-  if (StorageMappingClass.has_value() !=
-      SymInfo.StorageMappingClass.has_value())
-    return SymInfo.StorageMappingClass.has_value();
+  if (StorageMappingClass.hasValue() != SymInfo.StorageMappingClass.hasValue())
+    return SymInfo.StorageMappingClass.hasValue();
 
-  if (StorageMappingClass) {
-    return getSMCPriority(StorageMappingClass.value()) <
-           getSMCPriority(SymInfo.StorageMappingClass.value());
+  if (StorageMappingClass.hasValue()) {
+    return getSMCPriority(StorageMappingClass.getValue()) <
+           getSMCPriority(SymInfo.StorageMappingClass.getValue());
   }
 
   return false;

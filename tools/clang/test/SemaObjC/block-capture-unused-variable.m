@@ -8,7 +8,7 @@ void dispatch_async(dispatch_queue_t queue, dispatch_block_t block);
 
 extern __attribute__((visibility("default"))) struct dispatch_queue_s _dispatch_main_q;
 
-id getFoo(void);
+id getFoo();
 
 @protocol P
 
@@ -18,7 +18,7 @@ id getFoo(void);
 
 @end
 
-void test(void) {
+void test() {
   // no diagnostics
   __block id x = getFoo();
   __block id<P> y = x;

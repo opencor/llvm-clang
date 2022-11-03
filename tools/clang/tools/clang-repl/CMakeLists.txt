@@ -11,7 +11,7 @@ add_clang_tool(clang-repl
   ClangRepl.cpp
   )
 
-clang_target_link_libraries(clang-repl PRIVATE
+clang_target_link_libraries(clang-repl PUBLIC
   clangBasic
   clangFrontend
   clangInterpreter

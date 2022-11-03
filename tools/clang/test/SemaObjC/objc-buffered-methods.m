@@ -12,7 +12,7 @@ int* global;
 
 @implementation I
 + (void) _defaultMinSize { };
-static void _initCommon(void) {
+static void _initCommon() {
   Class graphicClass;
   [graphicClass _defaultMinSize];
 }

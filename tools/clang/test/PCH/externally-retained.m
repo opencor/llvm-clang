@@ -23,7 +23,7 @@ id sharedObject = 0;
 #else
 //===----------------------------------------------------------------------===//
 
-void callDoSomething(void) {
+void callDoSomething() {
   doSomething(sharedObject);
 }
 

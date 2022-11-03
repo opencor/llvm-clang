@@ -48,4 +48,7 @@ attributes #0 = { sanitize_address "amdgpu-implicitarg-num-bytes"="48" }
 !opencl.ocl.version = !{!90}
 !90 = !{i32 2, i32 0}
 
+!llvm.module.flags = !{!0}
+!0 = !{i32 4, !"amdgpu_hostcall", i32 1}
+
 ; CHECK: AMDGPU HSA Metadata Parser Test: PASS

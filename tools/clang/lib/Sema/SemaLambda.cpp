@@ -182,7 +182,7 @@ Optional<unsigned> clang::getStackIndexOfNearestEnclosingCaptureCapableLambda(
   if (!OptionalStackIndex)
     return NoLambdaIsCaptureCapable;
 
-  const unsigned IndexOfCaptureReadyLambda = *OptionalStackIndex;
+  const unsigned IndexOfCaptureReadyLambda = OptionalStackIndex.getValue();
   assert(((IndexOfCaptureReadyLambda != (FunctionScopes.size() - 1)) ||
           S.getCurGenericLambda()) &&
          "The capture ready lambda for a potential capture can only be the "
@@ -238,19 +238,21 @@ getGenericLambdaTemplateParameterList(LambdaScopeInfo *LSI, Sema &SemaRef) {
   return LSI->GLTemplateParameterList;
 }
 
-CXXRecordDecl *
-Sema::createLambdaClosureType(SourceRange IntroducerRange, TypeSourceInfo *Info,
-                              unsigned LambdaDependencyKind,
-                              LambdaCaptureDefault CaptureDefault) {
+CXXRecordDecl *Sema::createLambdaClosureType(SourceRange IntroducerRange,
+                                             TypeSourceInfo *Info,
+                                             bool KnownDependent,
+                                             LambdaCaptureDefault CaptureDefault) {
   DeclContext *DC = CurContext;
   while (!(DC->isFunctionOrMethod() || DC->isRecord() || DC->isFileContext()))
     DC = DC->getParent();
   bool IsGenericLambda = getGenericLambdaTemplateParameterList(getCurLambda(),
                                                                *this);
   // Start constructing the lambda class.
-  CXXRecordDecl *Class = CXXRecordDecl::CreateLambda(
-      Context, DC, Info, IntroducerRange.getBegin(), LambdaDependencyKind,
-      IsGenericLambda, CaptureDefault);
+  CXXRecordDecl *Class = CXXRecordDecl::CreateLambda(Context, DC, Info,
+                                                     IntroducerRange.getBegin(),
+                                                     KnownDependent,
+                                                     IsGenericLambda,
+                                                     CaptureDefault);
   DC->addDecl(Class);
 
   return Class;
@@ -433,7 +435,7 @@ void Sema::handleLambdaNumbering(
     unsigned ManglingNumber, DeviceManglingNumber;
     Decl *ManglingContextDecl;
     std::tie(HasKnownInternalLinkage, ManglingNumber, DeviceManglingNumber,
-             ManglingContextDecl) = *Mangling;
+             ManglingContextDecl) = Mangling.getValue();
     Class->setLambdaMangling(ManglingNumber, ManglingContextDecl,
                              HasKnownInternalLinkage);
     Class->setDeviceLambdaManglingNumber(DeviceManglingNumber);
@@ -896,18 +898,17 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
 
   // Determine if we're within a context where we know that the lambda will
   // be dependent, because there are template parameters in scope.
-  CXXRecordDecl::LambdaDependencyKind LambdaDependencyKind =
-      CXXRecordDecl::LDK_Unknown;
+  bool KnownDependent;
   if (LSI->NumExplicitTemplateParams > 0) {
     auto *TemplateParamScope = CurScope->getTemplateParamParent();
     assert(TemplateParamScope &&
            "Lambda with explicit template param list should establish a "
            "template param scope");
     assert(TemplateParamScope->getParent());
-    if (TemplateParamScope->getParent()->getTemplateParamParent() != nullptr)
-      LambdaDependencyKind = CXXRecordDecl::LDK_AlwaysDependent;
-  } else if (CurScope->getTemplateParamParent() != nullptr) {
-    LambdaDependencyKind = CXXRecordDecl::LDK_AlwaysDependent;
+    KnownDependent = TemplateParamScope->getParent()
+                                       ->getTemplateParamParent() != nullptr;
+  } else {
+    KnownDependent = CurScope->getTemplateParamParent() != nullptr;
   }
 
   // Determine the signature of the call operator.
@@ -976,8 +977,8 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
                                       UPPC_DeclarationType);
   }
 
-  CXXRecordDecl *Class = createLambdaClosureType(
-      Intro.Range, MethodTyInfo, LambdaDependencyKind, Intro.Default);
+  CXXRecordDecl *Class = createLambdaClosureType(Intro.Range, MethodTyInfo,
+                                                 KnownDependent, Intro.Default);
   CXXMethodDecl *Method =
       startLambdaDefinition(Class, Intro.Range, MethodTyInfo, EndLoc, Params,
                             ParamInfo.getDeclSpec().getConstexprSpecifier(),

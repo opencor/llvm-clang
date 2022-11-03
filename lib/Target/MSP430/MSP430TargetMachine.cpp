@@ -27,7 +27,9 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMSP430Target() {
 }
 
 static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
-  return RM.value_or(Reloc::Static);
+  if (!RM.hasValue())
+    return Reloc::Static;
+  return *RM;
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
@@ -49,7 +51,7 @@ MSP430TargetMachine::MSP430TargetMachine(const Target &T, const Triple &TT,
   initAsmInfo();
 }
 
-MSP430TargetMachine::~MSP430TargetMachine() = default;
+MSP430TargetMachine::~MSP430TargetMachine() {}
 
 namespace {
 /// MSP430 Code Generator Pass Configuration Options.

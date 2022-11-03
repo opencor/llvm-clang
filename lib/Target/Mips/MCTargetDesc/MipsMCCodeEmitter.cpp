@@ -42,11 +42,13 @@ using namespace llvm;
 namespace llvm {
 
 MCCodeEmitter *createMipsMCCodeEmitterEB(const MCInstrInfo &MCII,
+                                         const MCRegisterInfo &MRI,
                                          MCContext &Ctx) {
   return new MipsMCCodeEmitter(MCII, Ctx, false);
 }
 
 MCCodeEmitter *createMipsMCCodeEmitterEL(const MCInstrInfo &MCII,
+                                         const MCRegisterInfo &MRI,
                                          MCContext &Ctx) {
   return new MipsMCCodeEmitter(MCII, Ctx, true);
 }

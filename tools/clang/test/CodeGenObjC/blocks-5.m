@@ -11,7 +11,7 @@
 
 
 
-int foo(void);
+int foo();
 extern void DVT (volatile const void * object, volatile const void * selector, const char * functionName); 
 @implementation IDEWorkspaceDocument
 

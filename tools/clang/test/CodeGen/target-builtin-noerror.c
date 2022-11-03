@@ -6,24 +6,24 @@
 
 // No warnings.
 extern __m256i a;
-int __attribute__((target("avx"))) bar(void) {
+int __attribute__((target("avx"))) bar() {
   return _mm256_extract_epi32(a, 3);
 }
 
-int baz(void) {
+int baz() {
   return bar();
 }
 
-int __attribute__((target("avx"))) qq_avx(void) {
+int __attribute__((target("avx"))) qq_avx() {
   return _mm256_extract_epi32(a, 3);
 }
 
-int qq_noavx(void) {
+int qq_noavx() {
   return 0;
 }
 
 extern __m256i a;
-int qq(void) {
+int qq() {
   if (__builtin_cpu_supports("avx"))
     return qq_avx();
   else
@@ -43,7 +43,7 @@ __m128 __attribute__((target("fma,fma4"))) fma_3(__m128 a, __m128 b, __m128 c) {
   return __builtin_ia32_vfmaddps(a, b, c);
 }
 
-void verifyfeaturestrings(void) {
+void verifyfeaturestrings() {
   (void)__builtin_cpu_supports("cmov");
   (void)__builtin_cpu_supports("mmx");
   (void)__builtin_cpu_supports("popcnt");
@@ -84,7 +84,7 @@ void verifyfeaturestrings(void) {
   (void)__builtin_cpu_supports("avx512vp2intersect");
 }
 
-void verifycpustrings(void) {
+void verifycpustrings() {
   (void)__builtin_cpu_is("alderlake");
   (void)__builtin_cpu_is("amd");
   (void)__builtin_cpu_is("amdfam10h");

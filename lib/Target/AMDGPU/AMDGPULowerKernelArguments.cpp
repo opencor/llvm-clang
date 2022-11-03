@@ -73,7 +73,7 @@ bool AMDGPULowerKernelArguments::runOnFunction(Function &F) {
   const uint64_t BaseOffset = ST.getExplicitKernelArgOffset(F);
 
   Align MaxAlign;
-  // FIXME: Alignment is broken with explicit arg offset.;
+  // FIXME: Alignment is broken broken with explicit arg offset.;
   const uint64_t TotalKernArgSize = ST.getKernArgSegmentSize(F, MaxAlign);
   if (TotalKernArgSize == 0)
     return false;
@@ -92,8 +92,9 @@ bool AMDGPULowerKernelArguments::runOnFunction(Function &F) {
   for (Argument &Arg : F.args()) {
     const bool IsByRef = Arg.hasByRefAttr();
     Type *ArgTy = IsByRef ? Arg.getParamByRefType() : Arg.getType();
-    MaybeAlign ParamAlign = IsByRef ? Arg.getParamAlign() : None;
-    Align ABITypeAlign = DL.getValueOrABITypeAlignment(ParamAlign, ArgTy);
+    MaybeAlign ABITypeAlign = IsByRef ? Arg.getParamAlign() : None;
+    if (!ABITypeAlign)
+      ABITypeAlign = DL.getABITypeAlign(ArgTy);
 
     uint64_t Size = DL.getTypeSizeInBits(ArgTy);
     uint64_t AllocSize = DL.getTypeAllocSize(ArgTy);

@@ -4,7 +4,7 @@
 #define va_arg(ap, type)    __builtin_va_arg(ap, type)
 typedef __builtin_va_list va_list;
 
-void myFunc(void) {
+void myFunc() {
     va_list values;
     
     int value;

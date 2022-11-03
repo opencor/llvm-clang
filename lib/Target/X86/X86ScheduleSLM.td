@@ -377,8 +377,10 @@ defm : SLMWriteResPair<WriteVecIMul,  [SLM_FPC_RSV0],   4>;
 defm : SLMWriteResPair<WriteVecIMulX, [SLM_FPC_RSV0],   5, [2]>;
 defm : SLMWriteResPair<WriteVecIMulY, [SLM_FPC_RSV0],   5, [2]>;
 defm : X86WriteResPairUnsupported<WriteVecIMulZ>;
-defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   11, [11], 7>;
-defm : X86WriteResPairUnsupported<WritePMULLDY>;
+// FIXME: The below is closer to correct, but caused some perf regressions.
+//defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   11, [11], 7>;
+defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   4>;
+defm : SLMWriteResPair<WritePMULLDY, [SLM_FPC_RSV0],   4>;
 defm : X86WriteResPairUnsupported<WritePMULLDZ>;
 defm : SLMWriteResPair<WriteShuffle,  [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteShuffleY, [SLM_FPC_RSV0],  1>;

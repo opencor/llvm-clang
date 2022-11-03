@@ -17,7 +17,7 @@ typedef unsigned long NSUInteger;
 @interface NSString<NSCopying>
 @end
 
-int main(void) {
+int main() {
 	NSDictionary *dict = @{ @"name":@666 };
 	NSDictionary *dict1 = @{ @"name":@666 };
 	NSDictionary *dict2 = @{ @"name":@666 };

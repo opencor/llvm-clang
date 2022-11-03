@@ -12,7 +12,6 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PointerUnion.h"
-#include "llvm/DebugInfo/PDB/Native/LinePrinter.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -50,8 +49,6 @@ enum class ModuleSubsection {
   CoffSymbolRVAs,
   All
 };
-
-extern FilterOptions Filters;
 
 namespace pretty {
 

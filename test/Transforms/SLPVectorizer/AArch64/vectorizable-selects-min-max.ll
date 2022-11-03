@@ -8,7 +8,14 @@ target triple = "arm64-apple-ios5.0.0"
 define void @select_umin_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_umin_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ult <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -69,7 +76,10 @@ entry:
 define void @select_umin_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_umin_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ult <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -160,7 +170,8 @@ entry:
 define void @select_umin_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_umin_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ult <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -187,7 +198,14 @@ entry:
 define void @select_umin_ule_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_umin_ule_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ule <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -248,7 +266,10 @@ entry:
 define void @select_umin_ule_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_umin_ule_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ule <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -288,7 +309,8 @@ entry:
 define void @select_umin_ule_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_umin_ule_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ule <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -314,7 +336,14 @@ entry:
 define void @select_smin_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_smin_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp slt <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -375,7 +404,10 @@ entry:
 define void @select_smin_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_smin_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp slt <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -415,7 +447,8 @@ entry:
 define void @select_smin_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_smin_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp slt <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -441,7 +474,14 @@ entry:
 define void @select_smin_sle_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_smin_sle_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sle <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -502,7 +542,10 @@ entry:
 define void @select_smin_sle_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_smin_sle_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sle <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -542,7 +585,8 @@ entry:
 define void @select_smin_sle_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_smin_sle_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sle <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -567,7 +611,14 @@ entry:
 define void @select_umax_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_umax_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ugt <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -628,7 +679,10 @@ entry:
 define void @select_umax_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_umax_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ugt <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -668,7 +722,8 @@ entry:
 define void @select_umax_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_umax_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ugt <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -694,7 +749,14 @@ entry:
 define void @select_umax_uge_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_umax_uge_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp uge <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -755,7 +817,10 @@ entry:
 define void @select_umax_uge_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_umax_uge_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp uge <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -795,7 +860,8 @@ entry:
 define void @select_umax_uge_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_umax_uge_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp uge <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -821,7 +887,14 @@ entry:
 define void @select_smax_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_smax_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -882,7 +955,10 @@ entry:
 define void @select_smax_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_smax_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -922,7 +998,8 @@ entry:
 define void @select_smax_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_smax_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>
@@ -949,7 +1026,14 @@ entry:
 define void @select_smax_sge_8xi16(i16* %ptr, i16 %x) {
 ; CHECK-LABEL: @select_smax_sge_8xi16(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR:%.*]] to <8 x i16>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i16, i16* [[PTR:%.*]], i16 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 3
+; CHECK-NEXT:    [[GEP_4:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 4
+; CHECK-NEXT:    [[GEP_5:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 5
+; CHECK-NEXT:    [[GEP_6:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 6
+; CHECK-NEXT:    [[GEP_7:%.*]] = getelementptr inbounds i16, i16* [[PTR]], i16 7
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i16* [[PTR]] to <8 x i16>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i16>, <8 x i16>* [[TMP0]], align 2
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sge <8 x i16> [[TMP1]], <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <8 x i1> [[TMP2]], <8 x i16> [[TMP1]], <8 x i16> <i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383, i16 16383>
@@ -1010,7 +1094,10 @@ entry:
 define void @select_smax_sge_4xi32(i32* %ptr, i32 %x) {
 ; CHECK-LABEL: @select_smax_sge_4xi32(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR:%.*]] to <4 x i32>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i32, i32* [[PTR:%.*]], i32 1
+; CHECK-NEXT:    [[GEP_2:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 2
+; CHECK-NEXT:    [[GEP_3:%.*]] = getelementptr inbounds i32, i32* [[PTR]], i32 3
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32* [[PTR]] to <4 x i32>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, <4 x i32>* [[TMP0]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sge <4 x i32> [[TMP1]], <i32 16383, i32 16383, i32 16383, i32 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <4 x i1> [[TMP2]], <4 x i32> [[TMP1]], <4 x i32> <i32 16383, i32 16383, i32 16383, i32 16383>
@@ -1050,7 +1137,8 @@ entry:
 define void @select_smax_sge_2xi64(i64* %ptr, i64 %x) {
 ; CHECK-LABEL: @select_smax_sge_2xi64(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR:%.*]] to <2 x i64>*
+; CHECK-NEXT:    [[GEP_1:%.*]] = getelementptr inbounds i64, i64* [[PTR:%.*]], i64 1
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i64* [[PTR]] to <2 x i64>*
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <2 x i64>, <2 x i64>* [[TMP0]], align 8
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sge <2 x i64> [[TMP1]], <i64 16383, i64 16383>
 ; CHECK-NEXT:    [[TMP3:%.*]] = select <2 x i1> [[TMP2]], <2 x i64> [[TMP1]], <2 x i64> <i64 16383, i64 16383>

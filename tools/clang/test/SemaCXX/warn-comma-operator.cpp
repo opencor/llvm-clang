@@ -7,10 +7,10 @@
 // RUN: %clang_cc1 -fsyntax-only -Wcomma -x c -std=c17 -verify %s
 
 // int returning function
-int return_four(void) { return 5; }
+int return_four() { return 5; }
 
 // Test builtin operators
-void test_builtin(void) {
+void test_builtin() {
   int x = 0, y = 0;
   for (; y < 10; x++, y++) {}
   for (; y < 10; ++x, y++) {}
@@ -32,7 +32,7 @@ void test_builtin(void) {
 }
 
 // Test nested comma operators
-void test_nested(void) {
+void test_nested() {
   int x1, x2, x3;
   int y1, *y2 = 0, y3 = 5;
 
@@ -42,7 +42,7 @@ void test_nested(void) {
 }
 
 // Confusing "," for "=="
-void test_compare(void) {
+void test_compare() {
   if (return_four(), 5) {}
   // expected-warning@-1{{comma operator}}
   // expected-note@-2{{cast expression to void}}
@@ -53,7 +53,7 @@ void test_compare(void) {
 }
 
 // Confusing "," for "+"
-int test_plus(void) {
+int test_plus() {
   return return_four(), return_four();
   // expected-warning@-1{{comma operator}}
   // expected-note@-2{{cast expression to void}}
@@ -64,7 +64,7 @@ int test_plus(void) {
 }
 
 // Be sure to look through parentheses
-void test_parentheses(void) {
+void test_parentheses() {
   int x, y;
   for (x = 0; return_four(), x;) {}
   // expected-warning@-1{{comma operator}}
@@ -79,7 +79,7 @@ void test_parentheses(void) {
   // CHECK: fix-it:{{.*}}:{[[@LINE-4]]:30-[[@LINE-4]]:30}:")"
 }
 
-void test_increment(void) {
+void test_increment() {
   int x, y;
   ++x, ++y;
   // expected-warning@-1{{comma operator}}
@@ -128,7 +128,7 @@ void test_conditions(int x) {
 }
 
 // Nested comma operator with fix-its.
-void test_nested_fixits(void) {
+void test_nested_fixits() {
   return_four(), return_four(), return_four(), return_four();
   // expected-warning@-1 3{{comma operator}}
   // expected-note@-2 3{{cast expression to void}}

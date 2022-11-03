@@ -14,14 +14,21 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/IR/Function.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Mangler.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/FormattedStream.h"
+#include "llvm/Target/TargetOptions.h"
 using namespace llvm;
 
 ARMException::ARMException(AsmPrinter *A) : DwarfCFIExceptionBase(A) {}
 
-ARMException::~ARMException() = default;
+ARMException::~ARMException() {}
 
 ARMTargetStreamer &ARMException::getTargetStreamer() {
   MCTargetStreamer &TS = *Asm->OutStreamer->getTargetStreamer();
@@ -94,7 +101,7 @@ void ARMException::emitTypeInfos(unsigned TTypeEncoding,
   // Emit the Catch TypeInfos.
   if (VerboseAsm && !TypeInfos.empty()) {
     Asm->OutStreamer->AddComment(">> Catch TypeInfos <<");
-    Asm->OutStreamer->addBlankLine();
+    Asm->OutStreamer->AddBlankLine();
     Entry = TypeInfos.size();
   }
 
@@ -109,7 +116,7 @@ void ARMException::emitTypeInfos(unsigned TTypeEncoding,
   // Emit the Exception Specifications.
   if (VerboseAsm && !FilterIds.empty()) {
     Asm->OutStreamer->AddComment(">> Filter TypeInfos <<");
-    Asm->OutStreamer->addBlankLine();
+    Asm->OutStreamer->AddBlankLine();
     Entry = 0;
   }
   for (std::vector<unsigned>::const_iterator

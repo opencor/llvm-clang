@@ -67,8 +67,7 @@ bool CSEConfigFull::shouldCSEOpc(unsigned Opc) {
 }
 
 bool CSEConfigConstantOnly::shouldCSEOpc(unsigned Opc) {
-  return Opc == TargetOpcode::G_CONSTANT || Opc == TargetOpcode::G_FCONSTANT ||
-         Opc == TargetOpcode::G_IMPLICIT_DEF;
+  return Opc == TargetOpcode::G_CONSTANT || Opc == TargetOpcode::G_IMPLICIT_DEF;
 }
 
 std::unique_ptr<CSEConfigBase>
@@ -89,7 +88,7 @@ void GISelCSEInfo::setMF(MachineFunction &MF) {
   this->MRI = &MF.getRegInfo();
 }
 
-GISelCSEInfo::~GISelCSEInfo() = default;
+GISelCSEInfo::~GISelCSEInfo() {}
 
 bool GISelCSEInfo::isUniqueMachineInstValid(
     const UniqueMachineInstr &UMI) const {
@@ -319,7 +318,7 @@ const GISelInstProfileBuilder &
 GISelInstProfileBuilder::addNodeID(const MachineInstr *MI) const {
   addNodeIDMBB(MI->getParent());
   addNodeIDOpcode(MI->getOpcode());
-  for (const auto &Op : MI->operands())
+  for (auto &Op : MI->operands())
     addNodeIDMachineOperand(Op);
   addNodeIDFlag(MI->getFlags());
   return *this;

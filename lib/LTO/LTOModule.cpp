@@ -50,7 +50,7 @@ LTOModule::LTOModule(std::unique_ptr<Module> M, MemoryBufferRef MBRef,
   SymTab.addModule(Mod.get());
 }
 
-LTOModule::~LTOModule() = default;
+LTOModule::~LTOModule() {}
 
 /// isBitcodeFile - Returns 'true' if the file (or memory contents) is LLVM
 /// bitcode.

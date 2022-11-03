@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -no-opaque-pointers -std=c++20 -triple=x86_64-unknown-linux-gnu -emit-llvm %s -o - -disable-llvm-passes | FileCheck %s
+// RUN: %clang_cc1 -std=c++20 -triple=x86_64-unknown-linux-gnu -emit-llvm %s -o - -disable-llvm-passes | FileCheck %s
 
 #include "Inputs/coroutine.h"
 
@@ -8,7 +8,6 @@ struct coro1 {
     std::suspend_never initial_suspend();
     std::suspend_never final_suspend() noexcept;
     void return_void();
-    void unhandled_exception() noexcept;
   };
 };
 
@@ -40,7 +39,6 @@ struct coro2 {
     std::suspend_never initial_suspend();
     std::suspend_never final_suspend() noexcept;
     void return_value(int);
-    void unhandled_exception() noexcept;
   };
 };
 

@@ -17,6 +17,6 @@ struct st { int i[1000]; };
 @interface Test
 +(struct st)method;
 @end
-int main(void) {
+int main() {
   [Test method];
 }

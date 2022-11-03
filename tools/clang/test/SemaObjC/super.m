@@ -62,7 +62,7 @@ typedef Foo super;
 
 typedef Foo FooTD;
 
-void test(void) {
+void test() {
   [FooTD cMethod];
   [super cMethod];
 }
@@ -71,12 +71,12 @@ struct SomeStruct {
   int X;
 };
 
-int test2(void) {
+int test2() {
   struct SomeStruct super = { 0 };
   return super.X;
 }
 
-int test3(void) {
+int test3() {
   id super = 0;
   [(B*)super instanceMethod];
   int *s1 = (int*)super;

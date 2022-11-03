@@ -104,8 +104,8 @@ namespace Intrinsic {
   int lookupLLVMIntrinsicByName(ArrayRef<const char *> NameTable,
                                 StringRef Name);
 
-  /// Map a Clang builtin name to an intrinsic ID.
-  ID getIntrinsicForClangBuiltin(const char *Prefix, StringRef BuiltinName);
+  /// Map a GCC builtin name to an intrinsic ID.
+  ID getIntrinsicForGCCBuiltin(const char *Prefix, StringRef BuiltinName);
 
   /// Map a MS builtin name to an intrinsic ID.
   ID getIntrinsicForMSBuiltin(const char *Prefix, StringRef BuiltinName);
@@ -142,7 +142,6 @@ namespace Intrinsic {
       VecOfBitcastsToInt,
       AMX,
       PPCQuad,
-      AnyPtrToElt,
     } Kind;
 
     union {
@@ -181,15 +180,14 @@ namespace Intrinsic {
       return (ArgKind)(Argument_Info & 7);
     }
 
-    // VecOfAnyPtrsToElt and AnyPtrToElt uses both an overloaded argument (for
-    // address space) and a reference argument (for matching vector width and
-    // element types)
+    // VecOfAnyPtrsToElt uses both an overloaded argument (for address space)
+    // and a reference argument (for matching vector width and element types)
     unsigned getOverloadArgNumber() const {
-      assert(Kind == VecOfAnyPtrsToElt || Kind == AnyPtrToElt);
+      assert(Kind == VecOfAnyPtrsToElt);
       return Argument_Info >> 16;
     }
     unsigned getRefArgNumber() const {
-      assert(Kind == VecOfAnyPtrsToElt || Kind == AnyPtrToElt);
+      assert(Kind == VecOfAnyPtrsToElt);
       return Argument_Info & 0xFFFF;
     }
 

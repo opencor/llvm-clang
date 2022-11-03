@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -no-opaque-pointers %s -triple x86_64-apple-darwin -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 %s -triple x86_64-apple-darwin -emit-llvm -o - | FileCheck %s
 // Exercise various use cases for local asm "register variables".
 
-int foo(void) {
+int foo() {
 // CHECK-LABEL: define{{.*}} i32 @foo()
 // CHECK: [[A:%[a-zA-Z0-9]+]] = alloca i32
 
@@ -24,7 +24,7 @@ int foo(void) {
 // CHECK:  ret i32 [[TMP1]]
 }
 
-int earlyclobber(void) {
+int earlyclobber() {
 // CHECK-LABEL: define{{.*}} i32 @earlyclobber()
 // CHECK: [[A:%[a-zA-Z0-9]+]] = alloca i32
 

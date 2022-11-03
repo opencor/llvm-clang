@@ -5,7 +5,7 @@ typedef struct __CFError * CFErrorRef; // expected-note {{forward declaration of
 
 void junk(int, ...);
 
-int main(void)
+int main()
 {
  CFErrorRef error;
  junk(1, *error, (void)0); // expected-error {{argument type 'struct __CFError' is incomplete}} \

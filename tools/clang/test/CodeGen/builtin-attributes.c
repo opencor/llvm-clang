@@ -1,8 +1,5 @@
 // REQUIRES: arm-registered-target
-// RUN: %clang_cc1 -no-opaque-pointers -triple arm-unknown-linux-gnueabi -emit-llvm -o - %s | FileCheck %s
-
-int printf(const char *, ...);
-void exit(int);
+// RUN: %clang_cc1 -triple arm-unknown-linux-gnueabi -emit-llvm -o - %s | FileCheck %s
 
 // CHECK: declare i32 @printf(i8* noundef, ...)
 void f0() {

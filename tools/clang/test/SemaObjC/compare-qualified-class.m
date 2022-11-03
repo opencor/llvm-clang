@@ -10,7 +10,7 @@
 @interface SomeObject <SomeProtocol>
 @end
 
-int main (void) {
+int main () {
     Class <SomeProtocol> classA;
     Class <SomeProtocol> classB;
     Class <SomeProtocol, SomeProtocol1> classC;

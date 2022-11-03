@@ -6,7 +6,6 @@
 // RUN: %clang -### --target=spirv64 -x c -c %s 2>&1 | FileCheck --check-prefix=SPV64 %s
 
 // SPV64: "-cc1" "-triple" "spirv64"
-// SPV64-SAME: "-no-opaque-pointers"
 // SPV64-SAME: "-o" [[BC:".*bc"]]
 // SPV64: {{llvm-spirv.*"}} [[BC]] "-o" {{".*o"}}
 
@@ -17,7 +16,6 @@
 // RUN: %clang -### --target=spirv32 -x c -c %s 2>&1 | FileCheck --check-prefix=SPV32 %s
 
 // SPV32: "-cc1" "-triple" "spirv32"
-// SPV32-SAME: "-no-opaque-pointers"
 // SPV32-SAME: "-o" [[BC:".*bc"]]
 // SPV32: {{llvm-spirv.*"}} [[BC]] "-o" {{".*o"}}
 
@@ -71,11 +69,3 @@
 // SPLINK-SAME: "-o" [[BC:".*bc"]]
 // SPLINK: {{llvm-spirv.*"}} [[BC]] "-o" [[SPV2:".*o"]]
 // SPLINK: {{spirv-link.*"}} [[SPV1]] [[SPV2]] "-o" "a.out"
-
-//-----------------------------------------------------------------------------
-// Check external vs internal object emission.
-// RUN: %clang -### --target=spirv64 -fno-integrated-objemitter %s 2>&1 | FileCheck --check-prefix=XTOR %s
-// RUN: %clang -### --target=spirv64 -fintegrated-objemitter %s 2>&1 | FileCheck --check-prefix=BACKEND %s
-
-// XTOR: {{llvm-spirv.*"}}
-// BACKEND-NOT: {{llvm-spirv.*"}}

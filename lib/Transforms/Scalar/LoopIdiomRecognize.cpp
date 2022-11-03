@@ -61,6 +61,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
@@ -345,7 +346,7 @@ INITIALIZE_PASS_END(LoopIdiomRecognizeLegacyPass, "loop-idiom",
 Pass *llvm::createLoopIdiomPass() { return new LoopIdiomRecognizeLegacyPass(); }
 
 static void deleteDeadInstruction(Instruction *I) {
-  I->replaceAllUsesWith(PoisonValue::get(I->getType()));
+  I->replaceAllUsesWith(UndefValue::get(I->getType()));
   I->eraseFromParent();
 }
 
@@ -797,7 +798,7 @@ bool LoopIdiomRecognize::processLoopStores(SmallVectorImpl<StoreInst *> &SL,
 }
 
 /// processLoopMemIntrinsic - Template function for calling different processor
-/// functions based on mem intrinsic type.
+/// functions based on mem instrinsic type.
 template <typename MemInst>
 bool LoopIdiomRecognize::processLoopMemIntrinsic(
     BasicBlock *BB,
@@ -994,8 +995,9 @@ bool LoopIdiomRecognize::processLoopMemSet(MemSetInst *MSI,
   SmallPtrSet<Instruction *, 1> MSIs;
   MSIs.insert(MSI);
   return processLoopStridedStore(Pointer, SE->getSCEV(MSI->getLength()),
-                                 MSI->getDestAlign(), SplatValue, MSI, MSIs, Ev,
-                                 BECount, IsNegStride, /*IsLoopMemset=*/true);
+                                 MaybeAlign(MSI->getDestAlignment()),
+                                 SplatValue, MSI, MSIs, Ev, BECount,
+                                 IsNegStride, /*IsLoopMemset=*/true);
 }
 
 /// mayLoopAccessLocation - Return true if the specified loop might access the
@@ -1099,7 +1101,6 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     Value *StoredVal, Instruction *TheStore,
     SmallPtrSetImpl<Instruction *> &Stores, const SCEVAddRecExpr *Ev,
     const SCEV *BECount, bool IsNegStride, bool IsLoopMemset) {
-  Module *M = TheStore->getModule();
   Value *SplatValue = isBytewiseValue(StoredVal, *DL);
   Constant *PatternValue = nullptr;
 
@@ -1129,7 +1130,7 @@ bool LoopIdiomRecognize::processLoopStridedStore(
 
   // TODO: ideally we should still be able to generate memset if SCEV expander
   // is taught to generate the dependencies at the latest point.
-  if (!Expander.isSafeToExpand(Start))
+  if (!isSafeToExpand(Start, *SE))
     return Changed;
 
   // Okay, we have a strided store "p[i]" of a splattable value.  We can turn
@@ -1163,7 +1164,7 @@ bool LoopIdiomRecognize::processLoopStridedStore(
 
   // TODO: ideally we should still be able to generate memset if SCEV expander
   // is taught to generate the dependencies at the latest point.
-  if (!Expander.isSafeToExpand(NumBytesS))
+  if (!isSafeToExpand(NumBytesS, *SE))
     return Changed;
 
   Value *NumBytes =
@@ -1182,14 +1183,15 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     NewCall = Builder.CreateMemSet(
         BasePtr, SplatValue, NumBytes, MaybeAlign(StoreAlignment),
         /*isVolatile=*/false, AATags.TBAA, AATags.Scope, AATags.NoAlias);
-  } else if (isLibFuncEmittable(M, TLI, LibFunc_memset_pattern16)) {
+  } else {
     // Everything is emitted in default address space
     Type *Int8PtrTy = DestInt8PtrTy;
 
+    Module *M = TheStore->getModule();
     StringRef FuncName = "memset_pattern16";
-    FunctionCallee MSP = getOrInsertLibFunc(M, *TLI, LibFunc_memset_pattern16,
-                            Builder.getVoidTy(), Int8PtrTy, Int8PtrTy, IntIdxTy);
-    inferNonMandatoryLibFuncAttrs(M, FuncName, *TLI);
+    FunctionCallee MSP = M->getOrInsertFunction(FuncName, Builder.getVoidTy(),
+                                                Int8PtrTy, Int8PtrTy, IntIdxTy);
+    inferLibFuncAttributes(M, FuncName, *TLI);
 
     // Otherwise we should form a memset_pattern16.  PatternValue is known to be
     // an constant array of 16-bytes.  Plop the value into a mergable global.
@@ -1200,9 +1202,7 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     GV->setAlignment(Align(16));
     Value *PatternPtr = ConstantExpr::getBitCast(GV, Int8PtrTy);
     NewCall = Builder.CreateCall(MSP, {BasePtr, PatternPtr, NumBytes});
-  } else
-    return Changed;
-
+  }
   NewCall->setDebugLoc(TheStore->getDebugLoc());
 
   if (MSSAU) {
@@ -1277,8 +1277,9 @@ class MemmoveVerifier {
 public:
   explicit MemmoveVerifier(const Value &LoadBasePtr, const Value &StoreBasePtr,
                            const DataLayout &DL)
-      : DL(DL), BP1(llvm::GetPointerBaseWithConstantOffset(
-                    LoadBasePtr.stripPointerCasts(), LoadOff, DL)),
+      : DL(DL), LoadOff(0), StoreOff(0),
+        BP1(llvm::GetPointerBaseWithConstantOffset(
+            LoadBasePtr.stripPointerCasts(), LoadOff, DL)),
         BP2(llvm::GetPointerBaseWithConstantOffset(
             StoreBasePtr.stripPointerCasts(), StoreOff, DL)),
         IsSameObject(BP1 == BP2) {}
@@ -1308,8 +1309,8 @@ public:
 
 private:
   const DataLayout &DL;
-  int64_t LoadOff = 0;
-  int64_t StoreOff = 0;
+  int64_t LoadOff;
+  int64_t StoreOff;
   const Value *BP1;
   const Value *BP2;
 
@@ -1481,9 +1482,9 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(
       return Changed;
     // We cannot allow unaligned ops for unordered load/store, so reject
     // anything where the alignment isn't at least the element size.
-    assert((StoreAlign && LoadAlign) &&
+    assert((StoreAlign.hasValue() && LoadAlign.hasValue()) &&
            "Expect unordered load/store to have align.");
-    if (StoreAlign.value() < StoreSize || LoadAlign.value() < StoreSize)
+    if (StoreAlign.getValue() < StoreSize || LoadAlign.getValue() < StoreSize)
       return Changed;
 
     // If the element.atomic memcpy is not lowered into explicit
@@ -1497,7 +1498,7 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(
     // Note that unordered atomic loads/stores are *required* by the spec to
     // have an alignment but non-atomic loads/stores may not.
     NewCall = Builder.CreateElementUnorderedAtomicMemCpy(
-        StoreBasePtr, StoreAlign.value(), LoadBasePtr, LoadAlign.value(),
+        StoreBasePtr, StoreAlign.getValue(), LoadBasePtr, LoadAlign.getValue(),
         NumBytes, StoreSize, AATags.TBAA, AATags.TBAAStruct, AATags.Scope,
         AATags.NoAlias);
   }

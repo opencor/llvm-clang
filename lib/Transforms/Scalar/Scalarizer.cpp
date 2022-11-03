@@ -39,6 +39,8 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/MathExtras.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include <cassert>
 #include <cstdint>
@@ -50,7 +52,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "scalarizer"
 
-static cl::opt<bool> ClScalarizeVariableInsertExtract(
+static cl::opt<bool> ScalarizeVariableInsertExtract(
     "scalarize-variable-insert-extract", cl::init(true), cl::Hidden,
     cl::desc("Allow the scalarizer pass to scalarize "
              "insertelement/extractelement with variable index"));
@@ -58,9 +60,9 @@ static cl::opt<bool> ClScalarizeVariableInsertExtract(
 // This is disabled by default because having separate loads and stores
 // makes it more likely that the -combiner-alias-analysis limits will be
 // reached.
-static cl::opt<bool> ClScalarizeLoadStore(
-    "scalarize-load-store", cl::init(false), cl::Hidden,
-    cl::desc("Allow the scalarizer pass to scalarize loads and store"));
+static cl::opt<bool>
+    ScalarizeLoadStore("scalarize-load-store", cl::init(false), cl::Hidden,
+                       cl::desc("Allow the scalarizer pass to scalarize loads and store"));
 
 namespace {
 
@@ -94,7 +96,7 @@ public:
   // Scatter V into Size components.  If new instructions are needed,
   // insert them before BBI in BB.  If Cache is nonnull, use it to cache
   // the results.
-  Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v, Type *PtrElemTy,
+  Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
             ValueVector *cachePtr = nullptr);
 
   // Return component I, creating a new Value for it if necessary.
@@ -107,8 +109,8 @@ private:
   BasicBlock *BB;
   BasicBlock::iterator BBI;
   Value *V;
-  Type *PtrElemTy;
   ValueVector *CachePtr;
+  PointerType *PtrTy;
   ValueVector Tmp;
   unsigned Size;
 };
@@ -186,23 +188,10 @@ struct VectorLayout {
   uint64_t ElemSize = 0;
 };
 
-template <typename T>
-T getWithDefaultOverride(const cl::opt<T> &ClOption,
-                         const llvm::Optional<T> &DefaultOverride) {
-  return ClOption.getNumOccurrences() ? ClOption
-                                      : DefaultOverride.value_or(ClOption);
-}
-
 class ScalarizerVisitor : public InstVisitor<ScalarizerVisitor, bool> {
 public:
-  ScalarizerVisitor(unsigned ParallelLoopAccessMDKind, DominatorTree *DT,
-                    ScalarizerPassOptions Options)
-      : ParallelLoopAccessMDKind(ParallelLoopAccessMDKind), DT(DT),
-        ScalarizeVariableInsertExtract(
-            getWithDefaultOverride(ClScalarizeVariableInsertExtract,
-                                   Options.ScalarizeVariableInsertExtract)),
-        ScalarizeLoadStore(getWithDefaultOverride(ClScalarizeLoadStore,
-                                                  Options.ScalarizeLoadStore)) {
+  ScalarizerVisitor(unsigned ParallelLoopAccessMDKind, DominatorTree *DT)
+    : ParallelLoopAccessMDKind(ParallelLoopAccessMDKind), DT(DT) {
   }
 
   bool visit(Function &F);
@@ -227,9 +216,8 @@ public:
   bool visitCallInst(CallInst &ICI);
 
 private:
-  Scatterer scatter(Instruction *Point, Value *V, Type *PtrElemTy = nullptr);
+  Scatterer scatter(Instruction *Point, Value *V);
   void gather(Instruction *Op, const ValueVector &CV);
-  void replaceUses(Instruction *Op, Value *CV);
   bool canTransferMetadata(unsigned Kind);
   void transferMetadataAndIRFlags(Instruction *Op, const ValueVector &CV);
   Optional<VectorLayout> getVectorLayout(Type *Ty, Align Alignment,
@@ -243,16 +231,12 @@ private:
 
   ScatterMap Scattered;
   GatherList Gathered;
-  bool Scalarized;
 
   SmallVector<WeakTrackingVH, 32> PotentiallyDeadInstrs;
 
   unsigned ParallelLoopAccessMDKind;
 
   DominatorTree *DT;
-
-  const bool ScalarizeVariableInsertExtract;
-  const bool ScalarizeLoadStore;
 };
 
 class ScalarizerLegacyPass : public FunctionPass {
@@ -281,14 +265,12 @@ INITIALIZE_PASS_END(ScalarizerLegacyPass, "scalarizer",
                     "Scalarize vector operations", false, false)
 
 Scatterer::Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
-                     Type *PtrElemTy, ValueVector *cachePtr)
-    : BB(bb), BBI(bbi), V(v), PtrElemTy(PtrElemTy), CachePtr(cachePtr) {
+                     ValueVector *cachePtr)
+  : BB(bb), BBI(bbi), V(v), CachePtr(cachePtr) {
   Type *Ty = V->getType();
-  if (Ty->isPointerTy()) {
-    assert(cast<PointerType>(Ty)->isOpaqueOrPointeeTypeMatches(PtrElemTy) &&
-           "Pointer element type mismatch");
-    Ty = PtrElemTy;
-  }
+  PtrTy = dyn_cast<PointerType>(Ty);
+  if (PtrTy)
+    Ty = PtrTy->getPointerElementType();
   Size = cast<FixedVectorType>(Ty)->getNumElements();
   if (!CachePtr)
     Tmp.resize(Size, nullptr);
@@ -305,15 +287,15 @@ Value *Scatterer::operator[](unsigned I) {
   if (CV[I])
     return CV[I];
   IRBuilder<> Builder(BB, BBI);
-  if (PtrElemTy) {
-    Type *VectorElemTy = cast<VectorType>(PtrElemTy)->getElementType();
+  if (PtrTy) {
+    Type *ElTy =
+        cast<VectorType>(PtrTy->getPointerElementType())->getElementType();
     if (!CV[0]) {
-      Type *NewPtrTy = PointerType::get(
-          VectorElemTy, V->getType()->getPointerAddressSpace());
+      Type *NewPtrTy = PointerType::get(ElTy, PtrTy->getAddressSpace());
       CV[0] = Builder.CreateBitCast(V, NewPtrTy, V->getName() + ".i0");
     }
     if (I != 0)
-      CV[I] = Builder.CreateConstGEP1_32(VectorElemTy, CV[0], I,
+      CV[I] = Builder.CreateConstGEP1_32(ElTy, CV[0], I,
                                          V->getName() + ".i" + Twine(I));
   } else {
     // Search through a chain of InsertElementInsts looking for element I.
@@ -352,7 +334,7 @@ bool ScalarizerLegacyPass::runOnFunction(Function &F) {
   unsigned ParallelLoopAccessMDKind =
       M.getContext().getMDKindID("llvm.mem.parallel_loop_access");
   DominatorTree *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  ScalarizerVisitor Impl(ParallelLoopAccessMDKind, DT, ScalarizerPassOptions());
+  ScalarizerVisitor Impl(ParallelLoopAccessMDKind, DT);
   return Impl.visit(F);
 }
 
@@ -362,8 +344,6 @@ FunctionPass *llvm::createScalarizerPass() {
 
 bool ScalarizerVisitor::visit(Function &F) {
   assert(Gathered.empty() && Scattered.empty());
-
-  Scalarized = false;
 
   // To ensure we replace gathered components correctly we need to do an ordered
   // traversal of the basic blocks in the function.
@@ -382,14 +362,13 @@ bool ScalarizerVisitor::visit(Function &F) {
 
 // Return a scattered form of V that can be accessed by Point.  V must be a
 // vector or a pointer to a vector.
-Scatterer ScalarizerVisitor::scatter(Instruction *Point, Value *V,
-                                     Type *PtrElemTy) {
+Scatterer ScalarizerVisitor::scatter(Instruction *Point, Value *V) {
   if (Argument *VArg = dyn_cast<Argument>(V)) {
     // Put the scattered form of arguments in the entry block,
     // so that it can be used everywhere.
     Function *F = VArg->getParent();
     BasicBlock *BB = &F->getEntryBlock();
-    return Scatterer(BB, BB->begin(), V, PtrElemTy, &Scattered[V]);
+    return Scatterer(BB, BB->begin(), V, &Scattered[V]);
   }
   if (Instruction *VOp = dyn_cast<Instruction>(V)) {
     // When scalarizing PHI nodes we might try to examine/rewrite InsertElement
@@ -400,17 +379,17 @@ Scatterer ScalarizerVisitor::scatter(Instruction *Point, Value *V,
     // need to analyse them further.
     if (!DT->isReachableFromEntry(VOp->getParent()))
       return Scatterer(Point->getParent(), Point->getIterator(),
-                       PoisonValue::get(V->getType()), PtrElemTy);
+                       UndefValue::get(V->getType()));
     // Put the scattered form of an instruction directly after the
     // instruction, skipping over PHI nodes and debug intrinsics.
     BasicBlock *BB = VOp->getParent();
     return Scatterer(
         BB, skipPastPhiNodesAndDbg(std::next(BasicBlock::iterator(VOp))), V,
-        PtrElemTy, &Scattered[V]);
+        &Scattered[V]);
   }
   // In the fallback case, just put the scattered before Point and
   // keep the result local to Point.
-  return Scatterer(Point->getParent(), Point->getIterator(), V, PtrElemTy);
+  return Scatterer(Point->getParent(), Point->getIterator(), V);
 }
 
 // Replace Op with the gathered form of the components in CV.  Defer the
@@ -438,15 +417,6 @@ void ScalarizerVisitor::gather(Instruction *Op, const ValueVector &CV) {
   }
   SV = CV;
   Gathered.push_back(GatherList::value_type(Op, &SV));
-}
-
-// Replace Op with CV and collect Op has a potentially dead instruction.
-void ScalarizerVisitor::replaceUses(Instruction *Op, Value *CV) {
-  if (CV != Op) {
-    Op->replaceAllUsesWith(CV);
-    PotentiallyDeadInstrs.emplace_back(Op);
-    Scalarized = true;
-  }
 }
 
 // Return true if it is safe to transfer the given metadata tag from
@@ -588,11 +558,9 @@ bool ScalarizerVisitor::splitCall(CallInst &CI) {
     if (OpI->getType()->isVectorTy()) {
       Scattered[I] = scatter(&CI, OpI);
       assert(Scattered[I].size() == NumElems && "mismatched call operands");
-      if (isVectorIntrinsicWithOverloadTypeAtArg(ID, I))
-        Tys.push_back(OpI->getType()->getScalarType());
     } else {
       ScalarOperands[I] = OpI;
-      if (isVectorIntrinsicWithOverloadTypeAtArg(ID, I))
+      if (hasVectorInstrinsicOverloadedScalarOpd(ID, I))
         Tys.push_back(OpI->getType());
     }
   }
@@ -608,7 +576,7 @@ bool ScalarizerVisitor::splitCall(CallInst &CI) {
     ScalarCallOps.clear();
 
     for (unsigned J = 0; J != NumArgs; ++J) {
-      if (isVectorIntrinsicWithScalarOpAtArg(ID, J))
+      if (hasVectorInstrinsicScalarOpd(ID, J))
         ScalarCallOps.push_back(ScalarOperands[J]);
       else
         ScalarCallOps.push_back(Scattered[J][Elem]);
@@ -841,7 +809,7 @@ bool ScalarizerVisitor::visitExtractElementInst(ExtractElementInst &EEI) {
 
   if (auto *CI = dyn_cast<ConstantInt>(ExtIdx)) {
     Value *Res = Op0[CI->getValue().getZExtValue()];
-    replaceUses(&EEI, Res);
+    gather(&EEI, {Res});
     return true;
   }
 
@@ -857,7 +825,7 @@ bool ScalarizerVisitor::visitExtractElementInst(ExtractElementInst &EEI) {
     Res = Builder.CreateSelect(ShouldExtract, Elt, Res,
                                EEI.getName() + ".upto" + Twine(I));
   }
-  replaceUses(&EEI, Res);
+  gather(&EEI, {Res});
   return true;
 }
 
@@ -923,7 +891,7 @@ bool ScalarizerVisitor::visitLoadInst(LoadInst &LI) {
 
   unsigned NumElems = cast<FixedVectorType>(Layout->VecTy)->getNumElements();
   IRBuilder<> Builder(&LI);
-  Scatterer Ptr = scatter(&LI, LI.getPointerOperand(), LI.getType());
+  Scatterer Ptr = scatter(&LI, LI.getPointerOperand());
   ValueVector Res;
   Res.resize(NumElems);
 
@@ -949,7 +917,7 @@ bool ScalarizerVisitor::visitStoreInst(StoreInst &SI) {
 
   unsigned NumElems = cast<FixedVectorType>(Layout->VecTy)->getNumElements();
   IRBuilder<> Builder(&SI);
-  Scatterer VPtr = scatter(&SI, SI.getPointerOperand(), FullValue->getType());
+  Scatterer VPtr = scatter(&SI, SI.getPointerOperand());
   Scatterer VVal = scatter(&SI, FullValue);
 
   ValueVector Stores;
@@ -972,7 +940,7 @@ bool ScalarizerVisitor::visitCallInst(CallInst &CI) {
 bool ScalarizerVisitor::finish() {
   // The presence of data in Gathered or Scattered indicates changes
   // made to the Function.
-  if (Gathered.empty() && Scattered.empty() && !Scalarized)
+  if (Gathered.empty() && Scattered.empty())
     return false;
   for (const auto &GMI : Gathered) {
     Instruction *Op = GMI.first;
@@ -1003,7 +971,6 @@ bool ScalarizerVisitor::finish() {
   }
   Gathered.clear();
   Scattered.clear();
-  Scalarized = false;
 
   RecursivelyDeleteTriviallyDeadInstructionsPermissive(PotentiallyDeadInstrs);
 
@@ -1015,7 +982,7 @@ PreservedAnalyses ScalarizerPass::run(Function &F, FunctionAnalysisManager &AM) 
   unsigned ParallelLoopAccessMDKind =
       M.getContext().getMDKindID("llvm.mem.parallel_loop_access");
   DominatorTree *DT = &AM.getResult<DominatorTreeAnalysis>(F);
-  ScalarizerVisitor Impl(ParallelLoopAccessMDKind, DT, Options);
+  ScalarizerVisitor Impl(ParallelLoopAccessMDKind, DT);
   bool Changed = Impl.visit(F);
   PreservedAnalyses PA;
   PA.preserve<DominatorTreeAnalysis>();

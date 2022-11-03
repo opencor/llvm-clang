@@ -18,7 +18,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/DependenceAnalysis.h"
-#include "llvm/Analysis/LoopCacheAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopNestAnalysis.h"
 #include "llvm/Analysis/LoopPass.h"
@@ -34,6 +33,7 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Type.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
 #include "llvm/InitializePasses.h"
@@ -44,6 +44,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include <cassert>
@@ -119,6 +120,8 @@ static bool populateDependencyMatrix(CharMatrix &DepMatrix, unsigned Level,
       std::vector<char> Dep;
       Instruction *Src = cast<Instruction>(*I);
       Instruction *Dst = cast<Instruction>(*J);
+      if (Src == Dst)
+        continue;
       // Ignore Input dependencies.
       if (isa<LoadInst>(Src) && isa<LoadInst>(Dst))
         continue;
@@ -267,27 +270,26 @@ static bool isLegalToInterChangeLoops(CharMatrix &DepMatrix,
   return true;
 }
 
-static void populateWorklist(Loop &L, LoopVector &LoopList) {
+static LoopVector populateWorklist(Loop &L) {
   LLVM_DEBUG(dbgs() << "Calling populateWorklist on Func: "
                     << L.getHeader()->getParent()->getName() << " Loop: %"
                     << L.getHeader()->getName() << '\n');
-  assert(LoopList.empty() && "LoopList should initially be empty!");
+  LoopVector LoopList;
   Loop *CurrentLoop = &L;
   const std::vector<Loop *> *Vec = &CurrentLoop->getSubLoops();
   while (!Vec->empty()) {
     // The current loop has multiple subloops in it hence it is not tightly
     // nested.
     // Discard all loops above it added into Worklist.
-    if (Vec->size() != 1) {
-      LoopList = {};
-      return;
-    }
+    if (Vec->size() != 1)
+      return {};
 
     LoopList.push_back(CurrentLoop);
     CurrentLoop = Vec->front();
     Vec = &CurrentLoop->getSubLoops();
   }
   LoopList.push_back(CurrentLoop);
+  return LoopList;
 }
 
 namespace {
@@ -358,10 +360,8 @@ public:
       : OuterLoop(Outer), InnerLoop(Inner), SE(SE), ORE(ORE) {}
 
   /// Check if the loop interchange is profitable.
-  bool isProfitable(const Loop *InnerLoop, const Loop *OuterLoop,
-                    unsigned InnerLoopId, unsigned OuterLoopId,
-                    CharMatrix &DepMatrix,
-                    const DenseMap<const Loop *, unsigned> &CostMap);
+  bool isProfitable(unsigned InnerLoopId, unsigned OuterLoopId,
+                    CharMatrix &DepMatrix);
 
 private:
   int getInstrOrderCost();
@@ -412,26 +412,23 @@ struct LoopInterchange {
   LoopInfo *LI = nullptr;
   DependenceInfo *DI = nullptr;
   DominatorTree *DT = nullptr;
-  std::unique_ptr<CacheCost> CC = nullptr;
 
   /// Interface to emit optimization remarks.
   OptimizationRemarkEmitter *ORE;
 
   LoopInterchange(ScalarEvolution *SE, LoopInfo *LI, DependenceInfo *DI,
-                  DominatorTree *DT, std::unique_ptr<CacheCost> &CC,
-                  OptimizationRemarkEmitter *ORE)
-      : SE(SE), LI(LI), DI(DI), DT(DT), CC(std::move(CC)), ORE(ORE) {}
+                  DominatorTree *DT, OptimizationRemarkEmitter *ORE)
+      : SE(SE), LI(LI), DI(DI), DT(DT), ORE(ORE) {}
 
   bool run(Loop *L) {
     if (L->getParentLoop())
       return false;
-    SmallVector<Loop *, 8> LoopList;
-    populateWorklist(*L, LoopList);
-    return processLoopList(LoopList);
+
+    return processLoopList(populateWorklist(*L));
   }
 
   bool run(LoopNest &LN) {
-    SmallVector<Loop *, 8> LoopList(LN.getLoops().begin(), LN.getLoops().end());
+    const auto &LoopList = LN.getLoops();
     for (unsigned I = 1; I < LoopList.size(); ++I)
       if (LoopList[I]->getParentLoop() != LoopList[I - 1])
         return false;
@@ -463,7 +460,7 @@ struct LoopInterchange {
     return LoopList.size() - 1;
   }
 
-  bool processLoopList(SmallVectorImpl<Loop *> &LoopList) {
+  bool processLoopList(ArrayRef<Loop *> LoopList) {
     bool Changed = false;
     unsigned LoopNestDepth = LoopList.size();
     if (LoopNestDepth < 2) {
@@ -503,55 +500,27 @@ struct LoopInterchange {
     }
 
     unsigned SelecLoopId = selectLoopForInterchange(LoopList);
-    // Obtain the loop vector returned from loop cache analysis beforehand,
-    // and put each <Loop, index> pair into a map for constant time query
-    // later. Indices in loop vector reprsent the optimal order of the
-    // corresponding loop, e.g., given a loopnest with depth N, index 0
-    // indicates the loop should be placed as the outermost loop and index N
-    // indicates the loop should be placed as the innermost loop.
-    //
-    // For the old pass manager CacheCost would be null.
-    DenseMap<const Loop *, unsigned> CostMap;
-    if (CC != nullptr) {
-      const auto &LoopCosts = CC->getLoopCosts();
-      for (unsigned i = 0; i < LoopCosts.size(); i++) {
-        CostMap[LoopCosts[i].first] = i;
-      }
-    }
-    // We try to achieve the globally optimal memory access for the loopnest,
-    // and do interchange based on a bubble-sort fasion. We start from
-    // the innermost loop, move it outwards to the best possible position
-    // and repeat this process.
-    for (unsigned j = SelecLoopId; j > 0; j--) {
-      bool ChangedPerIter = false;
-      for (unsigned i = SelecLoopId; i > SelecLoopId - j; i--) {
-        bool Interchanged = processLoop(LoopList[i], LoopList[i - 1], i, i - 1,
-                                        DependencyMatrix, CostMap);
-        if (!Interchanged)
-          continue;
-        // Loops interchanged, update LoopList accordingly.
-        std::swap(LoopList[i - 1], LoopList[i]);
-        // Update the DependencyMatrix
-        interChangeDependencies(DependencyMatrix, i, i - 1);
+    // Move the selected loop outwards to the best possible position.
+    Loop *LoopToBeInterchanged = LoopList[SelecLoopId];
+    for (unsigned i = SelecLoopId; i > 0; i--) {
+      bool Interchanged = processLoop(LoopToBeInterchanged, LoopList[i - 1], i,
+                                      i - 1, DependencyMatrix);
+      if (!Interchanged)
+        return Changed;
+      // Update the DependencyMatrix
+      interChangeDependencies(DependencyMatrix, i, i - 1);
 #ifdef DUMP_DEP_MATRICIES
-        LLVM_DEBUG(dbgs() << "Dependence after interchange\n");
-        printDepMatrix(DependencyMatrix);
+      LLVM_DEBUG(dbgs() << "Dependence after interchange\n");
+      printDepMatrix(DependencyMatrix);
 #endif
-        ChangedPerIter |= Interchanged;
-        Changed |= Interchanged;
-      }
-      // Early abort if there was no interchange during an entire round of
-      // moving loops outwards.
-      if (!ChangedPerIter)
-        break;
+      Changed |= Interchanged;
     }
     return Changed;
   }
 
   bool processLoop(Loop *InnerLoop, Loop *OuterLoop, unsigned InnerLoopId,
                    unsigned OuterLoopId,
-                   std::vector<std::vector<char>> &DependencyMatrix,
-                   const DenseMap<const Loop *, unsigned> &CostMap) {
+                   std::vector<std::vector<char>> &DependencyMatrix) {
     LLVM_DEBUG(dbgs() << "Processing InnerLoopId = " << InnerLoopId
                       << " and OuterLoopId = " << OuterLoopId << "\n");
     LoopInterchangeLegality LIL(OuterLoop, InnerLoop, SE, ORE);
@@ -561,8 +530,7 @@ struct LoopInterchange {
     }
     LLVM_DEBUG(dbgs() << "Loops are legal to interchange\n");
     LoopInterchangeProfitability LIP(OuterLoop, InnerLoop, SE, ORE);
-    if (!LIP.isProfitable(InnerLoop, OuterLoop, InnerLoopId, OuterLoopId,
-                          DependencyMatrix, CostMap)) {
+    if (!LIP.isProfitable(InnerLoopId, OuterLoopId, DependencyMatrix)) {
       LLVM_DEBUG(dbgs() << "Interchanging loops not profitable.\n");
       return false;
     }
@@ -765,12 +733,8 @@ static PHINode *findInnerReductionPhi(Loop *L, Value *V) {
       if (PHI->getNumIncomingValues() == 1)
         continue;
       RecurrenceDescriptor RD;
-      if (RecurrenceDescriptor::isReductionPHI(PHI, L, RD)) {
-        // Detect floating point reduction only when it can be reordered.
-        if (RD.getExactFPMathInst() != nullptr)
-          return nullptr;
+      if (RecurrenceDescriptor::isReductionPHI(PHI, L, RD))
         return PHI;
-      }
       return nullptr;
     }
   }
@@ -929,23 +893,28 @@ areInnerLoopExitPHIsSupported(Loop *InnerL, Loop *OuterL,
 static bool areOuterLoopExitPHIsSupported(Loop *OuterLoop, Loop *InnerLoop) {
   BasicBlock *LoopNestExit = OuterLoop->getUniqueExitBlock();
   for (PHINode &PHI : LoopNestExit->phis()) {
+    //  FIXME: We currently are not able to detect floating point reductions
+    //         and have to use floating point PHIs as a proxy to prevent
+    //         interchanging in the presence of floating point reductions.
+    if (PHI.getType()->isFloatingPointTy())
+      return false;
     for (unsigned i = 0; i < PHI.getNumIncomingValues(); i++) {
-      Instruction *IncomingI = dyn_cast<Instruction>(PHI.getIncomingValue(i));
-      if (!IncomingI || IncomingI->getParent() != OuterLoop->getLoopLatch())
-        continue;
+     Instruction *IncomingI = dyn_cast<Instruction>(PHI.getIncomingValue(i));
+     if (!IncomingI || IncomingI->getParent() != OuterLoop->getLoopLatch())
+       continue;
 
-      // The incoming value is defined in the outer loop latch. Currently we
-      // only support that in case the outer loop latch has a single predecessor.
-      // This guarantees that the outer loop latch is executed if and only if
-      // the inner loop is executed (because tightlyNested() guarantees that the
-      // outer loop header only branches to the inner loop or the outer loop
-      // latch).
-      // FIXME: We could weaken this logic and allow multiple predecessors,
-      //        if the values are produced outside the loop latch. We would need
-      //        additional logic to update the PHI nodes in the exit block as
-      //        well.
-      if (OuterLoop->getLoopLatch()->getUniquePredecessor() == nullptr)
-        return false;
+     // The incoming value is defined in the outer loop latch. Currently we
+     // only support that in case the outer loop latch has a single predecessor.
+     // This guarantees that the outer loop latch is executed if and only if
+     // the inner loop is executed (because tightlyNested() guarantees that the
+     // outer loop header only branches to the inner loop or the outer loop
+     // latch).
+     // FIXME: We could weaken this logic and allow multiple predecessors,
+     //        if the values are produced outside the loop latch. We would need
+     //        additional logic to update the PHI nodes in the exit block as
+     //        well.
+     if (OuterLoop->getLoopLatch()->getUniquePredecessor() == nullptr)
+       return false;
     }
   }
   return true;
@@ -1156,33 +1125,21 @@ static bool isProfitableForVectorization(unsigned InnerLoopId,
   return !DepMatrix.empty();
 }
 
-bool LoopInterchangeProfitability::isProfitable(
-    const Loop *InnerLoop, const Loop *OuterLoop, unsigned InnerLoopId,
-    unsigned OuterLoopId, CharMatrix &DepMatrix,
-    const DenseMap<const Loop *, unsigned> &CostMap) {
-  // TODO: Remove the legacy cost model.
+bool LoopInterchangeProfitability::isProfitable(unsigned InnerLoopId,
+                                                unsigned OuterLoopId,
+                                                CharMatrix &DepMatrix) {
+  // TODO: Add better profitability checks.
+  // e.g
+  // 1) Construct dependency matrix and move the one with no loop carried dep
+  //    inside to enable vectorization.
 
-  // This is the new cost model returned from loop cache analysis.
-  // A smaller index means the loop should be placed an outer loop, and vice
-  // versa.
-  if (CostMap.find(InnerLoop) != CostMap.end() &&
-      CostMap.find(OuterLoop) != CostMap.end()) {
-    unsigned InnerIndex = 0, OuterIndex = 0;
-    InnerIndex = CostMap.find(InnerLoop)->second;
-    OuterIndex = CostMap.find(OuterLoop)->second;
-    LLVM_DEBUG(dbgs() << "InnerIndex = " << InnerIndex
-                      << ", OuterIndex = " << OuterIndex << "\n");
-    if (InnerIndex < OuterIndex)
-      return true;
-  } else {
-    // Legacy cost model: this is rough cost estimation algorithm. It counts the
-    // good and bad order of induction variables in the instruction and allows
-    // reordering if number of bad orders is more than good.
-    int Cost = getInstrOrderCost();
-    LLVM_DEBUG(dbgs() << "Cost = " << Cost << "\n");
-    if (Cost < -LoopInterchangeCostThreshold)
-      return true;
-  }
+  // This is rough cost estimation algorithm. It counts the good and bad order
+  // of induction variables in the instruction and allows reordering if number
+  // of bad orders is more than good.
+  int Cost = getInstrOrderCost();
+  LLVM_DEBUG(dbgs() << "Cost = " << Cost << "\n");
+  if (Cost < -LoopInterchangeCostThreshold)
+    return true;
 
   // It is not profitable as per current cache profitability model. But check if
   // we can move this loop outside to improve parallelism.
@@ -1193,8 +1150,10 @@ bool LoopInterchangeProfitability::isProfitable(
     return OptimizationRemarkMissed(DEBUG_TYPE, "InterchangeNotProfitable",
                                     InnerLoop->getStartLoc(),
                                     InnerLoop->getHeader())
-           << "Interchanging loops is too costly and it does not improve "
-              "parallelism.";
+           << "Interchanging loops is too costly (cost="
+           << ore::NV("Cost", Cost) << ", threshold="
+           << ore::NV("Threshold", LoopInterchangeCostThreshold)
+           << ") and it does not improve parallelism.";
   });
   return false;
 }
@@ -1465,13 +1424,9 @@ static void moveLCSSAPhis(BasicBlock *InnerExit, BasicBlock *InnerHeader,
 
     // Incoming values are guaranteed be instructions currently.
     auto IncI = cast<Instruction>(P.getIncomingValueForBlock(InnerLatch));
-    // In case of multi-level nested loops, follow LCSSA to find the incoming
-    // value defined from the innermost loop.
-    auto IncIInnerMost = cast<Instruction>(followLCSSA(IncI));
     // Skip phis with incoming values from the inner loop body, excluding the
     // header and latch.
-    if (IncIInnerMost->getParent() != InnerLatch &&
-        IncIInnerMost->getParent() != InnerHeader)
+    if (IncI->getParent() != InnerLatch && IncI->getParent() != InnerHeader)
       continue;
 
     assert(all_of(P.users(),
@@ -1740,8 +1695,8 @@ struct LoopInterchangeLegacyPass : public LoopPass {
     auto *DI = &getAnalysis<DependenceAnalysisWrapperPass>().getDI();
     auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     auto *ORE = &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
-    std::unique_ptr<CacheCost> CC = nullptr;
-    return LoopInterchange(SE, LI, DI, DT, CC, ORE).run(L);
+
+    return LoopInterchange(SE, LI, DI, DT, ORE).run(L);
   }
 };
 } // namespace
@@ -1768,10 +1723,8 @@ PreservedAnalyses LoopInterchangePass::run(LoopNest &LN,
   Function &F = *LN.getParent();
 
   DependenceInfo DI(&F, &AR.AA, &AR.SE, &AR.LI);
-  std::unique_ptr<CacheCost> CC =
-      CacheCost::getCacheCost(LN.getOutermostLoop(), AR, DI);
   OptimizationRemarkEmitter ORE(&F);
-  if (!LoopInterchange(&AR.SE, &AR.LI, &DI, &AR.DT, CC, &ORE).run(LN))
+  if (!LoopInterchange(&AR.SE, &AR.LI, &DI, &AR.DT, &ORE).run(LN))
     return PreservedAnalyses::all();
   return getLoopPassPreservedAnalyses();
 }

@@ -1,5 +1,4 @@
 add_llvm_component_library(LLVMJITLink
-  DWARFRecordSectionSplitter.cpp
   EHFrameSupport.cpp
   JITLink.cpp
   JITLinkGeneric.cpp
@@ -20,11 +19,6 @@ add_llvm_component_library(LLVMJITLink
   ELF_aarch64.cpp
   ELF_riscv.cpp
   ELF_x86_64.cpp
-
-  # COFF
-  COFF.cpp
-  COFFLinkGraphBuilder.cpp
-  COFF_x86_64.cpp
 
   # Architectures:
   aarch64.cpp

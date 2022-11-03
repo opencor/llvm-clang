@@ -21,6 +21,7 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/Object/ModuleSymbolTable.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/FunctionAttrs.h"
@@ -127,14 +128,6 @@ void promoteTypeIds(Module &M, StringRef ModuleId) {
   if (Function *TypeTestFunc =
           M.getFunction(Intrinsic::getName(Intrinsic::type_test))) {
     for (const Use &U : TypeTestFunc->uses()) {
-      auto CI = cast<CallInst>(U.getUser());
-      ExternalizeTypeId(CI, 1);
-    }
-  }
-
-  if (Function *PublicTypeTestFunc =
-          M.getFunction(Intrinsic::getName(Intrinsic::public_type_test))) {
-    for (const Use &U : PublicTypeTestFunc->uses()) {
       auto CI = cast<CallInst>(U.getUser());
       ExternalizeTypeId(CI, 1);
     }
@@ -318,8 +311,7 @@ void splitAndWriteThinLTOBitcode(
             return;
         }
         if (!F->isDeclaration() &&
-            computeFunctionBodyMemoryAccess(*F, AARGetter(*F)) ==
-                FMRB_DoesNotAccessMemory)
+            computeFunctionBodyMemoryAccess(*F, AARGetter(*F)) == MAK_ReadNone)
           EligibleVirtualFns.insert(F);
       });
     }
@@ -550,11 +542,11 @@ class WriteThinLTOBitcode : public ModulePass {
   raw_ostream &OS; // raw_ostream to print on
   // The output stream on which to emit a minimized module for use
   // just in the thin link, if requested.
-  raw_ostream *ThinLinkOS = nullptr;
+  raw_ostream *ThinLinkOS;
 
 public:
   static char ID; // Pass identification, replacement for typeid
-  WriteThinLTOBitcode() : ModulePass(ID), OS(dbgs()) {
+  WriteThinLTOBitcode() : ModulePass(ID), OS(dbgs()), ThinLinkOS(nullptr) {
     initializeWriteThinLTOBitcodePass(*PassRegistry::getPassRegistry());
   }
 

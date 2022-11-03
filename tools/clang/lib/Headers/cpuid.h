@@ -232,7 +232,6 @@
 
 /* Features in %ebx for leaf 0x80000008 */
 #define bit_CLZERO      0x00000001
-#define bit_RDPRU       0x00000010
 #define bit_WBNOINVD    0x00000200
 
 

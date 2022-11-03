@@ -14,6 +14,7 @@
 
 #include "llvm/DebugInfo/Symbolize/DIFetcher.h"
 
+#include "llvm/Debuginfod/Debuginfod.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 

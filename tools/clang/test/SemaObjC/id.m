@@ -5,7 +5,7 @@
 Class T;
 id<Foo> S;
 id R;
-void foo(void) {
+void foo() {
   // Test assignment compatibility of Class and id.  No warning should be
   // produced.
   // rdar://6770142 - Class and id<foo> are compatible.

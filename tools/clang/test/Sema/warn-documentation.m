@@ -176,7 +176,7 @@ struct S;
 
 // expected-warning@+1 {{unknown command tag name}}
 /// \t bbb IS_DOXYGEN_END
-int FooBar(void);
+int FooBar();
 
 // rdar://13836387
 /** \brief Module handling the incoming notifications from the system.
@@ -256,7 +256,7 @@ struct HasFields {
  * \param p not here.
  * \returns integer.
  */
-void (^_Nullable blockPointerVariableThatLeadsNowhere)(void);
+void (^_Nullable blockPointerVariableThatLeadsNowhere)();
 
 @interface CheckFunctionBlockPointerVars {
   /**
@@ -298,7 +298,7 @@ void (^_Nullable blockPointerVariableThatLeadsNowhere)(void);
  * \returns Nothing, but can allow this as this pattern is used to document the
  * value that the property getter returns.
  */
-@property void (^blockReturnsNothing)(void);
+@property void (^blockReturnsNothing)();
 
 @end
 
@@ -314,8 +314,8 @@ void (^_Nullable blockPointerVariableThatLeadsNowhere)(void);
 typedef void (^VariadicBlockType)(int a, ...);
 
 // PR42844 - Assertion failures when using typedefed block pointers
-typedef void(^VoidBlockType)(void);
-typedef VoidBlockType VoidBlockTypeCall(void);
+typedef void(^VoidBlockType)();
+typedef VoidBlockType VoidBlockTypeCall();
 VoidBlockTypeCall *d; ///< \return none
 // expected-warning@-1 {{'\return' command used in a comment that is not attached to a function or method declaration}}
 VoidBlockTypeCall ^e; ///< \return none

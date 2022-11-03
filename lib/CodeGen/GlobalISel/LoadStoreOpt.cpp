@@ -73,7 +73,6 @@ void LoadStoreOpt::init(MachineFunction &MF) {
 
 void LoadStoreOpt::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<AAResultsWrapperPass>();
-  AU.setPreservesAll();
   getSelectionDAGFallbackAnalysisUsage(AU);
   MachineFunctionPass::getAnalysisUsage(AU);
 }
@@ -298,7 +297,7 @@ bool LoadStoreOpt::mergeStores(SmallVectorImpl<GStore *> &StoresToMerge) {
   const auto &LegalSizes = LegalStoreSizes[AS];
 
 #ifndef NDEBUG
-  for (auto *StoreMI : StoresToMerge)
+  for (auto StoreMI : StoresToMerge)
     assert(MRI->getType(StoreMI->getValueReg()) == OrigTy);
 #endif
 
@@ -366,7 +365,7 @@ bool LoadStoreOpt::doSingleStoreMerge(SmallVectorImpl<GStore *> &Stores) {
   // directly. Otherwise, we need to generate some instructions to merge the
   // existing values together into a wider type.
   SmallVector<APInt, 8> ConstantVals;
-  for (auto *Store : Stores) {
+  for (auto Store : Stores) {
     auto MaybeCst =
         getIConstantVRegValWithLookThrough(Store->getValueReg(), *MRI);
     if (!MaybeCst) {
@@ -415,7 +414,7 @@ bool LoadStoreOpt::doSingleStoreMerge(SmallVectorImpl<GStore *> &Stores) {
     return R;
   });
 
-  for (auto *MI : Stores)
+  for (auto MI : Stores)
     InstsToErase.insert(MI);
   return true;
 }
@@ -507,12 +506,6 @@ bool LoadStoreOpt::addStoreToCandidate(GStore &StoreMI,
 
   // Don't allow truncating stores for now.
   if (StoreMI.getMemSizeInBits() != ValueTy.getSizeInBits())
-    return false;
-
-  // Avoid adding volatile or ordered stores to the candidate. We already have a
-  // check for this in instMayAlias() but that only get's called later between
-  // potential aliasing hazards.
-  if (!StoreMI.isSimple())
     return false;
 
   Register StoreAddr = StoreMI.getPointerReg();

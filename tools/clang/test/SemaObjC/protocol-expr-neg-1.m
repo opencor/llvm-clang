@@ -9,7 +9,7 @@
 
 @class cl;
 
-int main(void)
+int main()
 {
 	Protocol *proto = @protocol(p1);
         Protocol *fproto = @protocol(fproto); // expected-error {{@protocol is using a forward protocol declaration of 'fproto'}}

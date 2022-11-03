@@ -124,10 +124,6 @@ class LLVM_LIBRARY_VISIBILITY OpenMPLinker : public Tool {
                      const char *LinkingOutput) const override;
 };
 
-void getNVPTXTargetFeatures(const Driver &D, const llvm::Triple &Triple,
-                            const llvm::opt::ArgList &Args,
-                            std::vector<StringRef> &Features);
-
 } // end namespace NVPTX
 } // end namespace tools
 

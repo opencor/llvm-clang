@@ -12,10 +12,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GlobalISel/InlineAsmLowering.h"
+#include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/GlobalISel/MachineIRBuilder.h"
+#include "llvm/CodeGen/GlobalISel/Utils.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 
 #define DEBUG_TYPE "inline-asm-lowering"
@@ -145,7 +150,6 @@ static unsigned getConstraintGenerality(TargetLowering::ConstraintType CT) {
   case TargetLowering::C_RegisterClass:
     return 2;
   case TargetLowering::C_Memory:
-  case TargetLowering::C_Address:
     return 3;
   }
   llvm_unreachable("Invalid constraint type");
@@ -306,7 +310,7 @@ bool InlineAsmLowering::lowerInlineAsm(
       // If this is an indirect operand, the operand is a pointer to the
       // accessed type.
       if (OpInfo.isIndirect) {
-        OpTy = Call.getParamElementType(ArgNo);
+        OpTy = Call.getAttributes().getParamElementType(ArgNo);
         assert(OpTy && "Indirect operand must have elementtype attribute");
       }
 
@@ -332,8 +336,6 @@ bool InlineAsmLowering::lowerInlineAsm(
       }
       ++ResNo;
     } else {
-      assert(OpInfo.Type != InlineAsm::isLabel &&
-             "GlobalISel currently doesn't support callbr");
       OpInfo.ConstraintVT = MVT::Other;
     }
 
@@ -429,8 +431,7 @@ bool InlineAsmLowering::lowerInlineAsm(
       }
 
       break;
-    case InlineAsm::isInput:
-    case InlineAsm::isLabel: {
+    case InlineAsm::isInput: {
       if (OpInfo.isMatchingInputConstraint()) {
         unsigned DefIdx = OpInfo.getMatchedOperand();
         // Find operand with register def that corresponds to DefIdx.
@@ -648,8 +649,6 @@ bool InlineAsmLowering::lowerInlineAsm(
       return false;
     case TargetLowering::C_Memory:
       break; // Already handled.
-    case TargetLowering::C_Address:
-      break; // Silence warning.
     case TargetLowering::C_Unknown:
       LLVM_DEBUG(dbgs() << "Unexpected unknown constraint\n");
       return false;

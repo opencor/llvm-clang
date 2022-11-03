@@ -8,9 +8,7 @@
 
 #include "ReduceOperandsToArgs.h"
 #include "Delta.h"
-#include "Utils.h"
 #include "llvm/ADT/Sequence.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -68,10 +66,10 @@ static void replaceFunctionCalls(Function *OldF, Function *NewF) {
   // Call arguments for NewF.
   SmallVector<Value *> Args(NewF->arg_size(), nullptr);
 
-  // Fill up the additional parameters with default values.
+  // Fill up the additional parameters with undef values.
   for (auto ArgIdx : llvm::seq<size_t>(OldF->arg_size(), NewF->arg_size())) {
     Type *NewArgTy = NewF->getArg(ArgIdx)->getType();
-    Args[ArgIdx] = getDefaultValue(NewArgTy);
+    Args[ArgIdx] = UndefValue::get(NewArgTy);
   }
 
   for (CallBase *CI : Callers) {

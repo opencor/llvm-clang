@@ -1,3 +1,4 @@
+; RUN: opt -lower-matrix-intrinsics -S < %s | FileCheck %s
 ; RUN: opt -passes='lower-matrix-intrinsics' -S < %s | FileCheck %s
 
 define <9 x double> @strided_load_3x3_volatile(double* %in, i64 %stride) {

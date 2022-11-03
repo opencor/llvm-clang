@@ -6,8 +6,8 @@
 - (__attribute__((objc_gc(strong))) const char *)UTF8String;
 @end
 
-int main(void) {
-__attribute__((objc_gc(strong))) char const *(^libraryNameForIndex)(void) = ^(void) {
+int main() {
+__attribute__((objc_gc(strong))) char const *(^libraryNameForIndex)() = ^() {
         NSString *moduleName;
         return [moduleName UTF8String];
     };

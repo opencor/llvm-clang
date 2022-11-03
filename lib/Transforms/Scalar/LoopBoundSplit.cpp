@@ -8,15 +8,20 @@
 
 #include "llvm/Transforms/Scalar/LoopBoundSplit.h"
 #include "llvm/ADT/Sequence.h"
+#include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/LoopIterator.h"
+#include "llvm/Analysis/LoopPass.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/IR/PatternMatch.h"
-#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/LoopSimplify.h"
+#include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/ScalarEvolutionExpander.h"
 
 #define DEBUG_TYPE "loop-bound-split"
@@ -28,23 +33,26 @@ using namespace PatternMatch;
 namespace {
 struct ConditionInfo {
   /// Branch instruction with this condition
-  BranchInst *BI = nullptr;
+  BranchInst *BI;
   /// ICmp instruction with this condition
-  ICmpInst *ICmp = nullptr;
+  ICmpInst *ICmp;
   /// Preciate info
-  ICmpInst::Predicate Pred = ICmpInst::BAD_ICMP_PREDICATE;
+  ICmpInst::Predicate Pred;
   /// AddRec llvm value
-  Value *AddRecValue = nullptr;
+  Value *AddRecValue;
   /// Non PHI AddRec llvm value
   Value *NonPHIAddRecValue;
   /// Bound llvm value
-  Value *BoundValue = nullptr;
+  Value *BoundValue;
   /// AddRec SCEV
-  const SCEVAddRecExpr *AddRecSCEV = nullptr;
+  const SCEVAddRecExpr *AddRecSCEV;
   /// Bound SCEV
-  const SCEV *BoundSCEV = nullptr;
+  const SCEV *BoundSCEV;
 
-  ConditionInfo() = default;
+  ConditionInfo()
+      : BI(nullptr), ICmp(nullptr), Pred(ICmpInst::BAD_ICMP_PREDICATE),
+        AddRecValue(nullptr), BoundValue(nullptr), AddRecSCEV(nullptr),
+        BoundSCEV(nullptr) {}
 };
 } // namespace
 

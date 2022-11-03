@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -no-opaque-pointers -O0 -fsanitize=memory -fsanitize-memory-use-after-dtor -disable-llvm-passes -std=c++20 -triple=x86_64-pc-linux -emit-llvm -o - %s | FileCheck %s --implicit-check-not "call void @__sanitizer_dtor_callback"
-// RUN: %clang_cc1 -no-opaque-pointers -O1 -fsanitize=memory -fsanitize-memory-use-after-dtor -disable-llvm-passes -std=c++20 -triple=x86_64-pc-linux -emit-llvm -o - %s | FileCheck %s --implicit-check-not "call void @__sanitizer_dtor_callback"
+// RUN: %clang_cc1 -O0 -fsanitize=memory -fsanitize-memory-use-after-dtor -disable-llvm-passes -std=c++20 -triple=x86_64-pc-linux -emit-llvm -o - %s | FileCheck %s --implicit-check-not "call void @__sanitizer_dtor_callback"
+// RUN: %clang_cc1 -O1 -fsanitize=memory -fsanitize-memory-use-after-dtor -disable-llvm-passes -std=c++20 -triple=x86_64-pc-linux -emit-llvm -o - %s | FileCheck %s --implicit-check-not "call void @__sanitizer_dtor_callback"
 
 struct Empty {};
 
@@ -44,9 +44,7 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T1
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T16StructD2Ev(
-// CHECK:         [[GEP:%.+]] = getelementptr i8, {{.*}}, i64 8{{$}}
-// CHECK:         call void @__sanitizer_dtor_callback(i8* [[GEP]], i64 13)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
 // CHECK-NEXT:    ret void
 
 namespace T2 {
@@ -59,11 +57,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T2
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T26StructD2Ev(
-// CHECK:         [[GEP1:%.+]] = getelementptr i8, {{.*}}, i64 16{{$}}
-// CHECK:         call void @__sanitizer_dtor_callback(i8* [[GEP1]], i64 5)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
-// CHECK:         [[GEP2:%.+]] = getelementptr i8, {{.*}}, i64 0{{$}}
-// CHECK:         call void @__sanitizer_dtor_callback(i8* [[GEP2]], i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T3 {
@@ -76,11 +71,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T3
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T36StructD2Ev(
-// CHECK:         [[GEP1:%.+]] = getelementptr i8, {{.*}}, i64 20{{$}}
-// CHECK:         call void @__sanitizer_dtor_callback(i8* [[GEP1]], i64 1)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
-// CHECK:         [[GEP2:%.+]] = getelementptr i8, {{.*}}, i64 0{{$}}
-// CHECK:         call void @__sanitizer_dtor_callback(i8* [[GEP2]], i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T4 {
@@ -108,7 +100,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T5
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T56StructD2Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK-NEXT:    ret void
 
 namespace T6 {
@@ -123,7 +114,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T6
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T66StructD2Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK-NEXT:    ret void
 
 namespace T7 {
@@ -137,9 +127,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T7
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T76StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T8 {
@@ -153,8 +142,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T8
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T86StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T9 {
@@ -168,8 +157,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T9
 // CHECK-LABEL: define {{.*}} @_ZN5empty2T96StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T10 {
@@ -183,8 +172,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T10
 // CHECK-LABEL: define {{.*}} @_ZN5empty3T106StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T11 {
@@ -213,7 +202,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T12
 } // namespace empty
 // CHECK-LABEL: define {{.*}} @_ZN5empty3T126StructD2Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 16)
 // CHECK-NEXT:    ret void
 
@@ -229,7 +217,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T1
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T16StructD2Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK-NEXT:    ret void
 
 namespace T2 {
@@ -242,8 +229,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T2
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T26StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T3 {
@@ -256,8 +243,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T3
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T36StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T4 {
@@ -285,8 +272,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T5
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T56StructD2Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
 // CHECK-NEXT:    ret void
 
 namespace T6 {
@@ -301,8 +286,6 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T6
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T66StructD2Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 13)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK-NEXT:    ret void
 
 namespace T7 {
@@ -316,10 +299,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T7
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T76StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T8 {
@@ -333,10 +314,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T8
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T86StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 8)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 5)
 // CHECK-NEXT:    ret void
 
 namespace T9 {
@@ -350,10 +329,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T9
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial2T96StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T10 {
@@ -367,10 +344,8 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T10
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial3T106StructD2Ev(
-// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 12)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
+// CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 1)
 // CHECK-NEXT:    ret void
 
 namespace T11 {
@@ -384,8 +359,6 @@ struct Struct {
 static_assert(sizeof(Struct) == 24);
 } // namespace T11
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial3T116StructD2Ev(
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 16)
 // CHECK-NEXT:    ret void
 
@@ -401,7 +374,5 @@ static_assert(sizeof(Struct) == 24);
 } // namespace T12
 } // namespace empty_non_trivial
 // CHECK-LABEL: define {{.*}} @_ZN17empty_non_trivial3T126StructD2Ev(
-// CHECK:         call void @_ZN10NonTrivialD1Ev(
 // CHECK:         call void @__sanitizer_dtor_callback(i8* {{.*}}, i64 16)
-// CHECK:         call void @_ZN15EmptyNonTrivialD1Ev(
 // CHECK:         ret void

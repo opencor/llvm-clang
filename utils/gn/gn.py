@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Calls `gn` with the right --dotfile= and --root= arguments for LLVM."""
 
 # GN normally expects a file called '.gn' at the root of the repository.

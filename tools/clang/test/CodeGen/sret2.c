@@ -8,4 +8,4 @@ struct abc {
  long e;
 };
  
-struct abc foo2(void){}
+struct abc foo2(){}

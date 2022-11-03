@@ -60,30 +60,29 @@
 #include "llvm/Transforms/Scalar/DFAJumpThreading.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CodeMetrics.h"
-#include "llvm/Analysis/DomTreeUpdater.h"
+#include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/SSAUpdaterBulk.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include <algorithm>
 #include <deque>
-
-#ifdef EXPENSIVE_CHECKS
-#include "llvm/IR/Verifier.h"
-#endif
 
 using namespace llvm;
 
@@ -102,11 +101,6 @@ static cl::opt<unsigned> MaxPathLength(
     "dfa-max-path-length",
     cl::desc("Max number of blocks searched to find a threading path"),
     cl::Hidden, cl::init(20));
-
-static cl::opt<unsigned> MaxNumPaths(
-    "dfa-max-num-paths",
-    cl::desc("Max number of paths enumerated around a switch"),
-    cl::Hidden, cl::init(200));
 
 static cl::opt<unsigned>
     CostThreshold("dfa-cost-threshold",
@@ -420,7 +414,7 @@ inline raw_ostream &operator<<(raw_ostream &OS, const ThreadingPath &TPath) {
 
 struct MainSwitch {
   MainSwitch(SwitchInst *SI, OptimizationRemarkEmitter *ORE) {
-    if (isCandidate(SI)) {
+    if (isPredictable(SI)) {
       Instr = SI;
     } else {
       ORE->emit([&]() {
@@ -438,60 +432,83 @@ struct MainSwitch {
   }
 
 private:
-  /// Do a use-def chain traversal starting from the switch condition to see if
-  /// \p SI is a potential condidate.
-  ///
-  /// Also, collect select instructions to unfold.
-  bool isCandidate(const SwitchInst *SI) {
-    std::deque<Value *> Q;
+  /// Do a use-def chain traversal. Make sure the value of the switch variable
+  /// is always a known constant. This means that all conditional jumps based on
+  /// switch variable can be converted to unconditional jumps.
+  bool isPredictable(const SwitchInst *SI) {
+    std::deque<Instruction *> Q;
     SmallSet<Value *, 16> SeenValues;
     SelectInsts.clear();
 
-    Value *SICond = SI->getCondition();
-    LLVM_DEBUG(dbgs() << "\tSICond: " << *SICond << "\n");
-    if (!isa<PHINode>(SICond))
+    Value *FirstDef = SI->getOperand(0);
+    auto *Inst = dyn_cast<Instruction>(FirstDef);
+
+    // If this is a function argument or another non-instruction, then give up.
+    // We are interested in loop local variables.
+    if (!Inst)
       return false;
 
-    addToQueue(SICond, Q, SeenValues);
+    // Require the first definition to be a PHINode
+    if (!isa<PHINode>(Inst))
+      return false;
+
+    LLVM_DEBUG(dbgs() << "\tisPredictable() FirstDef: " << *Inst << "\n");
+
+    Q.push_back(Inst);
+    SeenValues.insert(FirstDef);
 
     while (!Q.empty()) {
-      Value *Current = Q.front();
+      Instruction *Current = Q.front();
       Q.pop_front();
 
       if (auto *Phi = dyn_cast<PHINode>(Current)) {
         for (Value *Incoming : Phi->incoming_values()) {
-          addToQueue(Incoming, Q, SeenValues);
+          if (!isPredictableValue(Incoming, SeenValues))
+            return false;
+          addInstToQueue(Incoming, Q, SeenValues);
         }
-        LLVM_DEBUG(dbgs() << "\tphi: " << *Phi << "\n");
+        LLVM_DEBUG(dbgs() << "\tisPredictable() phi: " << *Phi << "\n");
       } else if (SelectInst *SelI = dyn_cast<SelectInst>(Current)) {
         if (!isValidSelectInst(SelI))
           return false;
-        addToQueue(SelI->getTrueValue(), Q, SeenValues);
-        addToQueue(SelI->getFalseValue(), Q, SeenValues);
-        LLVM_DEBUG(dbgs() << "\tselect: " << *SelI << "\n");
+        if (!isPredictableValue(SelI->getTrueValue(), SeenValues) ||
+            !isPredictableValue(SelI->getFalseValue(), SeenValues)) {
+          return false;
+        }
+        addInstToQueue(SelI->getTrueValue(), Q, SeenValues);
+        addInstToQueue(SelI->getFalseValue(), Q, SeenValues);
+        LLVM_DEBUG(dbgs() << "\tisPredictable() select: " << *SelI << "\n");
         if (auto *SelIUse = dyn_cast<PHINode>(SelI->user_back()))
           SelectInsts.push_back(SelectInstToUnfold(SelI, SelIUse));
-      } else if (isa<Constant>(Current)) {
-        LLVM_DEBUG(dbgs() << "\tconst: " << *Current << "\n");
-        continue;
       } else {
-        LLVM_DEBUG(dbgs() << "\tother: " << *Current << "\n");
-        // Allow unpredictable values. The hope is that those will be the
-        // initial switch values that can be ignored (they will hit the
-        // unthreaded switch) but this assumption will get checked later after
-        // paths have been enumerated (in function getStateDefMap).
-        continue;
+        // If it is neither a phi nor a select, then we give up.
+        return false;
       }
     }
 
     return true;
   }
 
-  void addToQueue(Value *Val, std::deque<Value *> &Q,
-                  SmallSet<Value *, 16> &SeenValues) {
+  bool isPredictableValue(Value *InpVal, SmallSet<Value *, 16> &SeenValues) {
+    if (SeenValues.contains(InpVal))
+      return true;
+
+    if (isa<ConstantInt>(InpVal))
+      return true;
+
+    // If this is a function argument or another non-instruction, then give up.
+    if (!isa<Instruction>(InpVal))
+      return false;
+
+    return true;
+  }
+
+  void addInstToQueue(Value *Val, std::deque<Instruction *> &Q,
+                      SmallSet<Value *, 16> &SeenValues) {
     if (SeenValues.contains(Val))
       return;
-    Q.push_back(Val);
+    if (Instruction *I = dyn_cast<Instruction>(Val))
+      Q.push_back(I);
     SeenValues.insert(Val);
   }
 
@@ -545,16 +562,7 @@ struct AllSwitchPaths {
   void run() {
     VisitedBlocks Visited;
     PathsType LoopPaths = paths(SwitchBlock, Visited, /* PathDepth = */ 1);
-    StateDefMap StateDef = getStateDefMap(LoopPaths);
-
-    if (StateDef.empty()) {
-      ORE->emit([&]() {
-        return OptimizationRemarkMissed(DEBUG_TYPE, "SwitchNotPredictable",
-                                        Switch)
-               << "Switch instruction is not predictable.";
-      });
-      return;
-    }
+    StateDefMap StateDef = getStateDefMap();
 
     for (PathType Path : LoopPaths) {
       ThreadingPath TPath;
@@ -629,9 +637,6 @@ private:
         PathType NewPath(Path);
         NewPath.push_front(BB);
         Res.push_back(NewPath);
-        if (Res.size() >= MaxNumPaths) {
-          return Res;
-        }
       }
     }
     // This block could now be visited again from a different predecessor. Note
@@ -642,22 +647,14 @@ private:
   }
 
   /// Walk the use-def chain and collect all the state-defining instructions.
-  ///
-  /// Return an empty map if unpredictable values encountered inside the basic
-  /// blocks of \p LoopPaths.
-  StateDefMap getStateDefMap(const PathsType &LoopPaths) const {
+  StateDefMap getStateDefMap() const {
     StateDefMap Res;
-
-    // Basic blocks belonging to any of the loops around the switch statement.
-    SmallPtrSet<BasicBlock *, 16> LoopBBs;
-    for (const PathType &Path : LoopPaths) {
-      for (BasicBlock *BB : Path)
-        LoopBBs.insert(BB);
-    }
 
     Value *FirstDef = Switch->getOperand(0);
 
-    assert(isa<PHINode>(FirstDef) && "The first definition must be a phi.");
+    assert(isa<PHINode>(FirstDef) && "After select unfolding, all state "
+                                     "definitions are expected to be phi "
+                                     "nodes.");
 
     SmallVector<PHINode *, 8> Stack;
     Stack.push_back(dyn_cast<PHINode>(FirstDef));
@@ -669,17 +666,15 @@ private:
       Res[CurPhi->getParent()] = CurPhi;
       SeenValues.insert(CurPhi);
 
-      for (BasicBlock *IncomingBB : CurPhi->blocks()) {
-        Value *Incoming = CurPhi->getIncomingValueForBlock(IncomingBB);
-        bool IsOutsideLoops = LoopBBs.count(IncomingBB) == 0;
+      for (Value *Incoming : CurPhi->incoming_values()) {
         if (Incoming == FirstDef || isa<ConstantInt>(Incoming) ||
-            SeenValues.contains(Incoming) || IsOutsideLoops) {
+            SeenValues.contains(Incoming)) {
           continue;
         }
 
-        // Any unpredictable value inside the loops means we must bail out.
-        if (!isa<PHINode>(Incoming))
-          return StateDefMap();
+        assert(isa<PHINode>(Incoming) && "After select unfolding, all state "
+                                         "definitions are expected to be phi "
+                                         "nodes.");
 
         Stack.push_back(cast<PHINode>(Incoming));
       }
@@ -828,16 +823,6 @@ private:
         });
         return false;
       }
-
-      if (!Metrics.NumInsts.isValid()) {
-        LLVM_DEBUG(dbgs() << "DFA Jump Threading: Not jump threading, contains "
-                          << "instructions with invalid cost.\n");
-        ORE->emit([&]() {
-          return OptimizationRemarkMissed(DEBUG_TYPE, "ConvergentInst", Switch)
-                 << "Contains instructions with invalid cost.";
-        });
-        return false;
-      }
     }
 
     unsigned DuplicationCost = 0;
@@ -851,7 +836,7 @@ private:
       // using binary search, hence the LogBase2().
       unsigned CondBranches =
           APInt(32, Switch->getNumSuccessors()).ceilLogBase2();
-      DuplicationCost = *Metrics.NumInsts.getValue() / CondBranches;
+      DuplicationCost = Metrics.NumInsts / CondBranches;
     } else {
       // Compared with jump tables, the DFA optimizer removes an indirect branch
       // on each loop iteration, thus making branch prediction more precise. The
@@ -859,7 +844,7 @@ private:
       // predictor to make a mistake, and the more benefit there is in the DFA
       // optimizer. Thus, the more branch targets there are, the lower is the
       // cost of the DFA opt.
-      DuplicationCost = *Metrics.NumInsts.getValue() / JumpTableSize;
+      DuplicationCost = Metrics.NumInsts / JumpTableSize;
     }
 
     LLVM_DEBUG(dbgs() << "\nDFA Jump Threading: Cost to jump thread block "
@@ -1212,7 +1197,7 @@ private:
         PhiToRemove.push_back(Phi);
       }
       for (PHINode *PN : PhiToRemove) {
-        PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
+        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
         PN->eraseFromParent();
       }
       return;
@@ -1261,7 +1246,7 @@ private:
 
   /// Returns true if IncomingBB is a predecessor of BB.
   bool isPredecessor(BasicBlock *BB, BasicBlock *IncomingBB) {
-    return llvm::is_contained(predecessors(BB), IncomingBB);
+    return llvm::find(predecessors(BB), IncomingBB) != pred_end(BB);
   }
 
   AllSwitchPaths *SwitchPaths;
@@ -1293,7 +1278,7 @@ bool DFAJumpThreading::run(Function &F) {
       continue;
 
     LLVM_DEBUG(dbgs() << "\nCheck if SwitchInst in BB " << BB.getName()
-                      << " is a candidate\n");
+                      << " is predictable\n");
     MainSwitch Switch(SI, ORE);
 
     if (!Switch.getInstr())

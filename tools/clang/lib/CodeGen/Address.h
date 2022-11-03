@@ -87,6 +87,11 @@ public:
            "Incorrect pointer element type");
   }
 
+  // Deprecated: Use constructor with explicit element type instead.
+  Address(llvm::Value *Pointer, CharUnits Alignment)
+      : Address(Pointer, Pointer->getType()->getPointerElementType(),
+                Alignment) {}
+
   static Address invalid() { return Address(nullptr); }
   bool isValid() const { return A.getPointer() != nullptr; }
 

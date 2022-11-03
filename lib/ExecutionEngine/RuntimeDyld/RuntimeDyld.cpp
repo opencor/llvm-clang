@@ -19,6 +19,7 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/MSVCErrorWorkarounds.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MathExtras.h"
 #include <mutex>
 
@@ -50,6 +51,8 @@ public:
   }
 };
 
+static ManagedStatic<RuntimeDyldErrorCategory> RTDyldErrorCategory;
+
 }
 
 char RuntimeDyldError::ID = 0;
@@ -59,12 +62,11 @@ void RuntimeDyldError::log(raw_ostream &OS) const {
 }
 
 std::error_code RuntimeDyldError::convertToErrorCode() const {
-  static RuntimeDyldErrorCategory RTDyldErrorCategory;
-  return std::error_code(GenericRTDyldError, RTDyldErrorCategory);
+  return std::error_code(GenericRTDyldError, *RTDyldErrorCategory);
 }
 
 // Empty out-of-line virtual destructor as the key function.
-RuntimeDyldImpl::~RuntimeDyldImpl() = default;
+RuntimeDyldImpl::~RuntimeDyldImpl() {}
 
 // Pin LoadedObjectInfo's vtables to this file.
 void RuntimeDyld::LoadedObjectInfo::anchor() {}
@@ -1309,7 +1311,7 @@ RuntimeDyld::RuntimeDyld(RuntimeDyld::MemoryManager &MemMgr,
   ProcessAllSections = false;
 }
 
-RuntimeDyld::~RuntimeDyld() = default;
+RuntimeDyld::~RuntimeDyld() {}
 
 static std::unique_ptr<RuntimeDyldCOFF>
 createRuntimeDyldCOFF(

@@ -9,7 +9,7 @@ struct __objcFastEnumerationState;
 @end
 
 
-int LOOP(void);
+int LOOP();
 
 @implementation MyList (BasicTest) 
 - (void)compilerTestAgainst {

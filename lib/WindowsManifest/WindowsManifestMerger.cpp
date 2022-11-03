@@ -14,6 +14,8 @@
 #include "llvm/Config/config.h"
 #include "llvm/Support/MemoryBuffer.h"
 
+#include <map>
+
 #if LLVM_ENABLE_LIBXML2
 #include <libxml/xmlreader.h>
 #endif
@@ -704,7 +706,7 @@ bool windows_manifest::isAvailable() { return false; }
 WindowsManifestMerger::WindowsManifestMerger()
     : Impl(std::make_unique<WindowsManifestMergerImpl>()) {}
 
-WindowsManifestMerger::~WindowsManifestMerger() = default;
+WindowsManifestMerger::~WindowsManifestMerger() {}
 
 Error WindowsManifestMerger::merge(MemoryBufferRef Manifest) {
   return Impl->merge(Manifest);

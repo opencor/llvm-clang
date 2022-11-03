@@ -83,7 +83,7 @@ LLVM welcomes contributions of all kinds. To learn more, see the following artic
 
 * :doc:`GettingInvolved`
 * :ref:`development-process`
-* :ref:`lists-forums`
+* :ref:`mailing-lists`
 * :ref:`meetups-social-events`
 * :ref:`community-proposals`
 

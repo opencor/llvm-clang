@@ -9,7 +9,7 @@
 - (void)testDataSource:(id)object withMultipleArguments:(id)arguments;
 @end
 
-int main(void) {
+int main() {
   id obj;
   [obj TestDataSource:nil withMultipleArguments:nil];
 }

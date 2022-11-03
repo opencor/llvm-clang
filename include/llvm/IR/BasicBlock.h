@@ -22,6 +22,9 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/SymbolTableListTraits.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/CBindingWrapping.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include <cassert>
 #include <cstddef>
 #include <iterator>
@@ -116,11 +119,7 @@ public:
 
   /// Returns the terminator instruction if the block is well formed or null
   /// if the block is not well formed.
-  const Instruction *getTerminator() const LLVM_READONLY {
-    if (InstList.empty() || !InstList.back().isTerminator())
-      return nullptr;
-    return &InstList.back();
-  }
+  const Instruction *getTerminator() const LLVM_READONLY;
   Instruction *getTerminator() {
     return const_cast<Instruction *>(
         static_cast<const BasicBlock *>(this)->getTerminator());

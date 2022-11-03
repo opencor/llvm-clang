@@ -14,9 +14,6 @@
 
 #include "llvm/Transforms/Utils/CallGraphUpdater.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/Analysis/CallGraph.h"
-#include "llvm/Analysis/CallGraphSCCPass.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
 using namespace llvm;

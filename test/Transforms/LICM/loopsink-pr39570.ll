@@ -1,5 +1,7 @@
-; RUN: opt -S -verify-memoryssa -loop-sink < %s | FileCheck %s
-; RUN: opt -S -verify-memoryssa -aa-pipeline=basic-aa -passes=loop-sink < %s | FileCheck %s
+; RUN: opt -S -loop-sink < %s | FileCheck %s
+; RUN: opt -S -verify-memoryssa -enable-mssa-in-legacy-loop-sink -loop-sink < %s | FileCheck %s
+; RUN: opt -S -aa-pipeline=basic-aa -passes=loop-sink < %s | FileCheck %s
+; RUN: opt -S -verify-memoryssa -enable-mssa-in-loop-sink -aa-pipeline=basic-aa -passes=loop-sink < %s | FileCheck %s
 
 ; CHECK: pr39570
 ; Make sure not to assert.

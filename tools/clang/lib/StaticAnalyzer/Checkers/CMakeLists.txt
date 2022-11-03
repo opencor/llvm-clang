@@ -40,9 +40,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   DynamicTypePropagation.cpp
   DynamicTypeChecker.cpp
   EnumCastOutOfRangeChecker.cpp
-  ErrnoChecker.cpp
-  ErrnoModeling.cpp
-  ErrnoTesterChecker.cpp
   ExprInspectionChecker.cpp
   FixedAddressChecker.cpp
   FuchsiaHandleChecker.cpp
@@ -114,7 +111,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   TestAfterDivZeroChecker.cpp
   TraversalChecker.cpp
   TrustNonnullChecker.cpp
-  TrustReturnsNonnullChecker.cpp
   UndefBranchChecker.cpp
   UndefCapturedBlockVarChecker.cpp
   UndefResultChecker.cpp

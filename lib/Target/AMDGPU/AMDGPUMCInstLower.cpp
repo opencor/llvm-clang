@@ -120,7 +120,8 @@ void AMDGPUMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
   // FIXME: Should be able to handle this with emitPseudoExpansionLowering. We
   // need to select it to the subtarget specific version, and there's no way to
   // do that with a single pseudo source operation.
-  if (Opcode == AMDGPU::S_SETPC_B64_return)
+  if (Opcode == AMDGPU::S_SETPC_B64_return ||
+      Opcode == AMDGPU::S_SETPC_B64_return_gfx)
     Opcode = AMDGPU::S_SETPC_B64;
   else if (Opcode == AMDGPU::SI_CALL) {
     // SI_CALL is just S_SWAPPC_B64 with an additional operand to track the
@@ -171,10 +172,6 @@ const MCExpr *AMDGPUAsmPrinter::lowerConstant(const Constant *CV) {
 }
 
 void AMDGPUAsmPrinter::emitInstruction(const MachineInstr *MI) {
-  // FIXME: Enable feature predicate checks once all the test pass.
-  // AMDGPU_MC::verifyInstructionPredicates(MI->getOpcode(),
-  //                                        getSubtargetInfo().getFeatureBits());
-
   if (emitPseudoExpansionLowering(*OutStreamer, MI))
     return;
 
@@ -211,16 +208,6 @@ void AMDGPUAsmPrinter::emitInstruction(const MachineInstr *MI) {
       return;
     }
 
-    if (MI->getOpcode() == AMDGPU::SCHED_BARRIER) {
-      if (isVerbose()) {
-        std::string HexString;
-        raw_string_ostream HexStream(HexString);
-        HexStream << format_hex(MI->getOperand(0).getImm(), 10, true);
-        OutStreamer->emitRawComment(" sched_barrier mask(" + HexString + ")");
-      }
-      return;
-    }
-
     if (MI->getOpcode() == AMDGPU::SI_MASKED_UNREACHABLE) {
       if (isVerbose())
         OutStreamer->emitRawComment(" divergent unreachable");
@@ -253,7 +240,7 @@ void AMDGPUAsmPrinter::emitInstruction(const MachineInstr *MI) {
       raw_svector_ostream CodeStream(CodeBytes);
 
       std::unique_ptr<MCCodeEmitter> InstEmitter(createSIMCCodeEmitter(
-          *STI.getInstrInfo(), OutContext));
+          *STI.getInstrInfo(), *OutContext.getRegisterInfo(), OutContext));
       InstEmitter->encodeInstruction(TmpInst, CodeStream, Fixups, STI);
 
       assert(CodeBytes.size() == STI.getInstrInfo()->getInstSizeInBytes(*MI));

@@ -1335,14 +1335,10 @@ VarTemplateDecl *VarTemplateSpecializationDecl::getSpecializedTemplate() const {
 
 void VarTemplateSpecializationDecl::setTemplateArgsInfo(
     const TemplateArgumentListInfo &ArgsInfo) {
-  TemplateArgsInfo =
-      ASTTemplateArgumentListInfo::Create(getASTContext(), ArgsInfo);
-}
-
-void VarTemplateSpecializationDecl::setTemplateArgsInfo(
-    const ASTTemplateArgumentListInfo *ArgsInfo) {
-  TemplateArgsInfo =
-      ASTTemplateArgumentListInfo::Create(getASTContext(), ArgsInfo);
+  TemplateArgsInfo.setLAngleLoc(ArgsInfo.getLAngleLoc());
+  TemplateArgsInfo.setRAngleLoc(ArgsInfo.getRAngleLoc());
+  for (const TemplateArgumentLoc &Loc : ArgsInfo.arguments())
+    TemplateArgsInfo.addArgument(Loc);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1518,20 +1514,12 @@ void TemplateParamObjectDecl::printName(llvm::raw_ostream &OS) const {
 }
 
 void TemplateParamObjectDecl::printAsExpr(llvm::raw_ostream &OS) const {
-  printAsExpr(OS, getASTContext().getPrintingPolicy());
-}
-
-void TemplateParamObjectDecl::printAsExpr(llvm::raw_ostream &OS,
-                                          const PrintingPolicy &Policy) const {
-  getType().getUnqualifiedType().print(OS, Policy);
-  printAsInit(OS, Policy);
+  const ASTContext &Ctx = getASTContext();
+  getType().getUnqualifiedType().print(OS, Ctx.getPrintingPolicy());
+  printAsInit(OS);
 }
 
 void TemplateParamObjectDecl::printAsInit(llvm::raw_ostream &OS) const {
-  printAsInit(OS, getASTContext().getPrintingPolicy());
-}
-
-void TemplateParamObjectDecl::printAsInit(llvm::raw_ostream &OS,
-                                          const PrintingPolicy &Policy) const {
-  getValue().printPretty(OS, Policy, getType(), &getASTContext());
+  const ASTContext &Ctx = getASTContext();
+  getValue().printPretty(OS, Ctx, getType());
 }

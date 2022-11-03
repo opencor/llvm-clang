@@ -581,7 +581,7 @@ class VectorType;
     getRegClassFor(MVT VT, bool isDivergent = false) const override;
 
     bool shouldAlignPointerArgs(CallInst *CI, unsigned &MinSize,
-                                Align &PrefAlign) const override;
+                                unsigned &PrefAlign) const override;
 
     /// createFastISel - This method returns a target specific FastISel object,
     /// or null if the target does not support "fast" ISel.
@@ -665,8 +665,7 @@ class VectorType;
     bool shouldInsertFencesForAtomic(const Instruction *I) const override;
     TargetLoweringBase::AtomicExpansionKind
     shouldExpandAtomicLoadInIR(LoadInst *LI) const override;
-    TargetLoweringBase::AtomicExpansionKind
-    shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
+    bool shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
     TargetLoweringBase::AtomicExpansionKind
     shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
     TargetLoweringBase::AtomicExpansionKind
@@ -714,8 +713,8 @@ class VectorType;
                                       Align Alignment,
                                       const DataLayout &DL) const;
 
-    bool isMulAddWithConstProfitable(SDValue AddNode,
-                                     SDValue ConstNode) const override;
+    bool isMulAddWithConstProfitable(const SDValue &AddNode,
+                                     const SDValue &ConstNode) const override;
 
     bool alignLoopsWithOptSize() const override;
 
@@ -732,8 +731,6 @@ class VectorType;
 
     bool isDesirableToCommuteWithShift(const SDNode *N,
                                        CombineLevel Level) const override;
-
-    bool isDesirableToCommuteXorWithShift(const SDNode *N) const override;
 
     bool shouldFoldConstantShiftPairToMask(const SDNode *N,
                                            CombineLevel Level) const override;
@@ -848,7 +845,8 @@ class VectorType;
     SDValue LowerFP_TO_INT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerINT_TO_FP(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFSETCC(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerSPONENTRY(SDValue Op, SelectionDAG &DAG) const;
+    void lowerABS(SDNode *N, SmallVectorImpl<SDValue> &Results,
+                  SelectionDAG &DAG) const;
     void LowerLOAD(SDNode *N, SmallVectorImpl<SDValue> &Results,
                    SelectionDAG &DAG) const;
 

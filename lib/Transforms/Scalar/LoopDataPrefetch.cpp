@@ -22,6 +22,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
@@ -29,7 +30,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ScalarEvolutionExpander.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 
 #define DEBUG_TYPE "loop-data-prefetch"
 
@@ -213,12 +216,10 @@ bool LoopDataPrefetchLegacyPass::runOnFunction(Function &F) {
 bool LoopDataPrefetch::run() {
   // If PrefetchDistance is not set, don't run the pass.  This gives an
   // opportunity for targets to run this pass for selected subtargets only
-  // (whose TTI sets PrefetchDistance and CacheLineSize).
-  if (getPrefetchDistance() == 0 || TTI->getCacheLineSize() == 0) {
-    LLVM_DEBUG(dbgs() << "Please set both PrefetchDistance and CacheLineSize "
-                         "for loop data prefetch.\n");
+  // (whose TTI sets PrefetchDistance).
+  if (getPrefetchDistance() == 0)
     return false;
-  }
+  assert(TTI->getCacheLineSize() && "Cache line size is not set for target");
 
   bool MadeChange = false;
 
@@ -235,14 +236,15 @@ struct Prefetch {
   /// The address formula for this prefetch as returned by ScalarEvolution.
   const SCEVAddRecExpr *LSCEVAddRec;
   /// The point of insertion for the prefetch instruction.
-  Instruction *InsertPt = nullptr;
+  Instruction *InsertPt;
   /// True if targeting a write memory access.
-  bool Writes = false;
+  bool Writes;
   /// The (first seen) prefetched instruction.
-  Instruction *MemI = nullptr;
+  Instruction *MemI;
 
   /// Constructor to create a new Prefetch for \p I.
-  Prefetch(const SCEVAddRecExpr *L, Instruction *I) : LSCEVAddRec(L) {
+  Prefetch(const SCEVAddRecExpr *L, Instruction *I)
+      : LSCEVAddRec(L), InsertPt(nullptr), Writes(false), MemI(nullptr) {
     addInstruction(I);
   };
 
@@ -301,11 +303,7 @@ bool LoopDataPrefetch::runOnLoop(Loop *L) {
     }
     Metrics.analyzeBasicBlock(BB, *TTI, EphValues);
   }
-
-  if (!Metrics.NumInsts.isValid())
-    return MadeChange;
-
-  unsigned LoopSize = *Metrics.NumInsts.getValue();
+  unsigned LoopSize = Metrics.NumInsts;
   if (!LoopSize)
     LoopSize = 1;
 
@@ -390,15 +388,15 @@ bool LoopDataPrefetch::runOnLoop(Loop *L) {
     if (!isStrideLargeEnough(P.LSCEVAddRec, TargetMinStride))
       continue;
 
-    BasicBlock *BB = P.InsertPt->getParent();
-    SCEVExpander SCEVE(*SE, BB->getModule()->getDataLayout(), "prefaddr");
     const SCEV *NextLSCEV = SE->getAddExpr(P.LSCEVAddRec, SE->getMulExpr(
       SE->getConstant(P.LSCEVAddRec->getType(), ItersAhead),
       P.LSCEVAddRec->getStepRecurrence(*SE)));
-    if (!SCEVE.isSafeToExpand(NextLSCEV))
+    if (!isSafeToExpand(NextLSCEV, *SE))
       continue;
 
+    BasicBlock *BB = P.InsertPt->getParent();
     Type *I8Ptr = Type::getInt8PtrTy(BB->getContext(), 0/*PtrAddrSpace*/);
+    SCEVExpander SCEVE(*SE, BB->getModule()->getDataLayout(), "prefaddr");
     Value *PrefPtrValue = SCEVE.expandCodeFor(NextLSCEV, I8Ptr, P.InsertPt);
 
     IRBuilder<> Builder(P.InsertPt);

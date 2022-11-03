@@ -16,12 +16,15 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Loads.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Transforms/InstCombine/InstCombiner.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
 using namespace PatternMatch;
@@ -772,7 +775,7 @@ static bool isObjectSizeLessThanOrEq(Value *V, uint64_t MaxSize,
       uint64_t TypeSize = DL.getTypeAllocSize(AI->getAllocatedType());
       // Make sure that, even if the multiplication below would wrap as an
       // uint64_t, we still do the right thing.
-      if ((CS->getValue().zext(128) * APInt(128, TypeSize)).ugt(MaxSize))
+      if ((CS->getValue().zextOrSelf(128)*APInt(128, TypeSize)).ugt(MaxSize))
         return false;
       continue;
     }
@@ -1392,10 +1395,8 @@ Instruction *InstCombinerImpl::visitStoreInst(StoreInst &SI) {
 
     if (StoreInst *PrevSI = dyn_cast<StoreInst>(BBI)) {
       // Prev store isn't volatile, and stores to the same location?
-      if (PrevSI->isUnordered() &&
-          equivalentAddressValues(PrevSI->getOperand(1), SI.getOperand(1)) &&
-          PrevSI->getValueOperand()->getType() ==
-              SI.getValueOperand()->getType()) {
+      if (PrevSI->isUnordered() && equivalentAddressValues(PrevSI->getOperand(1),
+                                                        SI.getOperand(1))) {
         ++NumDeadStore;
         // Manually add back the original store to the worklist now, so it will
         // be processed after the operands of the removed store, as this may
@@ -1435,8 +1436,6 @@ Instruction *InstCombinerImpl::visitStoreInst(StoreInst &SI) {
   }
 
   // store undef, Ptr -> noop
-  // FIXME: This is technically incorrect because it might overwrite a poison
-  // value. Change to PoisonValue once #52930 is resolved.
   if (isa<UndefValue>(Val))
     return eraseInstFromFunction(SI);
 

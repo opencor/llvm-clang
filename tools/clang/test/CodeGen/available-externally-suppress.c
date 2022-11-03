@@ -13,7 +13,7 @@ inline void f0(int y) { x = y; }
 // CHECK: declare void @f0(i32 noundef)
 // LTO-LABEL: define{{.*}} void @test()
 // LTO: define available_externally void @f0
-void test(void) {
+void test() {
   f0(17);
 }
 

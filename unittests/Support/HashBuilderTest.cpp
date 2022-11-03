@@ -44,15 +44,13 @@ using HashBuilder = llvm::HashBuilder<typename HasherTAndEndianness::HasherT,
                                       HasherTAndEndianness::Endianness>;
 
 template <typename HasherTAndEndianness, typename... Ts>
-static typename HashBuilder<HasherTAndEndianness>::template HashResultTy<>
-hashWithBuilder(const Ts &...Args) {
-  return HashBuilder<HasherTAndEndianness>().add(Args...).final();
+static std::string hashWithBuilder(const Ts &...Args) {
+  return HashBuilder<HasherTAndEndianness>().add(Args...).final().str();
 }
 
 template <typename HasherTAndEndianness, typename... Ts>
-static typename HashBuilder<HasherTAndEndianness>::template HashResultTy<>
-hashRangeWithBuilder(const Ts &...Args) {
-  return HashBuilder<HasherTAndEndianness>().addRange(Args...).final();
+static std::string hashRangeWithBuilder(const Ts &...Args) {
+  return HashBuilder<HasherTAndEndianness>().addRange(Args...).final().str();
 }
 
 // All the test infrastructure relies on the variadic helpers. Test them first.
@@ -104,7 +102,7 @@ TYPED_TEST(HashBuilderTest, AddHashableData) {
     auto SwappedData = llvm::support::endian::byte_swap(Data, E);
     Hasher.update(llvm::makeArrayRef(
         reinterpret_cast<const uint8_t *>(&SwappedData), sizeof(Data)));
-    return Hasher.final();
+    return static_cast<std::string>(Hasher.final());
   };
 
   char C = 'c';

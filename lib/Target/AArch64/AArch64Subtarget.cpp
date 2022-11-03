@@ -21,7 +21,6 @@
 #include "GISel/AArch64RegisterBankInfo.h"
 #include "MCTargetDesc/AArch64AddressingModes.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/AArch64TargetParser.h"
@@ -52,16 +51,6 @@ static cl::opt<bool>
 static cl::opt<bool> UseAA("aarch64-use-aa", cl::init(true),
                            cl::desc("Enable the use of AA during codegen."));
 
-static cl::opt<unsigned> OverrideVectorInsertExtractBaseCost(
-    "aarch64-insert-extract-base-cost",
-    cl::desc("Base cost of vector insert/extract element"), cl::Hidden);
-
-unsigned AArch64Subtarget::getVectorInsertExtractBaseCost() const {
-  if (OverrideVectorInsertExtractBaseCost.getNumOccurrences() > 0)
-    return OverrideVectorInsertExtractBaseCost;
-  return VectorInsertExtractBaseCost;
-}
-
 AArch64Subtarget &AArch64Subtarget::initializeSubtargetDependencies(
     StringRef FS, StringRef CPUString, StringRef TuneCPUString) {
   // Determine default and user-specified characteristics
@@ -89,17 +78,14 @@ void AArch64Subtarget::initializeProperties() {
     CacheLineSize = 64;
     break;
   case CortexA35:
+    break;
   case CortexA53:
   case CortexA55:
     PrefFunctionLogAlignment = 4;
-    PrefLoopLogAlignment = 4;
-    MaxBytesForLoopAlignment = 8;
     break;
   case CortexA57:
     MaxInterleaveFactor = 4;
     PrefFunctionLogAlignment = 4;
-    PrefLoopLogAlignment = 4;
-    MaxBytesForLoopAlignment = 8;
     break;
   case CortexA65:
     PrefFunctionLogAlignment = 3;
@@ -107,10 +93,6 @@ void AArch64Subtarget::initializeProperties() {
   case CortexA72:
   case CortexA73:
   case CortexA75:
-    PrefFunctionLogAlignment = 4;
-    PrefLoopLogAlignment = 4;
-    MaxBytesForLoopAlignment = 8;
-    break;
   case CortexA76:
   case CortexA77:
   case CortexA78:
@@ -119,21 +101,12 @@ void AArch64Subtarget::initializeProperties() {
   case CortexX1:
   case CortexX1C:
     PrefFunctionLogAlignment = 4;
-    PrefLoopLogAlignment = 5;
-    MaxBytesForLoopAlignment = 16;
     break;
   case CortexA510:
-    PrefFunctionLogAlignment = 4;
-    VScaleForTuning = 1;
-    PrefLoopLogAlignment = 4;
-    MaxBytesForLoopAlignment = 8;
-    break;
   case CortexA710:
   case CortexX2:
     PrefFunctionLogAlignment = 4;
     VScaleForTuning = 1;
-    PrefLoopLogAlignment = 5;
-    MaxBytesForLoopAlignment = 16;
     break;
   case A64FX:
     CacheLineSize = 256;
@@ -385,8 +358,6 @@ bool AArch64Subtarget::supportsAddressTopByteIgnored() const {
   if (!UseAddressTopByteIgnored)
     return false;
 
-  if (TargetTriple.isDriverKit())
-    return true;
   if (TargetTriple.isiOS()) {
     return TargetTriple.getiOSVersion() >= VersionTuple(8);
   }

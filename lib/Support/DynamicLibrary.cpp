@@ -12,11 +12,14 @@
 
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm-c/Support.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Mutex.h"
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 using namespace llvm;
@@ -26,14 +29,14 @@ using namespace llvm::sys;
 class DynamicLibrary::HandleSet {
   typedef std::vector<void *> HandleList;
   HandleList Handles;
-  void *Process = nullptr;
+  void *Process;
 
 public:
   static void *DLOpen(const char *Filename, std::string *Err);
   static void DLClose(void *Handle);
   static void *DLSym(void *Handle, const char *Symbol);
 
-  HandleSet() = default;
+  HandleSet() : Process(nullptr) {}
   ~HandleSet();
 
   HandleList::iterator Find(void *Handle) { return find(Handles, Handle); }

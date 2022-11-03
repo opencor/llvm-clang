@@ -10,7 +10,6 @@
 #include "llvm/Support/Signals.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <stdlib.h>
 
 #if defined(_WIN32)
 # include <windows.h>
@@ -22,12 +21,8 @@
 const char *TestMainArgv0;
 
 int main(int argc, char **argv) {
-  // Skip setting up signal handlers for tests that need to test things without
-  // them configured.
-  if (!getenv("LLVM_PROGRAM_TEST_NO_STACKTRACE_HANDLER")) {
-    llvm::sys::PrintStackTraceOnErrorSignal(argv[0],
-                                            true /* Disable crash reporting */);
-  }
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0],
+                                          true /* Disable crash reporting */);
 
   // Initialize both gmock and gtest.
   testing::InitGoogleMock(&argc, argv);

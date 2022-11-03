@@ -1,7 +1,8 @@
-// RUN: %clang_cc1 %s -fsyntax-only -verify -verify=c2x -pedantic -Wno-strict-prototypes
+// RUN: %clang_cc1 %s -fsyntax-only -verify -verify=c2x -pedantic
+// RUN: %clang_cc1 %s -fsyntax-only -std=c2x -verify -pedantic
 
 // PR1892, PR11354
-void f(double a[restrict][5]) { __typeof(a) x = 10; } // expected-error {{(aka 'double (*restrict)[5]')}}
+void f(double a[restrict][5]) { __typeof(a) x = 10; } // expected-warning {{(aka 'double (*restrict)[5]')}}
 
 int foo (__const char *__path);
 int foo(__const char *__restrict __file);
@@ -41,7 +42,7 @@ int t14() {
 }
 
 // <rdar://problem/6097326>
-y(y) { return y; } // expected-warning{{parameter 'y' was not declared, defaults to 'int'; ISO C99 and later do not support implicit int}} \
+y(y) { return y; } // expected-warning{{parameter 'y' was not declared, defaulting to type 'int'}} \
                    // expected-warning{{type specifier missing, defaults to 'int'}}
 
 

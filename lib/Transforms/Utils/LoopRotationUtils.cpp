@@ -13,24 +13,31 @@
 #include "llvm/Transforms/Utils/LoopRotationUtils.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/CodeMetrics.h"
 #include "llvm/Analysis/DomTreeUpdater.h"
+#include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 using namespace llvm;
@@ -310,13 +317,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
                    L->dump());
         return Rotated;
       }
-      if (!Metrics.NumInsts.isValid()) {
-        LLVM_DEBUG(dbgs() << "LoopRotation: NOT rotating - contains instructions"
-                   " with invalid cost: ";
-                   L->dump());
-        return Rotated;
-      }
-      if (*Metrics.NumInsts.getValue() > MaxHeaderSize) {
+      if (Metrics.NumInsts > MaxHeaderSize) {
         LLVM_DEBUG(dbgs() << "LoopRotation: NOT rotating - contains "
                           << Metrics.NumInsts
                           << " instructions, which is more than the threshold ("
@@ -445,7 +446,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
       // With the operands remapped, see if the instruction constant folds or is
       // otherwise simplifyable.  This commonly occurs because the entry from PHI
       // nodes allows icmps and other instructions to fold.
-      Value *V = simplifyInstruction(C, SQ);
+      Value *V = SimplifyInstruction(C, SQ);
       if (V && LI->replacementPreservesLCSSAForm(C, V)) {
         // If so, then delete the temporary instruction and stick the folded value
         // in the map.
@@ -622,7 +623,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
         // We only need to split loop exit edges.
         Loop *PredLoop = LI->getLoopFor(ExitPred);
         if (!PredLoop || PredLoop->contains(Exit) ||
-            isa<IndirectBrInst>(ExitPred->getTerminator()))
+            ExitPred->getTerminator()->isIndirectTerminator())
           continue;
         SplitLatchEdge |= L->getLoopLatch() == ExitPred;
         BasicBlock *ExitSplit = SplitCriticalEdge(

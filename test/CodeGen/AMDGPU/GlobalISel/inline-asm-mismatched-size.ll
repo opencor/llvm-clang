@@ -39,7 +39,9 @@ define i64 @return_type_is_too_big_scalar() {
   ; CHECK-LABEL: name: return_type_is_too_big_scalar
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   ; CHECK-NEXT:   INLINEASM &"; def $0", 1 /* sideeffect attdialect */, 10 /* regdef */, implicit-def $vgpr8
@@ -50,11 +52,15 @@ define i64 @return_type_is_too_big_scalar() {
 define i32 @return_type_is_too_small_scalar() {
   ; CHECK-LABEL: name: return_type_is_too_small_scalar
   ; CHECK: bb.1 (%ir-block.0):
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT:   INLINEASM &"; def $0", 1 /* sideeffect attdialect */, 10 /* regdef */, implicit-def $vgpr8_vgpr9
-  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s64) = COPY $vgpr8_vgpr9
-  ; CHECK-NEXT:   [[TRUNC:%[0-9]+]]:_(s32) = G_TRUNC [[COPY]](s64)
+  ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:_(s64) = COPY $vgpr8_vgpr9
+  ; CHECK-NEXT:   [[TRUNC:%[0-9]+]]:_(s32) = G_TRUNC [[COPY1]](s64)
   ; CHECK-NEXT:   $vgpr0 = COPY [[TRUNC]](s32)
-  ; CHECK-NEXT:   SI_RETURN implicit $vgpr0
+  ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:ccr_sgpr_64 = COPY [[COPY]]
+  ; CHECK-NEXT:   S_SETPC_B64_return [[COPY2]], implicit $vgpr0
   %reg = call i32 asm sideeffect "; def $0", "={v[8:9]}" ()
   ret i32 %reg
 }
@@ -63,7 +69,9 @@ define i8 addrspace(1)* @return_type_is_too_big_pointer() {
   ; CHECK-LABEL: name: return_type_is_too_big_pointer
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   ; CHECK-NEXT:   INLINEASM &"; def $0", 1 /* sideeffect attdialect */, 10 /* regdef */, implicit-def $vgpr8
@@ -75,7 +83,9 @@ define i8 addrspace(3)* @return_type_is_too_small_pointer() {
   ; CHECK-LABEL: name: return_type_is_too_small_pointer
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   ; CHECK-NEXT:   INLINEASM &"; def $0", 1 /* sideeffect attdialect */, 10 /* regdef */, implicit-def $vgpr8_vgpr9
@@ -86,7 +96,7 @@ define i8 addrspace(3)* @return_type_is_too_small_pointer() {
 define void @use_vector_too_small(<8 x i32> %arg) {
   ; CHECK-LABEL: name: use_vector_too_small
   ; CHECK: bb.1 (%ir-block.0):
-  ; CHECK-NEXT:   liveins: $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5, $vgpr6, $vgpr7
+  ; CHECK-NEXT:   liveins: $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5, $vgpr6, $vgpr7, $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s32) = COPY $vgpr0
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:_(s32) = COPY $vgpr1
@@ -97,9 +107,11 @@ define void @use_vector_too_small(<8 x i32> %arg) {
   ; CHECK-NEXT:   [[COPY6:%[0-9]+]]:_(s32) = COPY $vgpr6
   ; CHECK-NEXT:   [[COPY7:%[0-9]+]]:_(s32) = COPY $vgpr7
   ; CHECK-NEXT:   [[BUILD_VECTOR:%[0-9]+]]:_(<8 x s32>) = G_BUILD_VECTOR [[COPY]](s32), [[COPY1]](s32), [[COPY2]](s32), [[COPY3]](s32), [[COPY4]](s32), [[COPY5]](s32), [[COPY6]](s32), [[COPY7]](s32)
+  ; CHECK-NEXT:   [[COPY8:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT:   $vgpr0_vgpr1_vgpr2_vgpr3_vgpr4_vgpr5_vgpr6_vgpr7 = COPY [[BUILD_VECTOR]](<8 x s32>)
   ; CHECK-NEXT:   INLINEASM &"; use $0", 1 /* sideeffect attdialect */, 9 /* reguse */, $vgpr0_vgpr1_vgpr2_vgpr3_vgpr4_vgpr5_vgpr6_vgpr7
-  ; CHECK-NEXT:   SI_RETURN
+  ; CHECK-NEXT:   [[COPY9:%[0-9]+]]:ccr_sgpr_64 = COPY [[COPY8]]
+  ; CHECK-NEXT:   S_SETPC_B64_return [[COPY9]]
   call void asm sideeffect "; use $0", "{v[0:7]}"(<8 x i32> %arg)
   ret void
 }
@@ -108,7 +120,7 @@ define void @use_vector_too_big(<8 x i32> %arg) {
   ; CHECK-LABEL: name: use_vector_too_big
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
-  ; CHECK-NEXT:   liveins: $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5, $vgpr6, $vgpr7
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31, $vgpr0, $vgpr1, $vgpr2, $vgpr3, $vgpr4, $vgpr5, $vgpr6, $vgpr7
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s32) = COPY $vgpr0
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:_(s32) = COPY $vgpr1
@@ -119,6 +131,7 @@ define void @use_vector_too_big(<8 x i32> %arg) {
   ; CHECK-NEXT:   [[COPY6:%[0-9]+]]:_(s32) = COPY $vgpr6
   ; CHECK-NEXT:   [[COPY7:%[0-9]+]]:_(s32) = COPY $vgpr7
   ; CHECK-NEXT:   [[BUILD_VECTOR:%[0-9]+]]:_(<8 x s32>) = G_BUILD_VECTOR [[COPY]](s32), [[COPY1]](s32), [[COPY2]](s32), [[COPY3]](s32), [[COPY4]](s32), [[COPY5]](s32), [[COPY6]](s32), [[COPY7]](s32)
+  ; CHECK-NEXT:   [[COPY8:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   call void asm sideeffect "; use $0", "{v[0:9]}"(<8 x i32> %arg)
@@ -129,11 +142,12 @@ define void @use_scalar_too_small(i64 %arg) {
   ; CHECK-LABEL: name: use_scalar_too_small
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
-  ; CHECK-NEXT:   liveins: $vgpr0, $vgpr1
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31, $vgpr0, $vgpr1
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s32) = COPY $vgpr0
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:_(s32) = COPY $vgpr1
   ; CHECK-NEXT:   [[MV:%[0-9]+]]:_(s64) = G_MERGE_VALUES [[COPY]](s32), [[COPY1]](s32)
+  ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   call void asm sideeffect "; use $0", "{v0}"(i64 %arg)
@@ -143,13 +157,15 @@ define void @use_scalar_too_small(i64 %arg) {
 define void @use_scalar_too_big(i32 %arg) {
   ; CHECK-LABEL: name: use_scalar_too_big
   ; CHECK: bb.1 (%ir-block.0):
-  ; CHECK-NEXT:   liveins: $vgpr0
+  ; CHECK-NEXT:   liveins: $vgpr0, $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s32) = COPY $vgpr0
+  ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT:   [[ANYEXT:%[0-9]+]]:_(s64) = G_ANYEXT [[COPY]](s32)
   ; CHECK-NEXT:   $vgpr0_vgpr1 = COPY [[ANYEXT]](s64)
   ; CHECK-NEXT:   INLINEASM &"; use $0", 1 /* sideeffect attdialect */, 9 /* reguse */, $vgpr0_vgpr1
-  ; CHECK-NEXT:   SI_RETURN
+  ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:ccr_sgpr_64 = COPY [[COPY1]]
+  ; CHECK-NEXT:   S_SETPC_B64_return [[COPY2]]
   call void asm sideeffect "; use $0", "{v[0:1]}"(i32 %arg)
   ret void
 }
@@ -158,11 +174,12 @@ define void @use_pointer_too_small(i8 addrspace(1)* %arg) {
   ; CHECK-LABEL: name: use_pointer_too_small
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
-  ; CHECK-NEXT:   liveins: $vgpr0, $vgpr1
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31, $vgpr0, $vgpr1
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(s32) = COPY $vgpr0
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:_(s32) = COPY $vgpr1
   ; CHECK-NEXT:   [[MV:%[0-9]+]]:_(p1) = G_MERGE_VALUES [[COPY]](s32), [[COPY1]](s32)
+  ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   call void asm sideeffect "; use $0", "{v0}"(i8 addrspace(1)* %arg)
@@ -173,9 +190,10 @@ define void @use_pointer_too_big(i32 addrspace(3)* %arg) {
   ; CHECK-LABEL: name: use_pointer_too_big
   ; CHECK: bb.0:
   ; CHECK-NEXT:   successors: %bb.1(0x80000000)
-  ; CHECK-NEXT:   liveins: $vgpr0
+  ; CHECK-NEXT:   liveins: $sgpr30_sgpr31, $vgpr0
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:_(p3) = COPY $vgpr0
+  ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:sgpr_64 = COPY $sgpr30_sgpr31
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1 (%ir-block.0):
   call void asm sideeffect "; use $0", "{v[0:1]}"(i32 addrspace(3)* %arg)

@@ -9,7 +9,6 @@
 #include "llvm/DebugInfo/DWARF/DWARFDebugAddr.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
-#include "llvm/Support/Errc.h"
 
 using namespace llvm;
 

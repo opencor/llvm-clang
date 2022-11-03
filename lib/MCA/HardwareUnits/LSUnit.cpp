@@ -39,7 +39,7 @@ LSUnitBase::LSUnitBase(const MCSchedModel &SM, unsigned LQ, unsigned SQ,
   }
 }
 
-LSUnitBase::~LSUnitBase() = default;
+LSUnitBase::~LSUnitBase() {}
 
 void LSUnitBase::cycleEvent() {
   for (const std::pair<unsigned, std::unique_ptr<MemoryGroup>> &G : Groups)
@@ -67,17 +67,17 @@ void LSUnitBase::dump() const {
 #endif
 
 unsigned LSUnit::dispatch(const InstRef &IR) {
-  const Instruction &IS = *IR.getInstruction();
-  bool IsStoreBarrier = IS.isAStoreBarrier();
-  bool IsLoadBarrier = IS.isALoadBarrier();
-  assert((IS.getMayLoad() || IS.getMayStore()) && "Not a memory operation!");
+  const InstrDesc &Desc = IR.getInstruction()->getDesc();
+  bool IsStoreBarrier = IR.getInstruction()->isAStoreBarrier();
+  bool IsLoadBarrier = IR.getInstruction()->isALoadBarrier();
+  assert((Desc.MayLoad || Desc.MayStore) && "Not a memory operation!");
 
-  if (IS.getMayLoad())
+  if (Desc.MayLoad)
     acquireLQSlot();
-  if (IS.getMayStore())
+  if (Desc.MayStore)
     acquireSQSlot();
 
-  if (IS.getMayStore()) {
+  if (Desc.MayStore) {
     unsigned NewGID = createMemoryGroup();
     MemoryGroup &NewGroup = getGroup(NewGID);
     NewGroup.addInstruction();
@@ -115,7 +115,7 @@ unsigned LSUnit::dispatch(const InstRef &IR) {
     if (IsStoreBarrier)
       CurrentStoreBarrierGroupID = NewGID;
 
-    if (IS.getMayLoad()) {
+    if (Desc.MayLoad) {
       CurrentLoadGroupID = NewGID;
       if (IsLoadBarrier)
         CurrentLoadBarrierGroupID = NewGID;
@@ -124,7 +124,7 @@ unsigned LSUnit::dispatch(const InstRef &IR) {
     return NewGID;
   }
 
-  assert(IS.getMayLoad() && "Expected a load!");
+  assert(Desc.MayLoad && "Expected a load!");
 
   unsigned ImmediateLoadDominator =
       std::max(CurrentLoadGroupID, CurrentLoadBarrierGroupID);
@@ -194,10 +194,10 @@ unsigned LSUnit::dispatch(const InstRef &IR) {
 }
 
 LSUnit::Status LSUnit::isAvailable(const InstRef &IR) const {
-  const Instruction &IS = *IR.getInstruction();
-  if (IS.getMayLoad() && isLQFull())
+  const InstrDesc &Desc = IR.getInstruction()->getDesc();
+  if (Desc.MayLoad && isLQFull())
     return LSUnit::LSU_LQUEUE_FULL;
-  if (IS.getMayStore() && isSQFull())
+  if (Desc.MayStore && isSQFull())
     return LSUnit::LSU_SQUEUE_FULL;
   return LSUnit::LSU_AVAILABLE;
 }
@@ -212,9 +212,9 @@ void LSUnitBase::onInstructionExecuted(const InstRef &IR) {
 }
 
 void LSUnitBase::onInstructionRetired(const InstRef &IR) {
-  const Instruction &IS = *IR.getInstruction();
-  bool IsALoad = IS.getMayLoad();
-  bool IsAStore = IS.getMayStore();
+  const InstrDesc &Desc = IR.getInstruction()->getDesc();
+  bool IsALoad = Desc.MayLoad;
+  bool IsAStore = Desc.MayStore;
   assert((IsALoad || IsAStore) && "Expected a memory operation!");
 
   if (IsALoad) {

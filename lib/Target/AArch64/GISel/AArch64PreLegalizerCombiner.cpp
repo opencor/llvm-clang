@@ -13,7 +13,6 @@
 
 #include "AArch64GlobalISelUtils.h"
 #include "AArch64TargetMachine.h"
-#include "llvm/CodeGen/GlobalISel/CSEInfo.h"
 #include "llvm/CodeGen/GlobalISel/Combiner.h"
 #include "llvm/CodeGen/GlobalISel/CombinerHelper.h"
 #include "llvm/CodeGen/GlobalISel/CombinerInfo.h"
@@ -370,8 +369,8 @@ public:
       report_fatal_error("Invalid rule identifier");
   }
 
-  bool combine(GISelChangeObserver &Observer, MachineInstr &MI,
-               MachineIRBuilder &B) const override;
+  virtual bool combine(GISelChangeObserver &Observer, MachineInstr &MI,
+                       MachineIRBuilder &B) const override;
 };
 
 bool AArch64PreLegalizerCombinerInfo::combine(GISelChangeObserver &Observer,

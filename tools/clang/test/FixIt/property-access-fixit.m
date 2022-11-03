@@ -22,7 +22,7 @@
 }
 @end
  
-int main(void)
+int main()
 {
     X *obj = [X new];
     obj.X = 3;

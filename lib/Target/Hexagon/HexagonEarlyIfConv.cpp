@@ -826,8 +826,8 @@ void HexagonEarlyIfConversion::updatePhiNodes(MachineBasicBlock *WhereB,
         FR = RO.getReg(), FSR = RO.getSubReg();
       else
         continue;
-      PN->removeOperand(i+1);
-      PN->removeOperand(i);
+      PN->RemoveOperand(i+1);
+      PN->RemoveOperand(i);
     }
     if (TR == 0)
       TR = SR, TSR = SSR;

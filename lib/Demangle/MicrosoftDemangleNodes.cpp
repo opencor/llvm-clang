@@ -121,8 +121,8 @@ std::string Node::toString(OutputFlags Flags) const {
   OutputBuffer OB;
   initializeOutputBuffer(nullptr, nullptr, OB, 1024);
   this->output(OB, Flags);
-  StringView SV = OB;
-  std::string Owned(SV.begin(), SV.end());
+  OB << '\0';
+  std::string Owned(OB.getBuffer());
   std::free(OB.getBuffer());
   return Owned;
 }

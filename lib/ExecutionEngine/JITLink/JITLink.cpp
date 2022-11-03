@@ -9,10 +9,10 @@
 #include "llvm/ExecutionEngine/JITLink/JITLink.h"
 
 #include "llvm/BinaryFormat/Magic.h"
-#include "llvm/ExecutionEngine/JITLink/COFF.h"
 #include "llvm/ExecutionEngine/JITLink/ELF.h"
 #include "llvm/ExecutionEngine/JITLink/MachO.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -41,6 +41,8 @@ public:
   }
 };
 
+static ManagedStatic<JITLinkerErrorCategory> JITLinkerErrorCategory;
+
 } // namespace
 
 namespace llvm {
@@ -51,8 +53,7 @@ char JITLinkError::ID = 0;
 void JITLinkError::log(raw_ostream &OS) const { OS << ErrMsg; }
 
 std::error_code JITLinkError::convertToErrorCode() const {
-  static JITLinkerErrorCategory TheJITLinkerErrorCategory;
-  return std::error_code(GenericJITLinkError, TheJITLinkerErrorCategory);
+  return std::error_code(GenericJITLinkError, *JITLinkerErrorCategory);
 }
 
 const char *getGenericEdgeKindName(Edge::Kind K) {
@@ -335,7 +336,7 @@ raw_ostream &operator<<(raw_ostream &OS, const SymbolLookupFlags &LF) {
 
 void JITLinkAsyncLookupContinuation::anchor() {}
 
-JITLinkContext::~JITLinkContext() = default;
+JITLinkContext::~JITLinkContext() {}
 
 bool JITLinkContext::shouldAddDefaultTargetPasses(const Triple &TT) const {
   return true;
@@ -392,15 +393,6 @@ Error makeTargetOutOfRangeError(const LinkGraph &G, const Block &B,
   return make_error<JITLinkError>(std::move(ErrMsg));
 }
 
-Error makeAlignmentError(llvm::orc::ExecutorAddr Loc, uint64_t Value, int N,
-                         const Edge &E) {
-  return make_error<JITLinkError>("0x" + llvm::utohexstr(Loc.getValue()) +
-                                  " improper alignment for relocation " +
-                                  formatv("{0:d}", E.getKind()) + ": 0x" +
-                                  llvm::utohexstr(Value) +
-                                  " is not aligned to " + Twine(N) + " bytes");
-}
-
 Expected<std::unique_ptr<LinkGraph>>
 createLinkGraphFromObject(MemoryBufferRef ObjectBuffer) {
   auto Magic = identify_magic(ObjectBuffer.getBuffer());
@@ -409,8 +401,6 @@ createLinkGraphFromObject(MemoryBufferRef ObjectBuffer) {
     return createLinkGraphFromMachOObject(ObjectBuffer);
   case file_magic::elf_relocatable:
     return createLinkGraphFromELFObject(ObjectBuffer);
-  case file_magic::coff_object:
-    return createLinkGraphFromCOFFObject(ObjectBuffer);
   default:
     return make_error<JITLinkError>("Unsupported file format");
   };
@@ -422,8 +412,6 @@ void link(std::unique_ptr<LinkGraph> G, std::unique_ptr<JITLinkContext> Ctx) {
     return link_MachO(std::move(G), std::move(Ctx));
   case Triple::ELF:
     return link_ELF(std::move(G), std::move(Ctx));
-  case Triple::COFF:
-    return link_COFF(std::move(G), std::move(Ctx));
   default:
     Ctx->notifyFailed(make_error<JITLinkError>("Unsupported object format"));
   };

@@ -238,7 +238,7 @@ SectionMemoryManager::~SectionMemoryManager() {
   }
 }
 
-SectionMemoryManager::MemoryMapper::~MemoryMapper() = default;
+SectionMemoryManager::MemoryMapper::~MemoryMapper() {}
 
 void SectionMemoryManager::anchor() {}
 

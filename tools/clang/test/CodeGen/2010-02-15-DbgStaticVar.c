@@ -7,7 +7,7 @@ static int foo(int a)
 	return b+a;
 }
 
-int main(void) {
+int main() {
 	int j = foo(1);
 	return 0;
 }

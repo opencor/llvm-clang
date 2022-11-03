@@ -21,11 +21,12 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/MisExpect.h"
 
 using namespace llvm;
 
@@ -99,8 +100,6 @@ static bool handleSwitchExpect(SwitchInst &SI) {
 
   uint64_t Index = (Case == *SI.case_default()) ? 0 : Case.getCaseIndex() + 1;
   Weights[Index] = LikelyBranchWeightVal;
-
-  misexpect::checkExpectAnnotations(SI, Weights, /*IsFrontend=*/true);
 
   SI.setCondition(ArgValue);
 
@@ -316,24 +315,19 @@ template <class BrSelInst> static bool handleBrSelExpect(BrSelInst &BSI) {
   std::tie(LikelyBranchWeightVal, UnlikelyBranchWeightVal) =
       getBranchWeight(Fn->getIntrinsicID(), CI, 2);
 
-  SmallVector<uint32_t, 4> ExpectedWeights;
   if ((ExpectedValue->getZExtValue() == ValueComparedTo) ==
       (Predicate == CmpInst::ICMP_EQ)) {
     Node =
         MDB.createBranchWeights(LikelyBranchWeightVal, UnlikelyBranchWeightVal);
-    ExpectedWeights = {LikelyBranchWeightVal, UnlikelyBranchWeightVal};
   } else {
     Node =
         MDB.createBranchWeights(UnlikelyBranchWeightVal, LikelyBranchWeightVal);
-    ExpectedWeights = {UnlikelyBranchWeightVal, LikelyBranchWeightVal};
   }
 
   if (CmpI)
     CmpI->setOperand(0, ArgValue);
   else
     BSI.setCondition(ArgValue);
-
-  misexpect::checkFrontendInstrumentation(BSI, ExpectedWeights);
 
   BSI.setMetadata(LLVMContext::MD_prof, Node);
 
@@ -415,7 +409,7 @@ public:
 
   bool runOnFunction(Function &F) override { return lowerExpectIntrinsic(F); }
 };
-} // namespace
+}
 
 char LowerExpectIntrinsic::ID = 0;
 INITIALIZE_PASS(LowerExpectIntrinsic, "lower-expect",

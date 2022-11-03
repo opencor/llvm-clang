@@ -24,6 +24,7 @@ class MCInstrInfo;
 class MCRegisterInfo;
 
 MCCodeEmitter *createR600MCCodeEmitter(const MCInstrInfo &MCII,
+                                       const MCRegisterInfo &MRI,
                                        MCContext &Ctx);
 MCInstrInfo *createR600MCInstrInfo();
 
@@ -35,7 +36,6 @@ MCInstrInfo *createR600MCInstrInfo();
 #define GET_INSTRINFO_ENUM
 #define GET_INSTRINFO_OPERAND_ENUM
 #define GET_INSTRINFO_SCHED_ENUM
-#define GET_INSTRINFO_MC_HELPER_DECLS
 #include "R600GenInstrInfo.inc"
 
 #define GET_SUBTARGETINFO_ENUM

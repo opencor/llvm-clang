@@ -7,7 +7,7 @@
   @property (readonly) int bar;
 @end
 
-void FUNC (void) {
+void FUNC () {
     Foo *foo;
     foo.bar = 0; // expected-error {{assignment to readonly property}}
 }

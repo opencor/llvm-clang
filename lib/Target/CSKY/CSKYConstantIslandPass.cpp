@@ -29,7 +29,6 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineDominators.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -287,7 +286,7 @@ LLVM_DUMP_METHOD void CSKYConstantIslands::dumpBBs() {
 bool CSKYConstantIslands::runOnMachineFunction(MachineFunction &Mf) {
   MF = &Mf;
   MCP = Mf.getConstantPool();
-  STI = &Mf.getSubtarget<CSKYSubtarget>();
+  STI = &static_cast<const CSKYSubtarget &>(Mf.getSubtarget());
 
   LLVM_DEBUG(dbgs() << "***** CSKYConstantIslands: "
                     << MCP->getConstants().size() << " CP entries, aligned to "
@@ -905,7 +904,8 @@ static inline unsigned getUnconditionalBrDisp(int Opc) {
     Scale = 2;
     break;
   default:
-    llvm_unreachable("");
+    assert(0);
+    break;
   }
 
   unsigned MaxOffs = ((1 << (Bits - 1)) - 1) * Scale;

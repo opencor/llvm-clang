@@ -28,6 +28,7 @@
 #include "llvm/IR/OptBisect.h"
 #include "llvm/IR/PassTimingInfo.h"
 #include "llvm/IR/PrintPasses.h"
+#include "llvm/IR/StructuralHash.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -270,7 +271,7 @@ bool CGPassManager::RefreshCallGraph(const CallGraphSCC &CurSCC, CallGraph &CG,
           Calls.count(Call) ||
 
           // If the call edge is not from a call or invoke, or it is a
-          // intrinsic call, then the function pass RAUW'd a call with
+          // instrinsic call, then the function pass RAUW'd a call with
           // another value. This can happen when constant folding happens
           // of well known functions etc.
           (Call->getCalledFunction() &&
@@ -469,7 +470,7 @@ bool CGPassManager::RunAllPassesOnSCC(CallGraphSCC &CurSCC, CallGraph &CG,
     initializeAnalysisImpl(P);
 
 #ifdef EXPENSIVE_CHECKS
-    uint64_t RefHash = P->structuralHash(CG.getModule());
+    uint64_t RefHash = StructuralHash(CG.getModule());
 #endif
 
     // Actually run this pass on the current SCC.
@@ -479,7 +480,7 @@ bool CGPassManager::RunAllPassesOnSCC(CallGraphSCC &CurSCC, CallGraph &CG,
     Changed |= LocalChanged;
 
 #ifdef EXPENSIVE_CHECKS
-    if (!LocalChanged && (RefHash != P->structuralHash(CG.getModule()))) {
+    if (!LocalChanged && (RefHash != StructuralHash(CG.getModule()))) {
       llvm::errs() << "Pass modifies its input and doesn't report it: "
                    << P->getPassName() << "\n";
       llvm_unreachable("Pass modifies its input and doesn't report it");

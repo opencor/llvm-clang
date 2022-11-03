@@ -189,9 +189,6 @@ private:
   MachineBasicBlock *insertMul(MachineInstr &MI, MachineBasicBlock *BB) const;
   MachineBasicBlock *insertCopyR1(MachineInstr &MI,
                                   MachineBasicBlock *BB) const;
-  MachineBasicBlock *insertAtomicArithmeticOp(MachineInstr &MI,
-                                              MachineBasicBlock *BB,
-                                              unsigned Opcode, int Width) const;
 };
 
 } // end namespace llvm

@@ -10,14 +10,12 @@
 #define LLVM_DEBUGINFO_PDB_NATIVE_NATIVETYPEENUM_H
 
 #include "llvm/ADT/Optional.h"
-#include "llvm/DebugInfo/CodeView/TypeIndex.h"
-#include "llvm/DebugInfo/CodeView/TypeRecord.h"
-#include "llvm/DebugInfo/PDB/IPDBRawSymbol.h"
+#include "llvm/DebugInfo/CodeView/CodeView.h"
+#include "llvm/DebugInfo/CodeView/TypeVisitorCallbacks.h"
 #include "llvm/DebugInfo/PDB/Native/NativeRawSymbol.h"
-#include "llvm/DebugInfo/PDB/PDBTypes.h"
+#include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 
 namespace llvm {
-class raw_ostream;
 namespace pdb {
 
 class NativeTypeBuiltin;

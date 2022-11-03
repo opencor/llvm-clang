@@ -406,9 +406,8 @@ static bool canThrow(const Value *V) {
   return true;
 }
 
-// Get a thread-local global variable with the given name. If it doesn't exist
-// declare it, which will generate an import and assume that it will exist at
-// link time.
+// Get a global variable with the given name. If it doesn't exist declare it,
+// which will generate an import and assume that it will exist at link time.
 static GlobalVariable *getGlobalVariable(Module &M, Type *Ty,
                                          WebAssemblyTargetMachine &TM,
                                          const char *Name) {
@@ -416,11 +415,16 @@ static GlobalVariable *getGlobalVariable(Module &M, Type *Ty,
   if (!GV)
     report_fatal_error(Twine("unable to create global: ") + Name);
 
-  // Variables created by this function are thread local. If the target does not
-  // support TLS, we depend on CoalesceFeaturesAndStripAtomics to downgrade it
-  // to non-thread-local ones, in which case we don't allow this object to be
-  // linked with other objects using shared memory.
-  GV->setThreadLocalMode(GlobalValue::GeneralDynamicTLSModel);
+  // If the target supports TLS, make this variable thread-local. We can't just
+  // unconditionally make it thread-local and depend on
+  // CoalesceFeaturesAndStripAtomics to downgrade it, because stripping TLS has
+  // the side effect of disallowing the object from being linked into a
+  // shared-memory module, which we don't want to be responsible for.
+  auto *Subtarget = TM.getSubtargetImpl();
+  auto TLS = Subtarget->hasAtomics() && Subtarget->hasBulkMemory()
+                 ? GlobalValue::LocalExecTLSModel
+                 : GlobalValue::NotThreadLocal;
+  GV->setThreadLocalMode(TLS);
   return GV;
 }
 
@@ -552,8 +556,8 @@ Value *WebAssemblyLowerEmscriptenEHSjLj::wrapInvoke(CallBase *CI) {
     Optional<unsigned> NEltArg;
     std::tie(SizeArg, NEltArg) = FnAttrs.getAllocSizeArgs();
     SizeArg += 1;
-    if (NEltArg)
-      NEltArg = NEltArg.value() + 1;
+    if (NEltArg.hasValue())
+      NEltArg = NEltArg.getValue() + 1;
     FnAttrs.addAllocSizeAttr(SizeArg, NEltArg);
   }
   // In case the callee has 'noreturn' attribute, We need to remove it, because
@@ -1060,16 +1064,22 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runOnModule(Module &M) {
       nullifySetjmp(F);
   }
 
-  // Delete unused global variables and functions
-  for (auto *V : {ThrewGV, ThrewValueGV})
-    if (V && V->use_empty())
-      V->eraseFromParent();
-  for (auto *V : {GetTempRet0F, SetTempRet0F, ResumeF, EHTypeIDF, EmLongjmpF,
-                  SaveSetjmpF, TestSetjmpF, WasmLongjmpF, CatchF})
-    if (V && V->use_empty())
-      V->eraseFromParent();
+  if (!Changed) {
+    // Delete unused global variables and functions
+    if (ResumeF)
+      ResumeF->eraseFromParent();
+    if (EHTypeIDF)
+      EHTypeIDF->eraseFromParent();
+    if (EmLongjmpF)
+      EmLongjmpF->eraseFromParent();
+    if (SaveSetjmpF)
+      SaveSetjmpF->eraseFromParent();
+    if (TestSetjmpF)
+      TestSetjmpF->eraseFromParent();
+    return false;
+  }
 
-  return Changed;
+  return true;
 }
 
 bool WebAssemblyLowerEmscriptenEHSjLj::runEHOnFunction(Function &F) {
@@ -1314,14 +1324,9 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runSjLjOnFunction(Function &F) {
     BasicBlock *BB = CB->getParent();
     if (BB->getParent() != &F) // in other function
       continue;
-    if (CB->getOperandBundle(LLVMContext::OB_funclet)) {
-      std::string S;
-      raw_string_ostream SS(S);
-      SS << "In function " + F.getName() +
-                ": setjmp within a catch clause is not supported in Wasm EH:\n";
-      SS << *CB;
-      report_fatal_error(StringRef(SS.str()));
-    }
+    if (CB->getOperandBundle(LLVMContext::OB_funclet))
+      report_fatal_error(
+          "setjmp within a catch clause is not supported in Wasm EH");
 
     CallInst *CI = nullptr;
     // setjmp cannot throw. So if it is an invoke, lower it to a call
@@ -1497,16 +1502,10 @@ void WebAssemblyLowerEmscriptenEHSjLj::handleLongjmpableCallsForEmscriptenSjLj(
   for (unsigned I = 0; I < BBs.size(); I++) {
     BasicBlock *BB = BBs[I];
     for (Instruction &I : *BB) {
-      if (isa<InvokeInst>(&I)) {
-        std::string S;
-        raw_string_ostream SS(S);
-        SS << "In function " << F.getName()
-           << ": When using Wasm EH with Emscripten SjLj, there is a "
-              "restriction that `setjmp` function call and exception cannot be "
-              "used within the same function:\n";
-        SS << I;
-        report_fatal_error(StringRef(SS.str()));
-      }
+      if (isa<InvokeInst>(&I))
+        report_fatal_error("When using Wasm EH with Emscripten SjLj, there is "
+                           "a restriction that `setjmp` function call and "
+                           "exception cannot be used within the same function");
       auto *CI = dyn_cast<CallInst>(&I);
       if (!CI)
         continue;
@@ -1830,8 +1829,7 @@ void WebAssemblyLowerEmscriptenEHSjLj::handleLongjmpableCallsForWasmSjLj(
         if (auto *CPI = dyn_cast<CatchPadInst>(FromPad)) {
           UnwindDest = CPI->getCatchSwitch()->getUnwindDest();
           break;
-        }
-        if (auto *CPI = dyn_cast<CleanupPadInst>(FromPad)) {
+        } else if (auto *CPI = dyn_cast<CleanupPadInst>(FromPad)) {
           // getCleanupRetUnwindDest() can return nullptr when
           // 1. This cleanuppad's matching cleanupret uwninds to caller
           // 2. There is no matching cleanupret because it ends with

@@ -99,17 +99,17 @@ namespace {
     // but the exact mapping of FP registers to stack slots is fixed later.
     struct LiveBundle {
       // Bit mask of live FP registers. Bit 0 = FP0, bit 1 = FP1, &c.
-      unsigned Mask = 0;
+      unsigned Mask;
 
       // Number of pre-assigned live registers in FixStack. This is 0 when the
       // stack order has not yet been fixed.
-      unsigned FixCount = 0;
+      unsigned FixCount;
 
       // Assigned stack order for live-in registers.
       // FixStack[i] == getStackEntry(i) for all i < FixCount.
       unsigned char FixStack[8];
 
-      LiveBundle() = default;
+      LiveBundle() : Mask(0), FixCount(0) {}
 
       // Have the live registers been assigned a stack order yet?
       bool isFixed() const { return !Mask || FixCount; }
@@ -866,7 +866,7 @@ void FPS::popStackAfter(MachineBasicBlock::iterator &I) {
   if (Opcode != -1) {
     I->setDesc(TII->get(Opcode));
     if (Opcode == X86::FCOMPP || Opcode == X86::UCOM_FPPr)
-      I->removeOperand(0);
+      I->RemoveOperand(0);
     MI.dropDebugNumber();
   } else {    // Insert an explicit pop
     // If this instruction sets FPSW, which is read in following instruction,
@@ -1034,7 +1034,7 @@ void FPS::handleCall(MachineBasicBlock::iterator &I) {
       STReturns |= 1 << getFPReg(Op);
 
     // Remove the operand so that later passes don't see it.
-    MI.removeOperand(i);
+    MI.RemoveOperand(i);
     --i;
     --e;
   }
@@ -1098,7 +1098,7 @@ void FPS::handleReturn(MachineBasicBlock::iterator &I) {
     LiveMask |= (1 << getFPReg(Op));
 
     // Remove the operand so that later passes don't see it.
-    MI.removeOperand(i);
+    MI.RemoveOperand(i);
     --i;
     --e;
   }
@@ -1162,7 +1162,7 @@ void FPS::handleZeroArgFP(MachineBasicBlock::iterator &I) {
   unsigned DestReg = getFPReg(MI.getOperand(0));
 
   // Change from the pseudo instruction to the concrete instruction.
-  MI.removeOperand(0); // Remove the explicit ST(0) operand
+  MI.RemoveOperand(0); // Remove the explicit ST(0) operand
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.addOperand(
       MachineOperand::CreateReg(X86::ST0, /*isDef*/ true, /*isImp*/ true));
@@ -1210,7 +1210,7 @@ void FPS::handleOneArgFP(MachineBasicBlock::iterator &I) {
   }
 
   // Convert from the pseudo instruction to the concrete instruction.
-  MI.removeOperand(NumOps - 1); // Remove explicit ST(0) operand
+  MI.RemoveOperand(NumOps - 1); // Remove explicit ST(0) operand
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.addOperand(
       MachineOperand::CreateReg(X86::ST0, /*isDef*/ false, /*isImp*/ true));
@@ -1263,8 +1263,8 @@ void FPS::handleOneArgFPRW(MachineBasicBlock::iterator &I) {
   }
 
   // Change from the pseudo instruction to the concrete instruction.
-  MI.removeOperand(1); // Drop the source operand.
-  MI.removeOperand(0); // Drop the destination operand.
+  MI.RemoveOperand(1); // Drop the source operand.
+  MI.RemoveOperand(0); // Drop the destination operand.
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.dropDebugNumber();
 }
@@ -1464,7 +1464,7 @@ void FPS::handleCompareFP(MachineBasicBlock::iterator &I) {
 
   // Change from the pseudo instruction to the concrete instruction.
   MI.getOperand(0).setReg(getSTReg(Op1));
-  MI.removeOperand(1);
+  MI.RemoveOperand(1);
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.dropDebugNumber();
 
@@ -1489,8 +1489,8 @@ void FPS::handleCondMovFP(MachineBasicBlock::iterator &I) {
 
   // Change the second operand to the stack register that the operand is in.
   // Change from the pseudo instruction to the concrete instruction.
-  MI.removeOperand(0);
-  MI.removeOperand(1);
+  MI.RemoveOperand(0);
+  MI.RemoveOperand(1);
   MI.getOperand(0).setReg(getSTReg(Op1));
   MI.setDesc(TII->get(getConcreteOpcode(MI.getOpcode())));
   MI.dropDebugNumber();

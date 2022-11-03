@@ -21,7 +21,6 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/TrackingMDRef.h"
 #include "llvm/Support/Casting.h"
@@ -220,23 +219,6 @@ namespace llvm {
     /// \param Name        Type name.
     /// \param SizeInBits  Size of the type.
     DIStringType *createStringType(StringRef Name, uint64_t SizeInBits);
-
-    /// Create debugging information entry for Fortran
-    /// assumed length string type.
-    /// \param Name            Type name.
-    /// \param StringLength    String length expressed as DIVariable *.
-    /// \param StrLocationExp  Optional memory location of the string.
-    DIStringType *createStringType(StringRef Name, DIVariable *StringLength,
-                                   DIExpression *StrLocationExp = nullptr);
-
-    /// Create debugging information entry for Fortran
-    /// assumed length string type.
-    /// \param Name             Type name.
-    /// \param StringLengthExp  String length expressed in DIExpression form.
-    /// \param StrLocationExp   Optional memory location of the string.
-    DIStringType *createStringType(StringRef Name,
-                                   DIExpression *StringLengthExp,
-                                   DIExpression *StrLocationExp = nullptr);
 
     /// Create debugging information entry for a qualified
     /// type, e.g. 'const int'.
@@ -752,8 +734,6 @@ namespace llvm {
     /// \param TParams       Function template parameters.
     /// \param ThrownTypes   Exception types this function may throw.
     /// \param Annotations   Attribute Annotations.
-    /// \param TargetFuncName The name of the target function if this is
-    ///                       a trampoline.
     DISubprogram *
     createFunction(DIScope *Scope, StringRef Name, StringRef LinkageName,
                    DIFile *File, unsigned LineNo, DISubroutineType *Ty,
@@ -762,8 +742,7 @@ namespace llvm {
                    DITemplateParameterArray TParams = nullptr,
                    DISubprogram *Decl = nullptr,
                    DITypeArray ThrownTypes = nullptr,
-                   DINodeArray Annotations = nullptr,
-                   StringRef TargetFuncName = "");
+                   DINodeArray Annotations = nullptr);
 
     /// Identical to createFunction,
     /// except that the resulting DbgNode is meant to be RAUWed.

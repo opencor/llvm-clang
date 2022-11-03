@@ -1,14 +1,8 @@
 static_library("Debuginfod") {
   output_name = "LLVMDebuginfod"
-  deps = [
-    "//llvm/lib/DebugInfo/Symbolize",
-    "//llvm/lib/Support",
-    "//llvm/utils/gn/build/libs/curl",
-  ]
+  deps = [ "//llvm/lib/Support" ]
   sources = [
-    "DIFetcher.cpp",
     "Debuginfod.cpp",
     "HTTPClient.cpp",
-    "HTTPServer.cpp",
   ]
 }
