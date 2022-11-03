@@ -190,8 +190,8 @@ public:
 /// This class is designed to represent an abstract "invocation" of the
 /// compiler, including data such as the include paths, the code generation
 /// options, the warning flags, and so on.
-class CompilerInvocation : public CompilerInvocationRefBase,
-                           public CompilerInvocationValueBase {
+class LLVMCLANG_EXPORT CompilerInvocation : public CompilerInvocationRefBase,
+                                            public CompilerInvocationValueBase {
 public:
   /// Create a compiler invocation from a list of input options.
   /// \returns true on success.

@@ -110,7 +110,7 @@ struct PointerAlignElem {
 /// The target data layout string is specified *by the target* - a frontend
 /// generating LLVM IR is required to generate the right target data for the
 /// target being codegen'd to.
-class DataLayout {
+class LLVMCLANG_EXPORT DataLayout {
 public:
   enum class FunctionPtrAlignType {
     /// The function pointer alignment is independent of the function alignment.

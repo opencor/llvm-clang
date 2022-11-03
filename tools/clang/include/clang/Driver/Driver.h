@@ -23,6 +23,7 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/StringSaver.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 #include <list>
 #include <map>
@@ -58,7 +59,9 @@ enum LTOKind {
 
 /// Driver - Encapsulate logic for constructing compilation processes
 /// from a set of gcc-driver-like command line arguments.
-class Driver {
+class LLVMCLANG_EXPORT Driver {
+  std::unique_ptr<llvm::opt::OptTable> Opts;
+
   DiagnosticsEngine &Diags;
 
   IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS;

@@ -47,7 +47,7 @@
 #include <utility>
 #include <vector>
 
-#include "OpenCLBuiltins.inc"
+#include "../lib/Sema/OpenCLBuiltins.inc"
 
 using namespace clang;
 using namespace sema;

@@ -85,7 +85,7 @@ class RawPCHContainerReader : public PCHContainerReader {
 };
 
 /// A registry of PCHContainerWriter and -Reader objects for different formats.
-class PCHContainerOperations {
+class LLVMCLANG_EXPORT PCHContainerOperations : private NonCopyable {
   llvm::StringMap<std::unique_ptr<PCHContainerWriter>> Writers;
   llvm::StringMap<std::unique_ptr<PCHContainerReader>> Readers;
 public:

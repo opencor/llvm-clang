@@ -70,4 +70,4 @@ bindings/go/llvm/workdir
 .*.sw?
 .sw?
 #OS X specific files.
-.DS_store
+.DS_Store

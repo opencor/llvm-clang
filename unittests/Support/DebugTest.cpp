@@ -19,7 +19,7 @@ TEST(DebugTest, Basic) {
   raw_string_ostream os1(s1), os2(s2);
   static const char *DT[] = {"A", "B"};  
   
-  llvm::DebugFlag = true;
+  llvm::setDebugFlag(true);
   setCurrentDebugTypes(DT, 2);
   DEBUG_WITH_TYPE("A", os1 << "A");
   DEBUG_WITH_TYPE("B", os1 << "B");

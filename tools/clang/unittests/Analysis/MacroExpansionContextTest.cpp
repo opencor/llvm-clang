@@ -24,7 +24,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "gtest/gtest.h"
 
-// static bool HACK_EnableDebugInUnitTest = (::llvm::DebugFlag = true);
+// static bool HACK_EnableDebugInUnitTest = (::llvm::setDebugFlag(true));
 
 namespace clang {
 namespace analysis {

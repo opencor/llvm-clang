@@ -3,7 +3,6 @@ include(CheckIncludeFiles)
 set(LLVM_LINK_COMPONENTS support)
 
 set(DIRECTORY_WATCHER_SOURCES DirectoryScanner.cpp)
-set(DIRECTORY_WATCHER_LINK_LIBS "")
 
 if(APPLE)
   check_include_files("CoreServices/CoreServices.h" HAVE_CORESERVICES)
@@ -28,4 +27,3 @@ add_clang_library(clangDirectoryWatcher
   )
 
 target_link_libraries(clangDirectoryWatcher PUBLIC ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries(clangDirectoryWatcher PRIVATE ${DIRECTORY_WATCHER_LINK_LIBS})

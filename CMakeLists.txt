@@ -635,6 +635,13 @@ option (LLVM_BUILD_EXTERNAL_COMPILER_RT
 option (LLVM_VERSION_PRINTER_SHOW_HOST_TARGET_INFO
   "Show target and host info when tools are invoked with --version." ON)
 
+# Option to build LLVM and Clang as a single shared library for use in OpenCOR.
+option(LLVMCLANG_BUILD_SHARED_LIB "Build LLVM and Clang as a single shared library for use in OpenCOR" OFF)
+
+if(LLVMCLANG_BUILD_SHARED_LIB)
+  add_definitions(-DLLVMCLANG_BUILD_SHARED_LIB)
+endif()
+
 # You can configure which libraries from LLVM you want to include in the
 # shared library by setting LLVM_DYLIB_COMPONENTS to a semi-colon delimited
 # list of LLVM components. All component names handled by llvm-config are valid.
@@ -1249,15 +1256,72 @@ if (LLVM_INCLUDE_BENCHMARKS)
   set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Don't install benchmark" FORCE)
   set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Don't download dependencies" FORCE)
   set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable Google Test in benchmark" FORCE)
-  set(BENCHMARK_ENABLE_WERROR ${LLVM_ENABLE_WERROR} CACHE BOOL 
+  set(BENCHMARK_ENABLE_WERROR ${LLVM_ENABLE_WERROR} CACHE BOOL
     "Handle -Werror for Google Benchmark based on LLVM_ENABLE_WERROR" FORCE)
   # Since LLVM requires C++11 it is safe to assume that std::regex is available.
   set(HAVE_STD_REGEX ON CACHE BOOL "OK" FORCE)
-  add_subdirectory(${LLVM_THIRD_PARTY_DIR}/benchmark 
+  add_subdirectory(${LLVM_THIRD_PARTY_DIR}/benchmark
     ${CMAKE_CURRENT_BINARY_DIR}/third-party/benchmark)
   add_subdirectory(benchmarks)
 endif()
 
 if (LLVM_INCLUDE_UTILS AND LLVM_INCLUDE_TOOLS)
   add_subdirectory(utils/llvm-locstats)
+endif()
+
+# Build LLVM and Clang as a single shared library for use in OpenCOR, if needed.
+if(LLVMCLANG_BUILD_SHARED_LIB)
+  add_subdirectory(tools/clang)
+  get_property(LLVMCLANG_LIBS GLOBAL PROPERTY LLVMCLANG_LIBS)
+  get_property(LLVMCLANG_INCLUDE_DIRS GLOBAL PROPERTY LLVMCLANG_INCLUDE_DIRS)
+  get_property(LLVMCLANG_SOURCES GLOBAL PROPERTY LLVMCLANG_SOURCES)
+  get_property(LLVMCLANG_COMPILE_DEFINITIONS GLOBAL PROPERTY LLVMCLANG_COMPILE_DEFINITIONS)
+  include_directories(${CMAKE_SOURCE_DIR}/include
+                      ${CMAKE_SOURCE_DIR}/tools/clang/include
+                      ${LLVMCLANG_INCLUDE_DIRS}
+                      ${CMAKE_BINARY_DIR}/include/llvm/Frontend/OpenACC
+                      ${CMAKE_BINARY_DIR}/include/llvm/Frontend/OpenMP
+                      ${CMAKE_BINARY_DIR}/include/llvm/IR
+                      ${CMAKE_BINARY_DIR}/lib/Target/X86
+                      ${CMAKE_BINARY_DIR}/lib/ToolDrivers/llvm-dlltool
+                      ${CMAKE_BINARY_DIR}/lib/ToolDrivers/llvm-lib
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/AST
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Basic
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Driver
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Parse
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Sema
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Serialization
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/StaticAnalyzer/Checkers
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Tooling
+                      ${CMAKE_BINARY_DIR}/tools/clang/include/clang/Tooling/Syntax
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/AST
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/Basic
+                      ${CMAKE_BINARY_DIR}/tools/clang/lib/Sema
+                      ${CMAKE_BINARY_DIR}/tools/llvm-config)
+  add_library(LLVMClang SHARED ${LLVMCLANG_SOURCES})
+  set_property(TARGET LLVMClang APPEND PROPERTY COMPILE_DEFINITIONS ${LLVMCLANG_COMPILE_DEFINITIONS})
+  if(WIN32)
+    set_target_properties(LLVMClang PROPERTIES OUTPUT_NAME llvmclang.${LLVM_VERSION_MAJOR})
+  else()
+    set_target_properties(LLVMClang PROPERTIES OUTPUT_NAME llvmclang)
+  endif()
+  set_target_properties(LLVMClang PROPERTIES VERSION ${LLVM_VERSION_MAJOR})
+  add_dependencies(LLVMClang ${LLVMCLANG_LIBS})
+  if(WIN32)
+    target_link_libraries(LLVMClang version)
+  elseif(APPLE)
+    target_link_libraries(LLVMClang "-framework CoreFoundation"
+                                    "-framework CoreServices")
+  else()
+    target_link_libraries(LLVMClang dl)
+  endif()
+  if(HAVE_LIBPTHREAD)
+    target_link_libraries(LLVMClang pthread)
+  endif()
+  if(HAVE_LIBZ)
+    target_link_libraries(LLVMClang z)
+  endif()
+  install(TARGETS LLVMClang RUNTIME DESTINATION lib
+                            LIBRARY DESTINATION lib
+                            ARCHIVE DESTINATION lib)
 endif()

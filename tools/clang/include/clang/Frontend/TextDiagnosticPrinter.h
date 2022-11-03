@@ -24,7 +24,7 @@ class DiagnosticOptions;
 class LangOptions;
 class TextDiagnostic;
 
-class TextDiagnosticPrinter : public DiagnosticConsumer {
+class LLVMCLANG_EXPORT TextDiagnosticPrinter : public DiagnosticConsumer {
   raw_ostream &OS;
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts;
 

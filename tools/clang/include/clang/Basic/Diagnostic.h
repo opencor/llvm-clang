@@ -188,7 +188,7 @@ struct DiagnosticStorage {
 /// as errors" and passes them off to the DiagnosticConsumer for reporting to
 /// the user. DiagnosticsEngine is tied to one translation unit and one
 /// SourceManager.
-class DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
+class LLVMCLANG_EXPORT DiagnosticsEngine : public RefCountedBase<DiagnosticsEngine> {
 public:
   /// The level of the diagnostic, after it has been through mapping.
   enum Level {
@@ -1719,7 +1719,7 @@ public:
 
 /// Abstract interface, implemented by clients of the front-end, which
 /// formats and prints fully processed diagnostics.
-class DiagnosticConsumer {
+class LLVMCLANG_EXPORT DiagnosticConsumer {
 protected:
   unsigned NumWarnings = 0;       ///< Number of warnings reported
   unsigned NumErrors = 0;         ///< Number of errors reported

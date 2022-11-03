@@ -20,6 +20,7 @@
 #include "llvm-c/ExternC.h"
 
 #include "llvm-c/Types.h"
+#include "llvm/Config/opencor.h"
 
 LLVM_C_EXTERN_C_BEGIN
 
@@ -504,7 +505,7 @@ LLVMContextRef LLVMContextCreate(void);
 /**
  * Obtain the global context instance.
  */
-LLVMContextRef LLVMGetGlobalContext(void);
+LLVMContextRef LLVMCLANG_EXPORT LLVMGetGlobalContext(void);
 
 /**
  * Set the diagnostic handler for this context.

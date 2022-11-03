@@ -10,6 +10,7 @@
 #define LLVM_CLANG_DRIVER_COMPILATION_H
 
 #include "clang/Basic/LLVM.h"
+#include "llvm/Config/opencor.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Util.h"
@@ -42,7 +43,7 @@ class ToolChain;
 
 /// Compilation - A set of tasks to perform for a single driver
 /// invocation.
-class Compilation {
+class LLVMCLANG_EXPORT Compilation : private NonCopyable {
   /// The driver we were created by.
   const Driver &TheDriver;
 

@@ -16,6 +16,7 @@
 #define LLVM_SUPPORT_TARGETSELECT_H
 
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Config/opencor.h"
 
 extern "C" {
   // Declare all of the target-initialization functions that are available.
@@ -116,7 +117,7 @@ namespace llvm {
   /// for JIT applications to ensure that the target gets linked in correctly.
   ///
   /// It is legal for a client to make multiple calls to this function.
-  inline bool InitializeNativeTarget() {
+  inline bool LLVMCLANG_EXPORT InitializeNativeTarget() {
   // If we have a native target, initialize it to ensure it is linked in.
 #ifdef LLVM_NATIVE_TARGET
     LLVM_NATIVE_TARGETINFO();
@@ -130,7 +131,7 @@ namespace llvm {
 
   /// InitializeNativeTargetAsmPrinter - The main program should call
   /// this function to initialize the native target asm printer.
-  inline bool InitializeNativeTargetAsmPrinter() {
+  inline bool LLVMCLANG_EXPORT InitializeNativeTargetAsmPrinter() {
   // If we have a native target, initialize the corresponding asm printer.
 #ifdef LLVM_NATIVE_ASMPRINTER
     LLVM_NATIVE_ASMPRINTER();

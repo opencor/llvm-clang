@@ -21,7 +21,7 @@ namespace clang {
 class BackendConsumer;
 class CodeGenerator;
 
-class CodeGenAction : public ASTFrontendAction {
+class LLVMCLANG_EXPORT CodeGenAction : public ASTFrontendAction {
 private:
   // Let BackendConsumer access LinkModule.
   friend class BackendConsumer;
@@ -101,7 +101,7 @@ public:
   EmitLLVMAction(llvm::LLVMContext *_VMContext = nullptr);
 };
 
-class EmitLLVMOnlyAction : public CodeGenAction {
+class LLVMCLANG_EXPORT EmitLLVMOnlyAction : public CodeGenAction {
   virtual void anchor();
 public:
   EmitLLVMOnlyAction(llvm::LLVMContext *_VMContext = nullptr);

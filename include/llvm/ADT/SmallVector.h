@@ -14,6 +14,7 @@
 #ifndef LLVM_ADT_SMALLVECTOR_H
 #define LLVM_ADT_SMALLVECTOR_H
 
+#include "llvm/Config/opencor.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/type_traits.h"
 #include <algorithm>
@@ -42,7 +43,7 @@ template <typename IteratorT> class iterator_range;
 /// Using 64 bit size is desirable for cases like SmallVector<char>, where a
 /// 32 bit size would limit the vector to ~4GB. SmallVectors are used for
 /// buffering bitcode output - which can exceed 4GB.
-template <class Size_T> class SmallVectorBase {
+template <class Size_T> class LLVMCLANG_EXPORT SmallVectorBase {
 protected:
   void *BeginX;
   Size_T Size = 0, Capacity;

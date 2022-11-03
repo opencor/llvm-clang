@@ -79,6 +79,7 @@ function(llvm_update_compile_flags name)
   endif()
 
   set_property(TARGET ${name} APPEND PROPERTY COMPILE_DEFINITIONS ${LLVM_COMPILE_DEFINITIONS})
+  set_property(GLOBAL PROPERTY LLVMCLANG_COMPILE_DEFINITIONS ${LLVM_COMPILE_DEFINITIONS})
 endfunction()
 
 function(add_llvm_symbol_exports target_name export_file)
@@ -437,6 +438,7 @@ endfunction(set_windows_version_resource_properties)
 #      candidate for inclusion into libLLVM.so.
 #   )
 function(llvm_add_library name)
+  set_property(GLOBAL APPEND PROPERTY LLVMCLANG_LIBS ${name})
   cmake_parse_arguments(ARG
     "MODULE;SHARED;STATIC;OBJECT;DISABLE_LLVM_LINK_LLVM_DYLIB;SONAME;NO_INSTALL_RPATH;COMPONENT_LIB"
     "OUTPUT_NAME;PLUGIN_TOOL;ENTITLEMENTS;BUNDLE_PATH"
